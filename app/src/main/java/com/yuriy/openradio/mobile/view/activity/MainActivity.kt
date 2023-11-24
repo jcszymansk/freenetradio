@@ -441,6 +441,8 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
             }
             if (children.isEmpty() && reference.mMediaPresenter.isAdapterEmpty()) {
                 reference.showNoDataMessage()
+            } else {
+                reference.hideNoDataMessage()
             }
 
             // No need to go on if indexed list ended with last item.
