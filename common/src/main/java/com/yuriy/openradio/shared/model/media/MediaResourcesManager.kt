@@ -209,7 +209,6 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
 
     val isPlaying: Boolean
         get()  {
-            AppLogger.d("TRACE:${mPlayer?.isPlaying}")
             return mPlayer?.isPlaying ?: false
         }
 

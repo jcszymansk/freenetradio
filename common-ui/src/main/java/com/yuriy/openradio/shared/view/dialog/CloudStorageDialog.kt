@@ -18,12 +18,15 @@ package com.yuriy.openradio.shared.view.dialog
 
 import android.app.Dialog
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import com.yuriy.openradio.shared.R
-import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.CloudStoreManagerDependency
+import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.model.storage.CloudStoreManager
 import com.yuriy.openradio.shared.utils.SafeToast
 import com.yuriy.openradio.shared.utils.findImageButton
@@ -78,6 +81,8 @@ class CloudStorageDialog : BaseDialogFragment(), CloudStoreManagerDependency {
         downloadFrom.setOnClickListener { downloadRadioStations() }
         val accSignOut = view.findImageButton(R.id.account_sign_out_btn)
         accSignOut.setOnClickListener { signOut() }
+        val accDel = view.findImageButton(R.id.account_del_btn)
+        accDel.setOnClickListener { deleteAccount() }
         mProgress = view.findProgressBar(R.id.cloud_storage_progress)
         mAccView = view.findLinearLayout(R.id.account_layout)
         mAccEmailView = view.findTextView(R.id.account_email_text_view)
@@ -166,6 +171,37 @@ class CloudStorageDialog : BaseDialogFragment(), CloudStoreManagerDependency {
             mCloudStoreManager.signOut()
             hideAccLayout()
         }
+    }
+
+    private fun deleteAccount() {
+        if (mCloudStoreManager.isUserExist()) {
+            mCloudStoreManager.deleteAccount(
+                {
+                    hideAccLayout()
+                    AccountDialog.show(parentFragmentManager, mAccountDialogDismissedListener)
+                    showAccDelResultDialog("Your account was deleted.")
+                },
+                {
+                    showAccDelResultDialog("Sorry, your request to delete your account was not successful. Please try again. If the problem persists, please contact me at chernyshov.yuriy@gmail.com.")
+                },
+                {
+                    showAccDelResultDialog("Sorry, your request to delete your account was not successful due to application internal error. Please re-start the application. If the problem persists, please contact me at chernyshov.yuriy@gmail.com.")
+                },
+                {
+                    showAccDelResultDialog("Your session has expired. For your security, please re-enter your sign-in credentials. Thank you for your understanding.")
+                }
+            )
+        }
+    }
+
+    private fun showAccDelResultDialog(message: String) {
+        val builder = AlertDialog.Builder(requireContext())
+        builder.setMessage(message)
+        Handler(Looper.getMainLooper()).postDelayed(
+            {
+                builder.show()
+            }, 500
+        )
     }
 
     private fun showProgress() {

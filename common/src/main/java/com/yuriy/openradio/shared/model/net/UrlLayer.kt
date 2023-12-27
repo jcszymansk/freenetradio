@@ -2,7 +2,6 @@ package com.yuriy.openradio.shared.model.net
 
 import android.net.Uri
 import androidx.core.util.Pair
-import com.yuriy.openradio.shared.model.media.RadioStationToAdd
 import java.net.URL
 
 interface UrlLayer {
@@ -60,8 +59,6 @@ interface UrlLayer {
      * @return [Uri].
      */
     fun getSearchUrl(query: String): Uri
-
-    fun getAddStationUrl(rsToAdd: RadioStationToAdd): Pair<Uri, List<Pair<String, String>>>
 
     fun getAllCountries(): Uri
 }

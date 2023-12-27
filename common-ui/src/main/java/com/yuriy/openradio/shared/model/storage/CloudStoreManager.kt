@@ -17,6 +17,8 @@
 package com.yuriy.openradio.shared.model.storage
 
 import android.app.Activity
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -39,15 +41,42 @@ class CloudStoreManager : StorageManagerDependency {
     }
 
     fun isUserExist(): Boolean {
-        return mAuth.currentUser != null
+        return getUser() != null
     }
 
     fun getUserEmail(): String {
-        return mAuth.currentUser?.email ?: "no email found"
+        return getUser()?.email ?: "no email found"
     }
 
     fun signOut() {
         mAuth.signOut()
+    }
+
+    fun deleteAccount(
+        onSuccess: () -> Unit,
+        onFailure: () -> Unit,
+        onInternalError: () -> Unit,
+        onRecentLoginRequired: () -> Unit
+    ) {
+        getUser()?.let { user ->
+            user.delete()
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        onSuccess()
+                    } else {
+                        onFailure()
+                    }
+                }
+                .addOnFailureListener {
+                    if (it is FirebaseAuthRecentLoginRequiredException) {
+                        onRecentLoginRequired()
+                    } else {
+                        onFailure()
+                    }
+                }
+        } ?: {
+            onInternalError()
+        }
     }
 
     fun sendPasswordReset(
@@ -72,7 +101,7 @@ class CloudStoreManager : StorageManagerDependency {
         onSuccess: (token: String) -> Unit,
         onFailure: (msg: String) -> Unit
     ) {
-        val user = mAuth.currentUser
+        val user = getUser()
         if (user == null) {
             onFailure("User invalid")
             return
@@ -194,6 +223,10 @@ class CloudStoreManager : StorageManagerDependency {
         val locals: String
     ) {
         constructor() : this("", "")
+    }
+
+    private fun getUser(): FirebaseUser? {
+        return mAuth.currentUser
     }
 
     companion object {

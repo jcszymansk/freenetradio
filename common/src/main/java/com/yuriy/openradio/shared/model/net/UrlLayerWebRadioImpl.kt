@@ -18,7 +18,6 @@ package com.yuriy.openradio.shared.model.net
 
 import android.net.Uri
 import androidx.core.util.Pair
-import com.yuriy.openradio.shared.model.media.RadioStationToAdd
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.NetUtils
 import java.net.MalformedURLException
@@ -70,10 +69,6 @@ class UrlLayerWebRadioImpl : UrlLayer {
     override fun getSearchUrl(query: String): Uri {
         val url = "$URL$KEY_SEARCH_ID$query"
         return Uri.parse(url)
-    }
-
-    override fun getAddStationUrl(rsToAdd: RadioStationToAdd): Pair<Uri, List<Pair<String, String>>> {
-        return Pair(Uri.EMPTY, ArrayList())
     }
 
     override fun getAllCountries(): Uri {

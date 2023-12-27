@@ -30,8 +30,6 @@ import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.SafeToast
 import com.yuriy.openradio.shared.utils.findButton
-import com.yuriy.openradio.shared.utils.findCheckBox
-import com.yuriy.openradio.shared.utils.gone
 
 /**
  * Created by Yuriy Chernyshov
@@ -64,8 +62,6 @@ class EditStationDialog : BaseAddEditStationDialog() {
         dialog?.setTitle(R.string.edit_station_dialog_title)
         val addOrEditBtn = view!!.findButton(R.id.add_edit_station_dialog_add_btn_view)
         addOrEditBtn.setText(R.string.edit_station_dialog_button_label)
-        val addToSrvChkBox = view.findCheckBox(R.id.add_to_srvr_check_view)
-        addToSrvChkBox.gone()
         mMediaId = getMediaId(arguments)
         val ctx = requireContext()
         if (mMediaId.isNotEmpty()) {

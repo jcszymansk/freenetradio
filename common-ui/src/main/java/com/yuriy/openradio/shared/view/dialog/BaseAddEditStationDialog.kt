@@ -23,7 +23,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.CheckBox
-import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ProgressBar
@@ -33,7 +32,6 @@ import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.SourcesLayerDependency
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
-import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.permission.PermissionChecker
 import com.yuriy.openradio.shared.service.location.LocationService
@@ -43,12 +41,9 @@ import com.yuriy.openradio.shared.utils.ImageFilePath
 import com.yuriy.openradio.shared.utils.IntentUtils
 import com.yuriy.openradio.shared.utils.SafeToast
 import com.yuriy.openradio.shared.utils.findButton
-import com.yuriy.openradio.shared.utils.findCheckBox
 import com.yuriy.openradio.shared.utils.findEditText
 import com.yuriy.openradio.shared.utils.findLinearLayout
-import com.yuriy.openradio.shared.utils.findTextView
 import com.yuriy.openradio.shared.utils.findView
-import com.yuriy.openradio.shared.utils.gone
 import com.yuriy.openradio.shared.utils.invisible
 import com.yuriy.openradio.shared.utils.visible
 
@@ -108,7 +103,6 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
         mNameEdit = view.findEditText(R.id.add_edit_station_name_edit)
         mUrlEdit = view.findEditText(R.id.add_edit_station_stream_url_edit)
         mImageLocalUrlEdit = view.findEditText(R.id.add_edit_station_image_url_edit)
-        val imageWebUrlEdit = view.findEditText(R.id.add_edit_station_web_image_url_edit)
         mProgressView = view.findViewById(R.id.add_edit_station_dialog_progress_bar_view)
         val countries = ArrayList(LocationService.COUNTRY_CODE_TO_NAME.values)
         countries.sort()
@@ -149,10 +143,6 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
             launcher.launch(chooserIntent)
         }
         mAddToFavCheckView = view.findViewById(R.id.add_to_fav_check_view)
-        val addToSrvrCheckView = view.findCheckBox(R.id.add_to_srvr_check_view)
-        addToSrvrCheckView.setOnCheckedChangeListener { _: CompoundButton?, isChecked: Boolean ->
-            toggleWebImageView(view, isChecked)
-        }
         val addOrEditBtn = view.findButton(R.id.add_edit_station_dialog_add_btn_view)
         addOrEditBtn.setOnClickListener {
             mProgressView.visible()
@@ -160,21 +150,15 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
                 mNameEdit.text.toString(),
                 mUrlEdit.text.toString(),
                 mImageLocalUrlEdit.text.toString(),
-                imageWebUrlEdit.text.toString(),
                 homePageEdit.text.toString(),
                 mGenresSpinner.selectedItem.toString(),
                 mCountriesSpinner.selectedItem.toString(),
-                mAddToFavCheckView.isChecked,
-                addToSrvrCheckView.isChecked
+                mAddToFavCheckView.isChecked
             )
         }
         val cancelBtn = view.findButton(R.id.add_edit_station_dialog_cancel_btn_view)
         cancelBtn.setOnClickListener { dialog?.dismiss() }
         mProgressView.invisible()
-        if (mSourcesLayer.getActiveSource() == Source.WEB_RADIO) {
-            addToSrvrCheckView.gone()
-            webImageViewGone(view)
-        }
         return view
     }
 
@@ -258,41 +242,19 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
      * @param name          Name of the Radio Station.
      * @param url           Url of the Stream associated with Radio Station.
      * @param imageLocalUrl Local Url of the Image associated with Radio Station.
-     * @param imageWebUrl   Web Url of the Image associated with Radio Station.
      * @param homePage      Web Url of Radio Station's home page.
      * @param genre         Genre of the Radio Station.
      * @param country       Country of the Radio Station.
      * @param addToFav      Whether or not add radio station to favorites.
-     * @param addToServer   Whether or not add radio station to the server.
      */
     private fun processInputInternal(
         name: String, url: String, imageLocalUrl: String,
-        imageWebUrl: String, homePage: String, genre: String,
-        country: String, addToFav: Boolean, addToServer: Boolean
+        homePage: String, genre: String,
+        country: String, addToFav: Boolean
     ) {
         val rsToAdd = RadioStationToAdd(
-            name, url, imageLocalUrl, imageWebUrl, homePage, genre, country, addToFav, addToServer
+            name, url, imageLocalUrl, homePage, genre, country, addToFav
         )
         processInput(rsToAdd)
-    }
-
-    private fun toggleWebImageView(view: View?, enabled: Boolean) {
-        if (view == null) {
-            return
-        }
-        val label = view.findTextView(R.id.add_edit_station_web_image_url_label)
-        val edit = view.findTextView(R.id.add_edit_station_web_image_url_edit)
-        label.isEnabled = enabled
-        edit.isEnabled = enabled
-    }
-
-    private fun webImageViewGone(view: View?) {
-        if (view == null) {
-            return
-        }
-        val label = view.findTextView(R.id.add_edit_station_web_image_url_label)
-        val edit = view.findTextView(R.id.add_edit_station_web_image_url_edit)
-        label.gone()
-        edit.gone()
     }
 }

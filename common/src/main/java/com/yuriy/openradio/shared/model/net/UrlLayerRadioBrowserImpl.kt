@@ -3,8 +3,6 @@ package com.yuriy.openradio.shared.model.net
 import android.net.Uri
 import androidx.core.util.Pair
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
-import com.yuriy.openradio.shared.model.media.RadioStationToAdd
-import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.NetUtils
@@ -14,7 +12,7 @@ import java.net.URL
 import java.net.UnknownHostException
 import java.util.Random
 
-class UrlLayerRadioBrowserImpl: UrlLayer {
+class UrlLayerRadioBrowserImpl : UrlLayer {
 
     private val mRandom = Random()
     private var mUrlsSet = Array(0) { AppUtils.EMPTY_STRING }
@@ -118,17 +116,6 @@ class UrlLayerRadioBrowserImpl: UrlLayer {
         )
     }
 
-    override fun getAddStationUrl(rsToAdd: RadioStationToAdd): Pair<Uri, List<Pair<String, String>>> {
-        val postParams = ArrayList<Pair<String, String>>()
-        postParams.add(Pair("name", rsToAdd.name))
-        postParams.add(Pair("url", rsToAdd.url))
-        postParams.add(Pair("homepage", rsToAdd.homePage))
-        postParams.add(Pair("favicon", rsToAdd.imageWebUrl))
-        postParams.add(Pair("countrycode", LocationService.COUNTRY_NAME_TO_CODE[rsToAdd.country]))
-        postParams.add(Pair("tags", rsToAdd.genre))
-        return Pair(Uri.parse(BASE_URL + "add"), postParams)
-    }
-
     override fun getAllCountries(): Uri {
         return Uri.parse(BASE_URL + "countries")
     }
@@ -172,6 +159,7 @@ class UrlLayerRadioBrowserImpl: UrlLayer {
         private const val TAG = "ULRBI"
         private const val LOOK_UP_DNS = "all.api.radio-browser.info"
         private const val BASE_URL_PREFIX = "https://do-look-up-dns-first"
+
         /**
          * Base URL for the API requests.
          */

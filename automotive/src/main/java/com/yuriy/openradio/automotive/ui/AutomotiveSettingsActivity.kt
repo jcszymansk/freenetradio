@@ -37,9 +37,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.yuriy.openradio.automotive.R
 import com.yuriy.openradio.automotive.dependencies.DependencyRegistryAutomotive
+import com.yuriy.openradio.shared.dependencies.CloudStoreManagerDependency
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
-import com.yuriy.openradio.shared.dependencies.CloudStoreManagerDependency
 import com.yuriy.openradio.shared.dependencies.LoggingLayerDependency
 import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
 import com.yuriy.openradio.shared.dependencies.SourcesLayerDependency
@@ -261,6 +261,7 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
         val uploadTo = findImageButton(R.id.automotive_cloud_storage_upload_btn)
         val downloadFrom = findImageButton(R.id.automotive_cloud_storage_download_btn)
         val accSignOut = findImageButton(R.id.automotive_account_sign_out_btn)
+        val accDel = findImageButton(R.id.automotive_account_del_btn)
         mProgress = findProgressBar(R.id.automotive_cloud_storage_progress_view)
         mAccView = findLinearLayout(R.id.automotive_account_layout)
         mAccEmailView = findTextView(R.id.automotive_account_email_text_view)
@@ -268,6 +269,7 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
         uploadTo.setOnClickListener { uploadRadioStations() }
         downloadFrom.setOnClickListener { downloadRadioStations() }
         accSignOut.setOnClickListener { signOut() }
+        accDel.setOnClickListener { deleteAccount() }
 
         hideProgress()
 
@@ -361,6 +363,37 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
             mCloudStoreManager.signOut()
             hideAccLayout()
         }
+    }
+
+    private fun deleteAccount() {
+        if (mCloudStoreManager.isUserExist()) {
+            mCloudStoreManager.deleteAccount(
+                {
+                    hideAccLayout()
+                    AccountDialog.show(supportFragmentManager, mAccountDialogDismissedListener)
+                    showAccDelResultDialog("Your account was deleted.")
+                },
+                {
+                    showAccDelResultDialog("Sorry, your request to delete your account was not successful. Please try again. If the problem persists, please contact me at chernyshov.yuriy@gmail.com.")
+                },
+                {
+                    showAccDelResultDialog("Sorry, your request to delete your account was not successful due to application internal error. Please re-start the application. If the problem persists, please contact me at chernyshov.yuriy@gmail.com.")
+                },
+                {
+                    showAccDelResultDialog("Your session has expired. For your security, please re-enter your sign-in credentials. Thank you for your understanding.")
+                }
+            )
+        }
+    }
+
+    private fun showAccDelResultDialog(message: String) {
+        val builder = AlertDialog.Builder(this)
+        builder.setMessage(message)
+        Handler(Looper.getMainLooper()).postDelayed(
+            {
+                builder.show()
+            }, 500
+        )
     }
 
     private fun showAccLayout() {

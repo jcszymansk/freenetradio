@@ -17,7 +17,6 @@
 package com.yuriy.openradio.shared.model
 
 import android.net.Uri
-import androidx.core.util.Pair
 import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
@@ -56,12 +55,4 @@ interface ModelLayer {
     fun getStations(uri: Uri, mediaIdBuilder: MediaIdBuilder): Set<RadioStation>
 
     fun getFeatured(): Set<RadioStation>
-
-    /**
-     * Add Radio Station to server.
-     *
-     * @param uri [Uri] of the request.
-     * @param parameters List of parameters to attach to url connection.
-     */
-    fun addStation(uri: Uri, parameters: List<Pair<String, String>>): Boolean
 }

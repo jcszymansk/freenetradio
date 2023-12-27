@@ -54,29 +54,9 @@ class RadioStationValidator(
                 mUiScope.launch { onFailure("Radio Station's stream is invalid") }
                 return@launch
             }
-            val imageWebUrl = rsToAdd.imageWebUrl
-            if (!NetUtils.checkResource(context, imageWebUrl)) {
-                mUiScope.launch { onWarning("Radio Station's web image is invalid") }
-            }
             val homePage = rsToAdd.homePage
             if (!NetUtils.checkResource(context, homePage)) {
                 mUiScope.launch { onWarning("Radio Station's home page is invalid") }
-            }
-            if (rsToAdd.isAddToServer) {
-                val urlData = mUrlLayer.getAddStationUrl(rsToAdd)
-                val uri = urlData.first
-                if (uri == null) {
-                    mUiScope.launch { onFailure("Radio Station's stream is invalid") }
-                    return@launch
-                }
-                val pairs = urlData.second
-                if (pairs == null || pairs.isEmpty()) {
-                    mUiScope.launch { onFailure("Radio Station's stream is invalid") }
-                    return@launch
-                }
-                if (!mProvider.addStation(uri, pairs)) {
-                    mUiScope.launch { onFailure("Radio Station can not be added to server") }
-                }
             }
             mUiScope.launch { onSuccess("Radio Station validated successfully") }
         }

@@ -297,6 +297,13 @@
                     android:layout_marginBottom="15dp"
                     android:src="@drawable/ic_sign_out" />
 
+                <ImageButton
+                    android:id="@+id/automotive_account_del_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="15dp"
+                    android:src="@drawable/ic_delete" />
+
             </LinearLayout>
 
             <LinearLayout

@@ -18,7 +18,6 @@ package com.yuriy.openradio.shared.model
 
 import android.content.Context
 import android.net.Uri
-import androidx.core.util.Pair
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.yuriy.openradio.shared.model.media.Category
@@ -32,8 +31,6 @@ import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
-import org.json.JSONException
-import org.json.JSONObject
 import java.util.TreeSet
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -86,30 +83,6 @@ class ModelLayerImpl(
         }
         val result = latch.await(3, TimeUnit.SECONDS)
         return mFeatured
-    }
-
-    override fun addStation(uri: Uri, parameters: List<Pair<String, String>>): Boolean {
-        // Post data to the server.
-        val response = String(mDownloaderLayer.downloadDataFromUri(mContext, uri, parameters))
-        AppLogger.i("Add station response:$response")
-        if (response.isEmpty()) {
-            return false
-        }
-        var value = false
-        try {
-            // {"ok":false,"message":"AddStationError 'url is empty'","uuid":""}
-            // {"ok":true,"message":"added station successfully","uuid":"3516ff35-14b9-4845-8624-4e6b0a7a3ab9"}
-            val jsonObject = JSONObject(response)
-            if (jsonObject.has("ok")) {
-                val str = jsonObject.getString("ok")
-                if (str.isNotEmpty()) {
-                    value = str.equals("true", ignoreCase = true)
-                }
-            }
-        } catch (e: JSONException) {
-            AppLogger.e("Add station", e)
-        }
-        return value
     }
 
     /**

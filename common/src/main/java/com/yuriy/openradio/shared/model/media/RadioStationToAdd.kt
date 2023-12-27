@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The "Open Radio" Project. Author: Chernyshov Yuriy
+ * Copyright 2020, 2023 The "Open Radio" Project. Author: Chernyshov Yuriy
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,28 +24,26 @@ import java.io.Serializable
  * @param name          Name of the Radio Station.
  * @param url           Url of the Stream associated with Radio Station.
  * @param imageLocalUrl Local Url of the Image associated with Radio Station.
- * @param imageWebUrl   Web Url of the Image associated with Radio Station.
  * @param homePage      Web Url of Radio Station's home page.
  * @param genre         Genre of the Radio Station.
  * @param country       Country of the Radio Station.
- * @param isAddToFav      Whether or not add radio station to favorites.
- * @param isAddToServer   Whether or not add radio station to the server.
+ * @param isAddToFav    Whether or not add radio station to favorites.
  */
-class RadioStationToAdd(val name: String, val url: String, val imageLocalUrl: String,
-                        val imageWebUrl: String, val homePage: String, val genre: String,
-                        val country: String, val isAddToFav: Boolean, val isAddToServer: Boolean) : Serializable {
+class RadioStationToAdd(
+    val name: String, val url: String, val imageLocalUrl: String,
+    val homePage: String, val genre: String,
+    val country: String, val isAddToFav: Boolean
+) : Serializable {
 
     override fun toString(): String {
         return "RadioStationToAdd{" +
                 "name='" + name + '\'' +
                 ", url='" + url + '\'' +
                 ", imageLocalUrl='" + imageLocalUrl + '\'' +
-                ", imageWebUrl='" + imageWebUrl + '\'' +
                 ", homePage='" + homePage + '\'' +
                 ", genre='" + genre + '\'' +
                 ", country='" + country + '\'' +
                 ", addToFav=" + isAddToFav +
-                ", addToServer=" + isAddToServer +
                 '}'
     }
 }
