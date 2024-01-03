@@ -26,8 +26,9 @@ class FilterImpl : Filter {
 
     private val mData = arrayOf(
         Item("stream.radiojar.com/z4qyckhr9druv", homePage = "radiosindia.com"),
-        Item(name = setOf("rainbow", "vijayawada")),
-        Item(name = setOf("mirchi", "Telugu"))
+        Item("air.pc.cdn.bitgravity.com/air/live/pbaudio174"),
+        Item("air.pc.cdn.bitgravity.com/air/live/pbaudio175"),
+        Item("playerservices.streamtheworld.com/api/livestream-redirect/HYD_TEL_GSTAAC".lowercase()),
     )
 
     override fun filter(radioStation: RadioStation): Boolean {
@@ -35,18 +36,14 @@ class FilterImpl : Filter {
             val variant = radioStation.mediaStream.getVariant(0)
             val url = variant.url.lowercase()
             val homePage = radioStation.homePage.lowercase()
-            val name = radioStation.name.lowercase()
 
-            val nameContains = item.name.any { (name.isNotEmpty() && name.contains(it)) }
-            (url.isNotEmpty() && url.contains(item.streamUrl))
-                    || (homePage.isNotEmpty() && homePage.contains(item.homePage))
-                    || nameContains
+            (item.streamUrl.isNotEmpty() && url.contains(item.streamUrl))
+                    || (item.homePage.isNotEmpty() && homePage.contains(item.homePage))
         }
     }
 
     private data class Item(
         val streamUrl: String = AppUtils.EMPTY_STRING,
-        val name: Set<String> = setOf(AppUtils.EMPTY_STRING),
         val homePage: String = AppUtils.EMPTY_STRING
     )
 }
