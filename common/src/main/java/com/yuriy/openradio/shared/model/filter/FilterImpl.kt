@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.model.filter
 
 import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.utils.AppUtils
 
 /**
  * Default implementation of the [Filter] interface.
@@ -24,20 +25,28 @@ import com.yuriy.openradio.shared.model.media.RadioStation
 class FilterImpl : Filter {
 
     private val mData = arrayOf(
-        Item("stream.radiojar.com/z4qyckhr9druv", "radiosindia.com")
+        Item("stream.radiojar.com/z4qyckhr9druv", homePage = "radiosindia.com"),
+        Item(name = setOf("rainbow", "vijayawada")),
+        Item(name = setOf("mirchi", "Telugu"))
     )
 
     override fun filter(radioStation: RadioStation): Boolean {
-        var result = false
-        for (item in mData) {
+        return mData.any { item ->
             val variant = radioStation.mediaStream.getVariant(0)
-            if (variant.url.contains(item.mStreamUrl) || radioStation.homePage.contains(item.homePage)) {
-                result = true
-                break
-            }
+            val url = variant.url.lowercase()
+            val homePage = radioStation.homePage.lowercase()
+            val name = radioStation.name.lowercase()
+
+            val nameContains = item.name.any { (name.isNotEmpty() && name.contains(it)) }
+            (url.isNotEmpty() && url.contains(item.streamUrl))
+                    || (homePage.isNotEmpty() && homePage.contains(item.homePage))
+                    || nameContains
         }
-        return result
     }
 
-    private data class Item(val mStreamUrl: String, val homePage: String)
+    private data class Item(
+        val streamUrl: String = AppUtils.EMPTY_STRING,
+        val name: Set<String> = setOf(AppUtils.EMPTY_STRING),
+        val homePage: String = AppUtils.EMPTY_STRING
+    )
 }
