@@ -59,10 +59,7 @@ class AboutDialog : BaseDialogFragment() {
         setOnClickOnText(context, view, R.id.about_radio_browser_link_view, RADIO_BROWSER_URL)
         setOnClickOnText(context, view, R.id.about_web_radio_link_view, WEB_RADIO_URL)
         setOnClickOnText(context, view, R.id.about_playlist_parser_name_view, PLAY_LIST_PARSER_URL)
-        setOnClickOnText(context, view, R.id.about_countries_boundaries_view, OFFLINE_COUNTRIES_URL)
         setOnClickOnText(context, view, R.id.about_easy_swipe_name_view, SWIPE_EFFECT_URL)
-        setOnClickOnImage(context, view, R.id.about_item_ivan_fb_btn, IVAN_FB_LINK)
-        setOnClickOnImage(context, view, R.id.about_item_ivan_ig_btn, IVAN_IG_LINK)
         setOnClickOnImage(context, view, R.id.about_item_support_btn, SUPPORT_LINK)
 
         AnalyticsUtils.logAboutOpen()
@@ -90,15 +87,9 @@ class AboutDialog : BaseDialogFragment() {
          */
         private const val PROJECT_HOME_URL = "https://github.com/ChernyshovYuriy/OpenRadio"
 
-        private const val IVAN_FB_LINK = "https://www.facebook.com/IvanChernyshovRacer"
-
-        private const val IVAN_IG_LINK = "https://www.instagram.com/ivan.chernyshov.racer"
-
         private const val EXO_PLAYER_URL = "https://github.com/google/ExoPlayer"
 
         private const val PLAY_LIST_PARSER_URL = "https://github.com/wseemann/JavaPlaylistParser"
-
-        private const val OFFLINE_COUNTRIES_URL = "https://github.com/westnordost/countryboundaries"
 
         private const val SWIPE_EFFECT_URL = "https://github.com/xenione/swipe-maker"
 

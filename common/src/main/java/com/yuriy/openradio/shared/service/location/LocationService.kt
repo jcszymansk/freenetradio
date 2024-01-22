@@ -21,6 +21,7 @@ import android.app.Activity
 import android.app.job.JobScheduler
 import android.content.Context
 import android.content.Intent
+import android.location.Geocoder
 import android.os.Bundle
 import android.os.Looper
 import android.os.Message
@@ -40,8 +41,7 @@ import com.yuriy.openradio.shared.permission.PermissionChecker
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.IntentUtils
-import de.westnordost.countryboundaries.CountryBoundaries
-import java.io.IOException
+import java.util.Locale
 import java.util.TreeMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -489,7 +489,6 @@ class LocationService : JobIntentService() {
         private var mContext: Context?
         private var mFusedLocationClient: FusedLocationProviderClient?
         private val mCounter: AtomicInteger
-        private var mCountryBoundaries: CountryBoundaries? = null
         override fun onLocationAvailability(availability: LocationAvailability) {
             super.onLocationAvailability(availability)
             if (!availability.isLocationAvailable) {
@@ -505,43 +504,29 @@ class LocationService : JobIntentService() {
             if (mContext == null) {
                 return
             }
+
             var countryCode = Country.COUNTRY_CODE_DEFAULT
-            if (mCountryBoundaries == null) {
-                mListener.onCountryCodeLocated(countryCode)
-                clear()
-                return
-            }
-            countryCode = try {
-                val location = result.lastLocation
-                extractCountryCode(
-                    mCountryBoundaries?.getIds(
+            val location = result.lastLocation
+            try {
+                mContext?.let {
+                    val geocoder = Geocoder(it, Locale.getDefault())
+                    val addresses = geocoder.getFromLocation(
+                        location?.latitude ?: Country.LAT_DEFAULT,
                         location?.longitude ?: Country.LONG_DEFAULT,
-                        location?.latitude ?: Country.LAT_DEFAULT
+                        1
                     )
-                )
+                    if (addresses?.isNotEmpty() == true) {
+                        countryCode = addresses[0].countryCode
+                    } else {
+                        AppLogger.e("$TAG Addresses are empty")
+                    }
+                }
             } catch (e: Exception) {
-                Country.COUNTRY_CODE_DEFAULT
+                AppLogger.e("$TAG Exception while access Addresses", e)
             }
+
             mListener.onCountryCodeLocated(countryCode)
             clear()
-        }
-
-        private fun extractCountryCode(data: List<String>?): String {
-            var result = Country.COUNTRY_CODE_DEFAULT
-            if (data == null) {
-                return result
-            }
-            if (data.isEmpty()) {
-                return result
-            }
-            for (id in data) {
-                // Need to get ISO standard only.
-                if (COUNTRY_CODE_TO_NAME.containsKey(id)) {
-                    // Do not break here, let's print all codes.
-                    result = id
-                }
-            }
-            return result
         }
 
         private fun clear() {
@@ -561,12 +546,6 @@ class LocationService : JobIntentService() {
             mContext = context
             mFusedLocationClient = fusedLocationClient
             mCounter = AtomicInteger(0)
-            try {
-                mCountryBoundaries = CountryBoundaries.load(mContext?.assets?.open("boundaries.ser"))
-            } catch (e: IOException) {
-                // Ignore up to now ...
-                AppLogger.e("$TAG can not load boundaries.ser", e)
-            }
         }
     }
 }

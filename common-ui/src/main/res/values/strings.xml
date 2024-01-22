@@ -27,8 +27,6 @@
     <string name="about_report_issue">Report issue</string>
     <string name="about_playlist_title">Playlist</string>
     <string name="about_playlist_url">Java Playlist Parser</string>
-    <string name="about_countries_boundaries_title">Offline countries</string>
-    <string name="about_countries_boundaries_name">Tobias Zwick</string>
     <string name="link_text">Link</string>
     <string name="enable_last_known_radio_station_label">Play last known Radio Station\n(enables application to play last known Radio Station automatically on start)</string>
     <string name="bt_auto_restart_descr">Resume playback when re-connected to the same Bluetooth Device</string>
