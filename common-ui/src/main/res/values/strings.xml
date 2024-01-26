@@ -40,6 +40,8 @@
     <string name="playback_buffer_after_rebuffer_description">Duration of media that must be buffered for playback to resume after a re-buffer, in milliseconds</string>
     <string name="restore_default">Restore Default</string>
     <string name="cloud_storage">Cloud Storage</string>
+    <string name="file_storage">File Storage</string>
+    <string name="cloud_storage_deprecated">Deprecated due to the technical reasons\nPlease Delete the Account</string>
     <string name="account">Account</string>
     <string name="can_not_play_station">Can not play Station</string>
     <string name="error_loading_media">Error Loading Media</string>
@@ -76,6 +78,7 @@
     <string name="main_menu_network">@string/network</string>
     <string name="main_menu_source">@string/source</string>
     <string name="main_menu_cloud_storage">Cloud Storage</string>
+    <string name="main_menu_file_storage">File Storage</string>
     <string name="main_menu_about">About</string>
     <string name="main_menu_sleep_timer">Sleep Timer</string>
     <string name="easy_swipe_title">Swipe effect</string>
@@ -95,9 +98,7 @@
     <string name="send_logs_lbl">Send Logs</string>
     <string name="e_mail_txt">E-Mail</string>
     <string name="password_txt">Password</string>
-    <string name="create">Create</string>
     <string name="sign_in">Sign In</string>
-    <string name="or">or</string>
     <string name="reset_password">Reset Password</string>
     <string name="success">Success</string>
     <string name="failure">Failure</string>

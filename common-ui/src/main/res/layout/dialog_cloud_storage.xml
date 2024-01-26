@@ -30,6 +30,17 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="25dp"
+        android:text="@string/cloud_storage_deprecated"
+        android:textSize="20sp"
+        android:gravity="center"
+        android:textColor="@color/colorAccent"
+        android:textStyle="bold" />
+
     <LinearLayout
         android:id="@+id/account_layout"
         android:layout_width="match_parent"
@@ -74,15 +85,8 @@
         android:orientation="horizontal">
 
         <ImageButton
-            android:id="@+id/cloud_storage_upload_btn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_weight="0.5"
-            android:src="@drawable/ic_cloud_upload" />
-
-        <ImageButton
             android:id="@+id/cloud_storage_download_btn"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="0.5"
             android:src="@drawable/ic_cloud_download" />

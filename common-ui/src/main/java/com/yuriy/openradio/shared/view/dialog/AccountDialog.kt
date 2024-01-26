@@ -22,8 +22,8 @@ import android.widget.EditText
 import android.widget.ProgressBar
 import androidx.fragment.app.FragmentManager
 import com.yuriy.openradio.shared.R
-import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.CloudStoreManagerDependency
+import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.model.storage.CloudStoreManager
 import com.yuriy.openradio.shared.utils.SafeToast
 import com.yuriy.openradio.shared.utils.findButton
@@ -67,32 +67,12 @@ class AccountDialog : BaseDialogFragment(), CloudStoreManagerDependency {
         mProgress = view.findProgressBar(R.id.account_progress_bar)
         mEmail = view.findEditText(R.id.account_email_input)
         mPwd = view.findEditText(R.id.account_pwd_input)
-        val createBtn = view.findButton(R.id.account_create)
-        createBtn.setOnClickListener { createUser() }
         val signInBtn = view.findButton(R.id.account_sign_in)
         signInBtn.setOnClickListener { signIn() }
         val resetPwdBtn = view.findButton(R.id.account_reset_pwd_btn)
         resetPwdBtn.setOnClickListener { resetPwd() }
         hideProgress()
         return createAlertDialog(view)
-    }
-
-    private fun createUser() {
-        showProgress()
-        mCloudStoreManager.createUser(
-            requireActivity(),
-            mEmail.text.toString(),
-            mPwd.text.toString(),
-            {
-                handleAccountSuccess()
-            },
-            {
-                hideProgress()
-                SafeToast.showAnyThread(
-                    context, getString(R.string.failure)
-                )
-            }
-        )
     }
 
     private fun signIn() {

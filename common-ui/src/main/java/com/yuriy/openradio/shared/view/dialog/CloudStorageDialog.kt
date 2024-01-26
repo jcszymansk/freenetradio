@@ -51,7 +51,7 @@ class CloudStorageDialog : BaseDialogFragment(), CloudStoreManagerDependency {
     private val mAccountDialogDismissedListener = AccountDialogDismissedListenerImpl()
 
     enum class Command {
-        UPLOAD, DOWNLOAD
+        DOWNLOAD
     }
 
     override fun configureWith(cloudStoreManager: CloudStoreManager) {
@@ -75,8 +75,6 @@ class CloudStorageDialog : BaseDialogFragment(), CloudStoreManagerDependency {
             requireActivity().findViewById(R.id.storage_root)
         )
         setWindowDimensions(view, 0.9f, 0.5f)
-        val uploadTo = view.findImageButton(R.id.cloud_storage_upload_btn)
-        uploadTo.setOnClickListener { uploadRadioStations() }
         val downloadFrom = view.findImageButton(R.id.cloud_storage_download_btn)
         downloadFrom.setOnClickListener { downloadRadioStations() }
         val accSignOut = view.findImageButton(R.id.account_sign_out_btn)
@@ -99,15 +97,6 @@ class CloudStorageDialog : BaseDialogFragment(), CloudStoreManagerDependency {
         }
     }
 
-    private fun uploadRadioStations() {
-        if (mCloudStoreManager.isUserExist().not()) {
-            AccountDialog.show(parentFragmentManager, mAccountDialogDismissedListener)
-        } else {
-            showAccLayout()
-            handleCommand(Command.UPLOAD)
-        }
-    }
-
     private fun downloadRadioStations() {
         if (mCloudStoreManager.isUserExist().not()) {
             AccountDialog.show(parentFragmentManager, mAccountDialogDismissedListener)
@@ -122,24 +111,6 @@ class CloudStorageDialog : BaseDialogFragment(), CloudStoreManagerDependency {
         mCloudStoreManager.getToken(
             {
                 when (command) {
-                    Command.UPLOAD -> {
-                        mCloudStoreManager.upload(
-                            it,
-                            {
-                                hideProgress()
-                                SafeToast.showAnyThread(
-                                    context, getString(R.string.success)
-                                )
-                            },
-                            {
-                                hideProgress()
-                                SafeToast.showAnyThread(
-                                    context, getString(R.string.failure)
-                                )
-                            }
-                        )
-                    }
-
                     Command.DOWNLOAD -> {
                         mCloudStoreManager.download(
                             it,
@@ -156,6 +127,10 @@ class CloudStorageDialog : BaseDialogFragment(), CloudStoreManagerDependency {
                                 )
                             }
                         )
+                    }
+
+                    else -> {
+                        // Ignore
                     }
                 }
             },

@@ -109,33 +109,6 @@ class CloudStoreManager : StorageManagerDependency {
         onSuccess(user.uid)
     }
 
-    fun createUser(
-        activity: Activity,
-        email: String,
-        password: String,
-        onSuccess: (token: String) -> Unit,
-        onFailure: (msg: String) -> Unit
-    ) {
-        if (email.isEmpty()) {
-            return onFailure("Email can not be empty")
-        }
-        if (password.isEmpty()) {
-            return onFailure("Password can not be empty")
-        }
-        mAuth.createUserWithEmailAndPassword(email, password)
-            .addOnCompleteListener(activity) { task ->
-                if (task.isSuccessful) {
-                    // Sign in success, update UI with the signed-in user's information
-                    AppLogger.d("$TAG createUserWithEmail:success")
-                    getToken(onSuccess, onFailure)
-                } else {
-                    // If sign in fails, display a message to the user.
-                    AppLogger.e("$TAG createUserWithEmail:failure", task.exception)
-                    onFailure("Task not successful")
-                }
-            }
-    }
-
     fun signIn(
         activity: Activity,
         email: String,
@@ -160,28 +133,6 @@ class CloudStoreManager : StorageManagerDependency {
                     AppLogger.e("$TAG signInWithEmail:failure", task.exception)
                     onFailure("Task not successful")
                 }
-            }
-    }
-
-    fun upload(
-        token: String,
-        onSuccess: () -> Unit,
-        onFailure: () -> Unit
-    ) {
-        val data = hashMapOf(
-            KEY_FAV to mStorageManagerLayer.getAllFavoritesAsString(),
-            KEY_LOC to mStorageManagerLayer.getAllDeviceLocalsAsString()
-        )
-
-        // Add or update data in Firestore
-        val userRef = mDb.collection(COLLECTION_USERS).document(token)
-        userRef.set(data)
-            .addOnSuccessListener {
-                onSuccess()
-            }
-            .addOnFailureListener { e ->
-                AppLogger.e("$TAG can't upload", e)
-                onFailure()
             }
     }
 
@@ -233,7 +184,5 @@ class CloudStoreManager : StorageManagerDependency {
 
         private const val TAG = "FSM"
         private const val COLLECTION_USERS = "users"
-        private const val KEY_FAV = "favorites"
-        private const val KEY_LOC = "locals"
     }
 }

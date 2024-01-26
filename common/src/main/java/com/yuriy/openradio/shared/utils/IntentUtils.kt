@@ -24,6 +24,8 @@ import android.os.Bundle
 import androidx.activity.result.ActivityResultCaller
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
 
 /**
  * Created by Yuriy Chernyshov
@@ -99,6 +101,32 @@ object IntentUtils {
         } catch (e: Throwable) {
             AppLogger.e("Can not start activity", e)
         }
+    }
+
+    fun startActivityForResultSafe(fragment: Fragment?, intent: Intent, requestCode: Int): Boolean {
+        if (fragment == null) {
+            return false
+        }
+        try {
+            fragment.startActivityForResult(intent, requestCode)
+        } catch (e: Throwable) {
+            AppLogger.e("Can not start activity for result", e)
+            return false
+        }
+        return true
+    }
+
+    fun startActivityForResultSafe(activity: AppCompatActivity?, intent: Intent, requestCode: Int): Boolean {
+        if (activity == null) {
+            return false
+        }
+        try {
+            activity.startActivityForResult(intent, requestCode)
+        } catch (e: Throwable) {
+            AppLogger.e("Can not start activity for result", e)
+            return false
+        }
+        return true
     }
 
     fun registerForActivityResultIntrl(

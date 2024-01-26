@@ -63,6 +63,7 @@ import com.yuriy.openradio.shared.view.dialog.BaseDialogFragment
 import com.yuriy.openradio.shared.view.dialog.BatteryOptimizationDialog
 import com.yuriy.openradio.shared.view.dialog.CloudStorageDialog
 import com.yuriy.openradio.shared.view.dialog.EqualizerDialog
+import com.yuriy.openradio.shared.view.dialog.FileStorageDialog
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.SearchDialog
@@ -270,10 +271,16 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
                     dialog.show(transaction, SleepTimerDialog.DIALOG_TAG)
                 }
 
-                R.id.nav_google_drive -> {
-                    // Show Storage Dialog
+                R.id.nav_cloud_storage -> {
+                    // Show Cloud Storage Dialog
                     val dialog = BaseDialogFragment.newInstance(CloudStorageDialog::class.java.name)
                     dialog.show(transaction, CloudStorageDialog.DIALOG_TAG)
+                }
+
+                R.id.nav_file_storage -> {
+                    // Show File Storage Dialog
+                    val dialog = BaseDialogFragment.newInstance(FileStorageDialog::class.java.name)
+                    dialog.show(transaction, FileStorageDialog.DIALOG_TAG)
                 }
 
                 R.id.nav_about -> {
@@ -303,7 +310,7 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
         }
 
         if (DependencyRegistryCommon.isGoogleApiAvailable.not()) {
-            navigationView.menu.removeItem(R.id.nav_google_drive)
+            navigationView.menu.removeItem(R.id.nav_cloud_storage)
         }
 
         // Handle Add Radio Station button.

@@ -42,6 +42,7 @@ import com.yuriy.openradio.shared.view.dialog.EditStationDialog
 import com.yuriy.openradio.shared.view.dialog.EqualizerDialog
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.CloudStorageDialog
+import com.yuriy.openradio.shared.view.dialog.FileStorageDialog
 import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.RSSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
@@ -185,6 +186,7 @@ object UiUtils {
         removeFragment(transaction, manager.findFragmentByTag(EqualizerDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(GeneralSettingsDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(CloudStorageDialog.DIALOG_TAG))
+        removeFragment(transaction, manager.findFragmentByTag(FileStorageDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(NetworkDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(RemoveStationDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(RSSettingsDialog.DIALOG_TAG))

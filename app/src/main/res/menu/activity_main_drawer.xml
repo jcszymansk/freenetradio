@@ -40,9 +40,13 @@
             android:icon="@drawable/ic_sleep_timer"
             android:title="@string/main_menu_sleep_timer"/>
         <item
-            android:id="@+id/nav_google_drive"
+            android:id="@+id/nav_cloud_storage"
             android:icon="@drawable/ic_cloud_black_24dp"
             android:title="@string/main_menu_cloud_storage"/>
+        <item
+            android:id="@+id/nav_file_storage"
+            android:icon="@drawable/ic_file_storage"
+            android:title="@string/main_menu_file_storage"/>
         <item
             android:id="@+id/nav_about"
             android:icon="@drawable/ic_info_black_24dp"

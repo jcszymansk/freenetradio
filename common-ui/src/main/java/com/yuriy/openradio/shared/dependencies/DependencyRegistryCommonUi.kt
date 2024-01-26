@@ -26,13 +26,14 @@ import com.yuriy.openradio.shared.model.logging.LoggingLayerImpl
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayer
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.source.SourcesLayer
+import com.yuriy.openradio.shared.model.storage.CloudStoreManager
 import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
 import com.yuriy.openradio.shared.model.storage.FavoritesStorage
+import com.yuriy.openradio.shared.model.storage.FileStoreManager
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayer
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayerImpl
-import com.yuriy.openradio.shared.model.storage.CloudStoreManager
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.presenter.MediaPresenter
 import com.yuriy.openradio.shared.presenter.MediaPresenterImpl
@@ -74,6 +75,7 @@ object DependencyRegistryCommonUi :
     private lateinit var sCastLayer: CastLayer
     private lateinit var sLoggingLayer: LoggingLayer
     private lateinit var sCloudStoreManager: CloudStoreManager
+    private lateinit var sFileStoraManager: FileStoreManager
 
     @Volatile
     private var sInit = AtomicBoolean(false)
@@ -124,6 +126,7 @@ object DependencyRegistryCommonUi :
         )
         Firebase.initialize(context)
         sCloudStoreManager = CloudStoreManager()
+        sFileStoraManager = FileStoreManager()
 
         sInit.set(true)
     }
@@ -178,6 +181,10 @@ object DependencyRegistryCommonUi :
 
     fun injectCloudStoreManager(dependency: CloudStoreManagerDependency) {
         dependency.configureWith(sCloudStoreManager)
+    }
+
+    fun injectFileStoreManager(dependency: FileStoreManagerDependency) {
+        dependency.configureWith(sFileStoraManager)
     }
 
     fun inject(dependency: EditStationDialog) {

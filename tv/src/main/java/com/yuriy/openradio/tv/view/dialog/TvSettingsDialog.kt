@@ -29,6 +29,7 @@ import com.yuriy.openradio.shared.view.dialog.AboutDialog
 import com.yuriy.openradio.shared.view.dialog.BaseDialogFragment
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.CloudStorageDialog
+import com.yuriy.openradio.shared.view.dialog.FileStorageDialog
 import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.SleepTimerDialog
 import com.yuriy.openradio.shared.view.dialog.SourceDialog
@@ -68,6 +69,7 @@ class TvSettingsDialog : BaseDialogFragment() {
             getString(com.yuriy.openradio.shared.R.string.main_menu_buffering),
             getString(com.yuriy.openradio.shared.R.string.main_menu_sleep_timer),
             getString(com.yuriy.openradio.shared.R.string.main_menu_cloud_storage),
+            getString(com.yuriy.openradio.shared.R.string.main_menu_file_storage),
             getString(com.yuriy.openradio.shared.R.string.main_menu_about)
         )
         if (DependencyRegistryCommon.isGoogleApiAvailable.not()) {
@@ -110,11 +112,16 @@ class TvSettingsDialog : BaseDialogFragment() {
                         dialog.show(transaction, SleepTimerDialog.DIALOG_TAG)
                     }
                     5 -> {
-                        // Show Google Drive Dialog
+                        // Show Cloud Storage Dialog
                         val dialog = newInstance(CloudStorageDialog::class.java.name)
                         dialog.show(transaction, CloudStorageDialog.DIALOG_TAG)
                     }
                     6 -> {
+                        // Show File Storage Dialog
+                        val dialog = newInstance(FileStorageDialog::class.java.name)
+                        dialog.show(transaction, FileStorageDialog.DIALOG_TAG)
+                    }
+                    7 -> {
                         // Show About Dialog
                         val dialog = newInstance(AboutDialog::class.java.name)
                         dialog.show(transaction, AboutDialog.DIALOG_TAG)

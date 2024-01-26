@@ -24,6 +24,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.util.Base64
 import android.util.DisplayMetrics
 import android.webkit.MimeTypeMap
 import androidx.annotation.ChecksSdkIntAtLeast
@@ -35,6 +36,10 @@ import androidx.media3.common.util.Util
 import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.ObjectInputStream
+import java.io.ObjectOutputStream
 import java.util.Locale
 import java.util.TreeSet
 
@@ -278,5 +283,44 @@ object AppUtils {
                 else -> MimeTypes.AUDIO_UNKNOWN
             }
         return mime
+    }
+
+    fun serializeMap(map: Map<String, String>): ByteArray {
+        return try {
+            ByteArrayOutputStream().use {
+                ObjectOutputStream(it).use { objectOutputStream ->
+                    objectOutputStream.writeObject(map)
+                }
+                it.toByteArray()
+            }
+        } catch (e: Exception) {
+            AppLogger.e("Error serializing map", e)
+            byteArrayOf()
+        }
+    }
+
+    fun deserializeMap(data: ByteArray?): Map<String, String> {
+        if (data == null) {
+            return emptyMap()
+        }
+        return try {
+            ByteArrayInputStream(data).use {
+                ObjectInputStream(it).use { objectInputStream ->
+                    @Suppress("UNCHECKED_CAST")
+                    objectInputStream.readObject() as Map<String, String>
+                }
+            }
+        } catch (e: Exception) {
+            AppLogger.e("Error deserializing map", e)
+            emptyMap()
+        }
+    }
+
+    fun encodeBase64(byteData: ByteArray): ByteArray {
+        return Base64.encode(byteData, Base64.DEFAULT)
+    }
+
+    fun decodeBase64(byteData: ByteArray): ByteArray {
+        return Base64.decode(byteData, Base64.DEFAULT)
     }
 }

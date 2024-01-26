@@ -40,6 +40,7 @@ import com.yuriy.openradio.automotive.dependencies.DependencyRegistryAutomotive
 import com.yuriy.openradio.shared.dependencies.CloudStoreManagerDependency
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
+import com.yuriy.openradio.shared.dependencies.FileStoreManagerDependency
 import com.yuriy.openradio.shared.dependencies.LoggingLayerDependency
 import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
 import com.yuriy.openradio.shared.dependencies.SourcesLayerDependency
@@ -48,6 +49,7 @@ import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.storage.CloudStoreManager
+import com.yuriy.openradio.shared.model.storage.FileStoreManager
 import com.yuriy.openradio.shared.presenter.MediaPresenter
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.OpenRadioStore
@@ -67,6 +69,7 @@ import com.yuriy.openradio.shared.utils.gone
 import com.yuriy.openradio.shared.utils.visible
 import com.yuriy.openradio.shared.view.dialog.AccountDialog
 import com.yuriy.openradio.shared.view.dialog.CloudStorageDialog
+import com.yuriy.openradio.shared.view.dialog.FileStorageDialog
 import com.yuriy.openradio.shared.view.dialog.StreamBufferingDialog
 import com.yuriy.openradio.shared.view.list.CountriesArrayAdapter
 import kotlinx.coroutines.CoroutineScope
@@ -74,7 +77,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency, SourcesLayerDependency,
-    LoggingLayerDependency, CloudStoreManagerDependency {
+    LoggingLayerDependency, CloudStoreManagerDependency, FileStoreManagerDependency {
 
     private lateinit var mMinBuffer: EditText
     private lateinit var mMaxBuffer: EditText
@@ -84,6 +87,7 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
     private lateinit var mMediaPresenter: MediaPresenter
     private lateinit var mPresenter: AutomotiveSettingsActivityPresenter
     private lateinit var mCloudStoreManager: CloudStoreManager
+    private lateinit var mFileStoreManager: FileStoreManager
     private lateinit var mSourcesLayer: SourcesLayer
     private lateinit var mLoggingLayer: LoggingLayer
     private lateinit var mAccView: LinearLayout
@@ -112,6 +116,10 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
         mSourcesLayer = sourcesLayer
     }
 
+    override fun configureWith(fileStoreManager: FileStoreManager) {
+        mFileStoreManager = fileStoreManager
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.automotive_activity_settings)
@@ -120,6 +128,7 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
         DependencyRegistryCommonUi.injectLoggingLayer(this)
         DependencyRegistryCommonUi.inject(this)
         DependencyRegistryCommonUi.injectCloudStoreManager(this)
+        DependencyRegistryCommonUi.injectFileStoreManager(this)
         DependencyRegistryAutomotive.inject(this)
 
         val toolbar = findToolbar(R.id.automotive_settings_toolbar)
@@ -258,16 +267,18 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
             mPlayBufferRebuffer
         )
 
-        val uploadTo = findImageButton(R.id.automotive_cloud_storage_upload_btn)
-        val downloadFrom = findImageButton(R.id.automotive_cloud_storage_download_btn)
+        val fileUploadBtn = findImageButton(R.id.automotive_file_storage_upload_btn)
+        val fileDownloadBtn = findImageButton(R.id.automotive_file_storage_download_btn)
+        val downloadFromCloud = findImageButton(R.id.automotive_cloud_storage_download_btn)
         val accSignOut = findImageButton(R.id.automotive_account_sign_out_btn)
         val accDel = findImageButton(R.id.automotive_account_del_btn)
         mProgress = findProgressBar(R.id.automotive_cloud_storage_progress_view)
         mAccView = findLinearLayout(R.id.automotive_account_layout)
         mAccEmailView = findTextView(R.id.automotive_account_email_text_view)
 
-        uploadTo.setOnClickListener { uploadRadioStations() }
-        downloadFrom.setOnClickListener { downloadRadioStations() }
+        fileUploadBtn.setOnClickListener { uploadRadioStationsFile() }
+        fileDownloadBtn.setOnClickListener { downloadRadioStationsFile() }
+        downloadFromCloud.setOnClickListener { downloadRadioStationsCloud() }
         accSignOut.setOnClickListener { signOut() }
         accDel.setOnClickListener { deleteAccount() }
 
@@ -340,22 +351,21 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
         )
     }
 
-    private fun uploadRadioStations() {
+    private fun downloadRadioStationsCloud() {
         if (mCloudStoreManager.isUserExist().not()) {
             AccountDialog.show(supportFragmentManager, mAccountDialogDismissedListener)
         } else {
             showAccLayout()
-            handleCommand(CloudStorageDialog.Command.UPLOAD)
+            handleCloudCommand(CloudStorageDialog.Command.DOWNLOAD)
         }
     }
 
-    private fun downloadRadioStations() {
-        if (mCloudStoreManager.isUserExist().not()) {
-            AccountDialog.show(supportFragmentManager, mAccountDialogDismissedListener)
-        } else {
-            showAccLayout()
-            handleCommand(CloudStorageDialog.Command.DOWNLOAD)
-        }
+    private fun downloadRadioStationsFile() {
+        handleFileCommand(FileStorageDialog.Command.DOWNLOAD)
+    }
+
+    private fun uploadRadioStationsFile() {
+        handleFileCommand(FileStorageDialog.Command.UPLOAD)
     }
 
     private fun signOut() {
@@ -417,29 +427,33 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
         mProgress.gone()
     }
 
-    private fun handleCommand(command: CloudStorageDialog.Command) {
+    private fun handleFileCommand(command: FileStorageDialog.Command) {
+        showProgress()
+        when (command) {
+            FileStorageDialog.Command.UPLOAD -> {
+                mFileStoreManager.upload(this) {
+                    hideProgress()
+                    SafeToast.showAnyThread(
+                        applicationContext, getString(com.yuriy.openradio.shared.R.string.failure)
+                    )
+                }
+            }
+            FileStorageDialog.Command.DOWNLOAD -> {
+                mFileStoreManager.download(this) {
+                    hideProgress()
+                    SafeToast.showAnyThread(
+                        applicationContext, getString(com.yuriy.openradio.shared.R.string.failure)
+                    )
+                }
+            }
+        }
+    }
+
+    private fun handleCloudCommand(command: CloudStorageDialog.Command) {
         showProgress()
         mCloudStoreManager.getToken(
             {
                 when (command) {
-                    CloudStorageDialog.Command.UPLOAD -> {
-                        mCloudStoreManager.upload(
-                            it,
-                            {
-                                hideProgress()
-                                SafeToast.showAnyThread(
-                                    applicationContext, getString(com.yuriy.openradio.shared.R.string.success)
-                                )
-                            },
-                            {
-                                hideProgress()
-                                SafeToast.showAnyThread(
-                                    applicationContext, getString(com.yuriy.openradio.shared.R.string.failure)
-                                )
-                            }
-                        )
-                    }
-
                     CloudStorageDialog.Command.DOWNLOAD -> {
                         mCloudStoreManager.download(
                             it,
@@ -456,6 +470,10 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
                                 )
                             }
                         )
+                    }
+
+                    else -> {
+                        // Ignore
                     }
                 }
             },

@@ -287,8 +287,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
-                    android:paddingBottom="5dp"
-                    android:text="account" />
+                    android:paddingBottom="5dp" />
 
                 <ImageButton
                     android:id="@+id/automotive_account_sign_out_btn"
@@ -306,18 +305,57 @@
 
             </LinearLayout>
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginBottom="15dp"
+                android:text="@string/file_storage"
+                android:textSize="18sp"
+                android:visibility="gone" />
+
+            <!--
+
+            Re-enable once a file picker will be used on automotive
+
+            -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="15dp"
+                android:baselineAligned="false"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/automotive_file_storage_download_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.5"
+                    android:src="@drawable/ic_file_download" />
+
+                <ImageButton
+                    android:id="@+id/automotive_file_storage_upload_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.5"
+                    android:src="@drawable/ic_file_upload" />
+
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginBottom="15dp"
+                android:text="@string/cloud_storage"
+                android:textSize="18sp" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:baselineAligned="false"
                 android:orientation="horizontal">
-
-                <ImageButton
-                    android:id="@+id/automotive_cloud_storage_upload_btn"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="0.5"
-                    android:src="@drawable/ic_cloud_upload" />
 
                 <ImageButton
                     android:id="@+id/automotive_cloud_storage_download_btn"
@@ -330,10 +368,10 @@
 
             <ProgressBar
                 android:id="@+id/automotive_cloud_storage_progress_view"
+                style="@style/Widget.AppCompat.ProgressBar.Horizontal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="30dp"
-                style="@style/Widget.AppCompat.ProgressBar.Horizontal"/>
+                android:layout_marginBottom="30dp" />
 
             <View
                 android:layout_width="match_parent"
