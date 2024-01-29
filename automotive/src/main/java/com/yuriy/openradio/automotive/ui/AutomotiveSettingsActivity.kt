@@ -18,6 +18,7 @@ package com.yuriy.openradio.automotive.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -348,6 +349,28 @@ class AutomotiveSettingsActivity : AppCompatActivity(), MediaPresenterDependency
             mMaxBuffer,
             mPlayBuffer,
             mPlayBufferRebuffer
+        )
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        mFileStoreManager.onActivityResult(
+            applicationContext,
+            requestCode,
+            resultCode,
+            data,
+            {
+                hideProgress()
+                SafeToast.showAnyThread(
+                    applicationContext, getString(com.yuriy.openradio.shared.R.string.success)
+                )
+            },
+            {
+                hideProgress()
+                SafeToast.showAnyThread(
+                    applicationContext, getString(com.yuriy.openradio.shared.R.string.failure)
+                )
+            }
         )
     }
 

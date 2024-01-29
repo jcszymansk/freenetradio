@@ -311,21 +311,14 @@
                 android:layout_gravity="center"
                 android:layout_marginBottom="15dp"
                 android:text="@string/file_storage"
-                android:textSize="18sp"
-                android:visibility="gone" />
+                android:textSize="18sp" />
 
-            <!--
-
-            Re-enable once a file picker will be used on automotive
-
-            -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="15dp"
                 android:baselineAligned="false"
-                android:orientation="horizontal"
-                android:visibility="gone">
+                android:orientation="horizontal" >
 
                 <ImageButton
                     android:id="@+id/automotive_file_storage_download_btn"
