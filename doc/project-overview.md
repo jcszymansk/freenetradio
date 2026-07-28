@@ -19,7 +19,7 @@ All five modules are declared in `settings.gradle`.
 | Module | Responsibility |
 | --- | --- |
 | `common/` | Domain models, provider APIs, parsing, caching, persistence, playback, Media3 service, Cast, equalizer, location, timers, and broadcast receivers |
-| `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, cloud backup, logging, and service-command glue |
+| `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, file import/export, deprecated cloud backup, logging, and service-command glue |
 | `app/` | Phone/tablet UI and Android Auto metadata |
 | `tv/` | D-pad-oriented Android TV UI and voice search |
 | `automotive/` | Native automotive packaging and settings; the vehicle system renders the media-browser UI |
@@ -192,16 +192,16 @@ Room databases have two bounded uses:
 
 API responses have an in-memory first-level cache and a Room-backed second-level cache with a 24-hour expiry. Artwork is exposed through the custom `ImagesProvider` content provider.
 
-### Firebase
+### File and cloud storage
 
-Firebase provides:
+`FileStoreManager` provides user-driven import and export of favorites and local stations. The archived baseline also retains Firebase integrations for:
 
 - Crashlytics
 - Analytics
 - Authentication
 - Firestore
 
-`CloudStoreManager` signs users in and uploads or downloads serialized favorites and local stations. Firestore also supplies the featured-stations feed.
+`CloudStoreManager` remains in the source, but the upstream UI deprecates cloud backup in favor of file import/export. Firestore also supplies the featured-stations feed.
 
 ## Dependency wiring
 
@@ -265,7 +265,7 @@ It has no conventional station-browsing Activity. The vehicle host renders the M
 - Cache clearing
 - Master volume
 - Stream buffering
-- Cloud backup and account state
+- File import/export and deprecated cloud account state
 - Log collection
 
 ## Android components and permissions
@@ -278,7 +278,7 @@ The shared manifest registers:
 - AndroidX `FileProvider`
 - Cast options metadata
 
-Permissions cover internet and network state, wake lock, coarse location, foreground media playback, Bluetooth state and connection, external image access, and TV microphone access. Location is used to choose a likely local country. Offline country-boundary data is shipped in `common/src/main/assets/boundaries.ser`.
+Permissions cover internet and network state, wake lock, coarse location, foreground media playback, Bluetooth state and connection, external image access, and TV microphone access. Location is used to choose a likely local country. The 15.0.0 baseline no longer ships the offline country-boundary dataset used by earlier revisions.
 
 The shared application manifest enables cleartext traffic and exports `ImagesProvider`; these are notable deployment and security settings.
 
@@ -294,13 +294,13 @@ The shared application manifest enables cleartext traffic and exports `ImagesPro
 | Mobile minimum SDK | 17 |
 | TV minimum SDK | 21 |
 | Automotive minimum SDK | 28 |
-| Media3 | 1.2.0 |
-| Room | 2.6.0 |
+| Media3 | 1.2.1 |
+| Room | 2.6.1 |
 | OkHttp | 3.12.13 |
 
 OkHttp and the Firebase BOM are pinned to versions compatible with API 17.
 
-The configured release version is `14.1.1`; `version.properties` contains version code `674`. `sign.gradle` reads a gitignored `sign.properties`, signs builds with that keystore, and increments the version code after `signReleaseBundle` completes.
+The configured release version is `15.0.0`; `version.properties` contains version code `716`. `sign.gradle` reads a gitignored `sign.properties`, signs builds with that keystore, and increments the version code after `signReleaseBundle` completes.
 
 Historical APKs are retained under `app/store/`. No continuous-integration workflow is present under `.github`; release signing and version advancement are developer-run Gradle tasks.
 
@@ -308,10 +308,10 @@ Historical APKs are retained under `app/store/`. No continuous-integration workf
 
 The repository contains:
 
-- Two JVM unit-test files under `common/src/test`
+- Four JVM unit-test files under `common/src/test`
 - Nine Android instrumentation-test files under `app/src/androidTest`
 - The stream-detection fixture `undetected_streams.txt`
 
 Coverage includes playlist detection, station serialization, media-ID helpers, storage, equalizer serialization, network utilities, and the image provider. There are no TV- or Automotive-specific tests.
 
-The project is licensed under Apache 2.0. `NOTICE` attributes the embedded playlist parser, country-boundary data, and Android Open Source Project material. The visible build and version files date from 2023, so the dependency choices reflect the Android and API compatibility constraints of that period.
+The project is licensed under Apache 2.0. `NOTICE` retains attribution for the embedded playlist parser, the formerly bundled country-boundary library, and Android Open Source Project material. The imported baseline is preserved from the original repository's January 2024 history; see `doc/source-provenance.md`.
