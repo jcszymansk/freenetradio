@@ -25,7 +25,6 @@ import android.os.ParcelFileDescriptor
 import androidx.exifinterface.media.ExifInterface
 import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
-import com.yuriy.openradio.shared.utils.AnalyticsUtils
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.NetUtils
 import kotlinx.coroutines.CoroutineScope
@@ -235,7 +234,6 @@ class ImagesPersistenceLayerImpl(
         private fun handleOOM(bytesSize: Int, exception: OutOfMemoryError): ByteArray {
             System.gc()
             AppLogger.e("$TAG can't decode $bytesSize bytes for $mImageUrl", exception)
-            AnalyticsUtils.logBitmapDecode(mImageUrl, bytesSize)
             return ByteArray(0)
         }
     }

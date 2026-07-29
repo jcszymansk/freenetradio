@@ -38,7 +38,6 @@ object MediaId {
     const val MEDIA_ID_COUNTRY_STATIONS = "__COUNTRY_STATIONS__"
     const val MEDIA_ID_COUNTRIES_LIST = "__COUNTRIES_LIST__"
     const val MEDIA_ID_FAVORITES_LIST = "__FAVORITES_LIST__"
-    const val MEDIA_ID_FEATURED_LIST = "__FEATURED_LIST__"
     const val MEDIA_ID_LOCAL_RADIO_STATIONS_LIST = "__MEDIA_ID_LOCAL_RADIO_STATIONS_LIST__"
     const val MEDIA_ID_CHILD_CATEGORIES = "__CHILD_CATEGORIES__"
     const val MEDIA_ID_SEARCH_FROM_APP = "__SEARCH_FROM_APP__"
@@ -62,8 +61,7 @@ object MediaId {
         MEDIA_ID_SEARCH_FROM_SERVICE,
         MEDIA_ID_POPULAR_STATIONS,
         MEDIA_ID_NEW_STATIONS,
-        MEDIA_ID_LIST_ENDED,
-        MEDIA_ID_FEATURED_LIST
+        MEDIA_ID_LIST_ENDED
     )
 
     fun normalizeFromSearchId(value: String): String {

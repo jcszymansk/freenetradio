@@ -30,7 +30,7 @@ import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.RenderersFactory
-import com.yuriy.openradio.shared.utils.AnalyticsUtils
+import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.AppUtils.getUserAgent
 import java.io.File
@@ -81,7 +81,7 @@ object ExoPlayerUtils {
     @Synchronized
     fun getHttpDataSourceFactory(userAgent: String): HttpDataSource.Factory? {
         if (sHttpDataSourceFactory == null) {
-            AnalyticsUtils.logMessage("ExoPlayer UserAgent '$userAgent'")
+            AppLogger.d("ExoPlayer UserAgent '$userAgent'")
             val cookieManager = CookieManager()
             cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER)
             CookieHandler.setDefault(cookieManager)

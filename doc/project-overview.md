@@ -16,8 +16,8 @@ All three modules are declared in `settings.gradle`.
 
 | Module | Responsibility |
 | --- | --- |
-| `common/` | Domain models, provider APIs, parsing, caching, persistence, playback, Media3 service, Cast, equalizer, location, timers, and broadcast receivers |
-| `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, file import/export, deprecated cloud backup, logging, and service-command glue |
+| `common/` | Domain models, provider APIs, parsing, caching, persistence, playback, Media3 service, equalizer, location, timers, and broadcast receivers |
+| `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, file import/export, logging, and service-command glue |
 | `app/` | Phone/tablet UI and Android Auto metadata |
 
 The application uses `applicationId` `com.yuriy.openradio`; establishing an independent identity is a later roadmap item.
@@ -52,7 +52,7 @@ flowchart LR
     Provider["Radio Browser / WebRadioDB"]
     Cache["Memory + Room cache"]
     Player["OpenRadioPlayer"]
-    Output["ExoPlayer or CastPlayer"]
+    Output["ExoPlayer"]
 
     UI --> Presenter
     Presenter --> Browser
@@ -88,7 +88,6 @@ A typical browse request follows this path:
 - Countries and country stations
 - Favorites
 - Local or user-defined stations
-- Featured stations
 - Popular and new stations
 - Search results
 - Automotive-specific browse nodes
@@ -143,7 +142,6 @@ This resolves station URLs that point to playlists rather than directly to audio
 `OpenRadioPlayer.kt` wraps:
 
 - Media3 `ExoPlayer` for device playback
-- Media3 `CastPlayer` for Google Cast
 
 The ExoPlayer path supports HLS and DASH alongside ordinary internet-radio streams. Buffer sizes are configurable through preferences; `MainAppCommon` validates them at startup and restores Media3 defaults when their ordering is invalid.
 
@@ -188,16 +186,9 @@ Room databases have two bounded uses:
 
 API responses have an in-memory first-level cache and a Room-backed second-level cache with a 24-hour expiry. Artwork is exposed through the custom `ImagesProvider` content provider.
 
-### File and cloud storage
+### File storage
 
-`FileStoreManager` provides user-driven import and export of favorites and local stations. The archived baseline also retains Firebase integrations for:
-
-- Crashlytics
-- Analytics
-- Authentication
-- Firestore
-
-`CloudStoreManager` remains in the source, but the upstream UI deprecates cloud backup in favor of file import/export. Firestore also supplies the featured-stations feed.
+`FileStoreManager` provides user-driven import and export of favorites and local stations. Account login, cloud synchronization, telemetry, automatic crash reporting, and the hosted featured-stations feed have been removed.
 
 ## Dependency wiring
 
@@ -212,13 +203,12 @@ At startup, `DependencyRegistryCommon.init()` creates the main object graph:
 - Station storages
 - Image persistence
 - Equalizer
-- Cast integration
 - Network monitor
 - Sleep timer
 - Radio-station manager
 - Service presenter
 
-It also detects whether the process is running on TV or in a car and whether Google Play Services are available.
+It also detects whether the process is running on TV or in a car.
 
 ## Supported platforms
 
@@ -232,8 +222,6 @@ The entry points are `MainApp.kt` and `MainActivity.kt`. `MainActivity` is a sin
 - Add, edit, and remove operations for local stations
 - General, network, and stream-buffer settings
 - Sleep timer
-- Cloud storage and account operations
-- Cast support
 - About information
 
 Its list adapter supports swipe-to-reveal station actions. The manifest also advertises Android Auto compatibility. Android Auto connects directly to the shared `OpenRadioService`; it does not use a separate projected-car Activity.
@@ -247,9 +235,8 @@ The shared manifest registers:
 - `LocationService`
 - `ImagesProvider`
 - AndroidX `FileProvider`
-- Cast options metadata
 
-Permissions cover internet and network state, wake lock, coarse location, foreground media playback, Bluetooth state and connection, and external image access. Location is used to choose a likely local country. The 15.0.0 baseline no longer ships the offline country-boundary dataset used by earlier revisions.
+Permissions cover internet and network state, wake lock, coarse location, foreground media playback, Bluetooth state and connection, and external image access. Android's platform `LocationManager` is used to choose a likely local country without Google Play Services. The 15.0.0 baseline no longer ships the offline country-boundary dataset used by earlier revisions.
 
 The shared application manifest enables cleartext traffic and exports `ImagesProvider`; these are notable deployment and security settings.
 
@@ -267,7 +254,7 @@ The shared application manifest enables cleartext traffic and exports `ImagesPro
 | Room | 2.6.1 |
 | OkHttp | 3.12.13 |
 
-OkHttp and the Firebase BOM are pinned to versions compatible with API 17.
+OkHttp is pinned to a version compatible with API 17.
 
 The configured release version is `15.0.0`; `version.properties` contains version code `716`. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project establishes its independent identity and signing key.
 

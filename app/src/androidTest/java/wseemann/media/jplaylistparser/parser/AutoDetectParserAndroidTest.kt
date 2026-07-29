@@ -49,7 +49,7 @@ class AutoDetectParserAndroidTest {
         val latch = CountDownLatch(1)
         GlobalScope.launch(Dispatchers.IO) {
             kotlin.run {
-                ext = parser.getStreamExtension(url, false)
+                ext = parser.getStreamExtension(url)
                 latch.countDown()
             }
         }

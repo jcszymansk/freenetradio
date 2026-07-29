@@ -22,8 +22,6 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
-import androidx.media3.cast.CastPlayer
-import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.DeviceInfo
@@ -49,12 +47,10 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import com.yuriy.openradio.R
-import com.yuriy.openradio.shared.model.cast.CastLayer
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.media.BrowseTree
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.service.OpenRadioService
-import com.yuriy.openradio.shared.utils.AnalyticsUtils
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.PlayerUtils
@@ -82,8 +78,7 @@ class OpenRadioPlayer(
     private val mContext: Context,
     private val mListener: Listener,
     private val mEqualizerLayer: EqualizerLayer,
-    private val mBrowseTree: BrowseTree,
-    private val mCastLayer: CastLayer
+    private val mBrowseTree: BrowseTree
 ) : Player {
     /**
      * Listener for the main public events.
@@ -96,8 +91,7 @@ class OpenRadioPlayer(
     }
 
     /**
-     * The current player will either be an ExoPlayer (for local playback)
-     * or a CastPlayer (for remote playback through a Cast device).
+     * The active ExoPlayer.
      */
     private var mPlayer: Player
 
@@ -117,33 +111,6 @@ class OpenRadioPlayer(
 
     @Volatile
     private var mStoppedByNetwork = false
-
-    /**
-     * If Cast is available, create a CastPlayer to handle communication with a Cast session.
-     */
-    private val mCastPlayer: CastPlayer? by lazy {
-        val castCtx = mCastLayer.getCastContext()
-        AppLogger.i("Init CastPlayer with $castCtx")
-        if (castCtx == null) {
-            return@lazy null
-        }
-        try {
-            CastPlayer(castCtx).apply {
-                setSessionAvailabilityListener(OpenRadioCastSessionAvailabilityListener())
-                addListener(mComponentListener)
-            }
-        } catch (e: Exception) {
-            // We wouldn't normally catch the generic `Exception` however
-            // calling `CastContext.getSharedInstance` can throw various exceptions, all of which
-            // indicate that Cast is unavailable.
-            // Related internal bug b/68009560.
-            AppLogger.e(
-                "Cast is not available on this device. " +
-                        "Exception thrown when attempting to obtain CastContext", e
-            )
-            null
-        }
-    }
 
     private val mExoPlayer: Player by lazy {
         AppLogger.i("Init ExoPlayer")
@@ -222,7 +189,6 @@ class OpenRadioPlayer(
         mEqualizerLayer.deinit()
         reset()
         mPlayer.release()
-        mCastPlayer?.release()
     }
 
     override fun play() {
@@ -794,47 +760,6 @@ class OpenRadioPlayer(
         mPlayer.stop()
     }
 
-    private fun switchToPlayer(player: Player) {
-        AppLogger.i("$TAG prev player: $mPlayer")
-        AppLogger.i("$TAG new  player: $player")
-
-        if (mPlayer === player) {
-            return
-        }
-
-        // Player state management.
-        var playbackPositionMs = C.TIME_UNSET
-        var currentItemIndex = C.INDEX_UNSET
-        var playWhenReady = true
-        var volume = 1.0F
-
-        val previousPlayer: Player = mPlayer
-        if (previousPlayer != null) {
-            // Save state from the previous player.
-            val playbackState = previousPlayer.playbackState
-            if (playbackState != Player.STATE_ENDED) {
-                playbackPositionMs = previousPlayer.currentPosition
-                playWhenReady = previousPlayer.playWhenReady
-                volume = previousPlayer.volume
-                currentItemIndex = previousPlayer.currentMediaItemIndex
-                if (currentItemIndex != currentItemIndex) {
-                    playbackPositionMs = C.TIME_UNSET
-                    currentItemIndex = currentItemIndex
-                }
-            }
-            previousPlayer.stop()
-            previousPlayer.clearMediaItems()
-        }
-
-        mPlayer = player
-
-        // Media queue management.
-        player.setMediaItems(mPlaylist, currentItemIndex, playbackPositionMs)
-        player.playWhenReady = playWhenReady
-        player.volume = volume
-        player.prepare()
-    }
-
     /**
      * Listener class for the players components events.
      */
@@ -878,7 +803,7 @@ class OpenRadioPlayer(
                     }
 
                     else -> {
-                        AnalyticsUtils.logMetadata(msg)
+                        AppLogger.d(msg)
                     }
                 }
                 if (title.isEmpty()) {
@@ -922,8 +847,7 @@ class OpenRadioPlayer(
             if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)
                 && events.contains(Player.EVENT_MEDIA_METADATA_CHANGED).not()
             ) {
-                // CastPlayer does not support onMetaDataChange. We can trigger this here when the
-                // media item changes.
+                // Ensure metadata listeners are notified when a media item changes.
                 if (mPlaylist.isNotEmpty()) {
                     for (listener in mListeners) {
                         listener.onMediaMetadataChanged(
@@ -1015,24 +939,6 @@ class OpenRadioPlayer(
                 }
             }
             return msg
-        }
-    }
-
-    private inner class OpenRadioCastSessionAvailabilityListener : SessionAvailabilityListener {
-
-        /**
-         * Called when a Cast session has started and the user wishes to control playback on a
-         * remote Cast receiver rather than play audio locally.
-         */
-        override fun onCastSessionAvailable() {
-            switchToPlayer(mCastPlayer!!)
-        }
-
-        /**
-         * Called when a Cast session has ended and the user wishes to control playback locally.
-         */
-        override fun onCastSessionUnavailable() {
-            switchToPlayer(mExoPlayer)
         }
     }
 

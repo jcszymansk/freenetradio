@@ -38,8 +38,6 @@ class MediaItemRootCar(private val mSource: Source) : MediaItemCommand {
         if (favorites.isNotEmpty()) {
             dependencies.addMediaItem(MediaItemBuilder.buildFavoritesMenuItem(context))
         }
-        // Show Featured.
-        dependencies.addMediaItem(MediaItemBuilder.buildFeaturedMenuItem(context))
         if (mSource == Source.RADIO_BROWSER) {
             // Recently added Radio Stations.
             dependencies.addMediaItem(MediaItemBuilder.buildNewStationsMenuItem(context))

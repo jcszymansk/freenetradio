@@ -17,16 +17,12 @@
 package com.yuriy.openradio.shared.dependencies
 
 import android.content.Context
-import com.google.firebase.ktx.Firebase
-import com.google.firebase.ktx.initialize
-import com.yuriy.openradio.shared.model.cast.CastLayer
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.logging.LoggingLayer
 import com.yuriy.openradio.shared.model.logging.LoggingLayerImpl
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayer
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.source.SourcesLayer
-import com.yuriy.openradio.shared.model.storage.CloudStoreManager
 import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
 import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.FileStoreManager
@@ -55,7 +51,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 object DependencyRegistryCommonUi :
     NetworkLayerDependency, LocationStorageDependency, FavoritesStorageDependency,
     DeviceLocalsStorageDependency, EqualizerLayerDependency, RadioStationManagerLayerDependency,
-    NetworkSettingsStorageDependency, SleepTimerModelDependency, SourcesLayerDependency, CastLayerDependency {
+    NetworkSettingsStorageDependency, SleepTimerModelDependency, SourcesLayerDependency {
 
     private lateinit var sMediaPresenter: MediaPresenter
     private lateinit var sEditStationPresenter: EditStationPresenter
@@ -72,9 +68,7 @@ object DependencyRegistryCommonUi :
     private lateinit var sRadioStationManagerLayer: RadioStationManagerLayer
     private lateinit var sSleepTimerModel: SleepTimerModel
     private lateinit var sSourcesLayer: SourcesLayer
-    private lateinit var sCastLayer: CastLayer
     private lateinit var sLoggingLayer: LoggingLayer
-    private lateinit var sCloudStoreManager: CloudStoreManager
     private lateinit var sFileStoraManager: FileStoreManager
 
     @Volatile
@@ -96,7 +90,6 @@ object DependencyRegistryCommonUi :
         DependencyRegistryCommon.injectNetworkSettingsStorage(this)
         DependencyRegistryCommon.injectSleepTimerModel(this)
         DependencyRegistryCommon.injectSourcesLayer(this)
-        DependencyRegistryCommon.injectCastLayer(this)
         sLoggingLayer = LoggingLayerImpl(context)
         sMediaPresenter = MediaPresenterImpl(
             context,
@@ -104,8 +97,7 @@ object DependencyRegistryCommonUi :
             sLocationStorage,
             sSleepTimerModel,
             sSourcesLayer,
-            sFavoritesStorage,
-            sCastLayer
+            sFavoritesStorage
         )
         sEditStationPresenter = EditStationPresenterImpl(
             sFavoritesStorage,
@@ -124,15 +116,9 @@ object DependencyRegistryCommonUi :
             context,
             sRadioStationManagerLayer
         )
-        Firebase.initialize(context)
-        sCloudStoreManager = CloudStoreManager()
         sFileStoraManager = FileStoreManager()
 
         sInit.set(true)
-    }
-
-    override fun configureWith(castLayer: CastLayer) {
-        sCastLayer = castLayer
     }
 
     override fun configureWith(sourcesLayer: SourcesLayer) {
@@ -177,10 +163,6 @@ object DependencyRegistryCommonUi :
 
     fun injectStorageManagerLayer(dependency: StorageManagerDependency) {
         dependency.configureWith(sStorageManagerLayer)
-    }
-
-    fun injectCloudStoreManager(dependency: CloudStoreManagerDependency) {
-        dependency.configureWith(sCloudStoreManager)
     }
 
     fun injectFileStoreManager(dependency: FileStoreManagerDependency) {

@@ -3,7 +3,6 @@ plugins {
 }
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
-apply plugin: "com.google.gms.google-services"
 apply from: "../constants.gradle"
 
 android {
@@ -18,15 +17,6 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    buildTypes {
-        debug {
-            manifestPlaceholders.firebaseCrashlyticsCollectionEnabled = false
-        }
-
-        release {
-            manifestPlaceholders.firebaseCrashlyticsCollectionEnabled = true
-        }
-    }
     compileOptions {
         sourceCompatibility project.ext.javaVersion
         targetCompatibility project.ext.javaVersion
@@ -70,37 +60,13 @@ dependencies {
     implementation "androidx.work:work-runtime-ktx:$workVersion"
     implementation "androidx.core:core-ktx:$kotlinCoreKtx"
     implementation "androidx.activity:activity-ktx:$kotlinActivityKtx"
-    // Import the Firebase BoM (see: https://firebase.google.com/docs/android/learn-more#bom)
-    api platform("com.google.firebase:firebase-bom:$firebaseBom")
-    api ("com.google.firebase:firebase-auth-ktx") {
-        exclude module: "play-services-ads-identifier"
-        exclude module: "play-services-measurement"
-        exclude module: "play-services-measurement-sdk"
-    }
-    api ("com.google.firebase:firebase-firestore-ktx") {
-        exclude module: "play-services-ads-identifier"
-        exclude module: "play-services-measurement"
-        exclude module: "play-services-measurement-sdk"
-    }
-    api ("com.google.firebase:firebase-analytics-ktx") {
-        exclude module: "play-services-ads-identifier"
-        exclude module: "play-services-measurement"
-        exclude module: "play-services-measurement-sdk"
-    }
-    api ("com.google.firebase:firebase-crashlytics-ktx") {
-        exclude module: "play-services-ads-identifier"
-        exclude module: "play-services-measurement"
-        exclude module: "play-services-measurement-sdk"
-    }
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlinxCoroutinesAndroid"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinxCoroutinesCore"
     api "androidx.media3:media3-exoplayer:$media3Version"
     implementation "androidx.media3:media3-datasource:$media3Version"
     implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
     implementation "androidx.media3:media3-exoplayer-dash:$media3Version"
-    api "androidx.media3:media3-cast:$media3Version"
     implementation "androidx.media3:media3-session:$media3Version"
-    implementation "com.google.android.gms:play-services-location:$googlePlayServicesLocationVersion"
     // https://mvnrepository.com/artifact/com.squareup.okhttp3/okhttp
     implementation "com.squareup.okhttp3:okhttp:$okhttp3Version"
     // https://mvnrepository.com/artifact/org.jdom/jdom2

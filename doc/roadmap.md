@@ -54,7 +54,7 @@ A clean checkout builds without private files, installs under a new identity, pl
 
 ### 4. Restore a clean, secret-free build
 
-**Progress:** mandatory `sign.properties` loading and inherited signing assignments have been removed. Gradle configuration succeeds; debug builds use Android's standard debug key and now stop at the separate inherited Google Services configuration.
+**Progress:** mandatory `sign.properties` loading, inherited signing assignments, and the unconditional Google Services and Crashlytics plugins have been removed. Gradle configuration succeeds; debug builds use Android's standard debug key. A complete APK build remains blocked by the legacy SMTP logging implementation covered by task 6.
 
 - Make the Gradle wrapper build a debug APK from a fresh checkout.
 - Stop `sign.gradle` from requiring `sign.properties` for ordinary builds.
@@ -67,6 +67,8 @@ A clean checkout builds without private files, installs under a new identity, pl
 **Exit check:** a fresh checkout with no ignored secret files produces an installable debug APK using the documented command.
 
 ### 5. Remove inherited online services
+
+**Status: completed.** Firebase Analytics, Crashlytics, Authentication, Firestore cloud backup, the hosted featured-stations feed, and their account/cloud UI have been removed. Google Cast was removed, and fused location was replaced with Android's platform location API. Local file import/export remains; the application has no Firebase or Google Play Services runtime dependencies.
 
 Remove features tied to unavailable, untrusted, or unnecessary infrastructure:
 
@@ -81,11 +83,11 @@ Keep favorites, local stations, settings, and recent-station state on the device
 
 Review other Google dependencies individually:
 
-- Keep Cast only if it is used during personal evaluation.
-- Prefer manual country selection; keep automatic location only if it provides practical value.
+- Remove Cast because it is not needed for the current personal-use target.
+- Keep automatic country selection, but implement it with Android's platform location API.
 - Remove dependencies that remain solely for a deleted feature.
 
-**Exit check:** normal browsing and playback do not initialize Firebase or require a Google/Firebase project.
+**Exit check:** the resolved runtime dependency graph contains no Firebase or Google Play Services artifacts; normal browsing and playback require no Google/Firebase project.
 
 ### 6. Replace direct log email with explicit sharing
 

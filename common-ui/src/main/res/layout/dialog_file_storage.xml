@@ -53,7 +53,7 @@
     </LinearLayout>
 
     <ProgressBar
-        android:id="@+id/cloud_storage_progress"
+        android:id="@+id/file_storage_progress"
         style="@style/Widget.AppCompat.ProgressBar.Horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />

@@ -34,8 +34,6 @@ class MediaItemRoot(private val mSource: Source) : MediaItemCommand {
 
     override fun execute(playbackStateListener: IUpdatePlaybackState, dependencies: MediaItemCommandDependencies) {
         val context = dependencies.context
-        // Show Featured first.
-        dependencies.addMediaItem(MediaItemBuilder.buildFeaturedMenuItem(context))
         // Show Favorites if they are exists.
         val favorites = dependencies.presenter.getAllFavorites()
         if (favorites.isNotEmpty()) {

@@ -16,7 +16,6 @@
 package com.yuriy.openradio.shared.service
 
 import android.content.Context
-import com.yuriy.openradio.shared.model.cast.CastLayer
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.RadioStation
@@ -37,8 +36,6 @@ interface OpenRadioServicePresenter {
 
     fun isMobileNetwork(): Boolean
 
-    fun getCastLayer(): CastLayer
-
     fun getUseMobile(): Boolean
 
     fun getStationsInCategory(categoryId: String, pageNumber: Int): Set<RadioStation>
@@ -58,8 +55,6 @@ interface OpenRadioServicePresenter {
     fun getAllFavorites(): Set<RadioStation>
 
     fun getAllDeviceLocal(): Set<RadioStation>
-
-    fun getFeatured(): Set<RadioStation>
 
     fun getLastRadioStation(): RadioStation
 

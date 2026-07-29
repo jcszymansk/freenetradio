@@ -53,7 +53,6 @@ class FileStorageDialog : BaseDialogFragment(), FileStoreManagerDependency {
 
     override fun onDestroy() {
         super.onDestroy()
-        AccountDialog.dismiss(parentFragmentManager)
         hideProgress()
     }
 
@@ -71,7 +70,7 @@ class FileStorageDialog : BaseDialogFragment(), FileStoreManagerDependency {
         upload.setOnClickListener {
             handleCommand(Command.UPLOAD)
         }
-        mProgress = view.findProgressBar(R.id.cloud_storage_progress)
+        mProgress = view.findProgressBar(R.id.file_storage_progress)
         hideProgress()
         return createAlertDialog(view)
     }

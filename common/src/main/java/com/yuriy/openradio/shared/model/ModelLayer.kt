@@ -53,6 +53,4 @@ interface ModelLayer {
      * @return collection of the Radio Stations.
      */
     fun getStations(uri: Uri, mediaIdBuilder: MediaIdBuilder): Set<RadioStation>
-
-    fun getFeatured(): Set<RadioStation>
 }

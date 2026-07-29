@@ -31,13 +31,10 @@ import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-import com.google.android.gms.cast.framework.CastButtonFactory
-import com.google.android.gms.cast.framework.CastContext
 import com.google.android.material.navigation.NavigationView
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.list.MobileMediaItemsAdapter
 import com.yuriy.openradio.shared.broadcast.AppLocalReceiverCallback
-import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
 import com.yuriy.openradio.shared.model.media.MediaId
@@ -61,7 +58,6 @@ import com.yuriy.openradio.shared.view.dialog.AboutDialog
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
 import com.yuriy.openradio.shared.view.dialog.BaseDialogFragment
 import com.yuriy.openradio.shared.view.dialog.BatteryOptimizationDialog
-import com.yuriy.openradio.shared.view.dialog.CloudStorageDialog
 import com.yuriy.openradio.shared.view.dialog.EqualizerDialog
 import com.yuriy.openradio.shared.view.dialog.FileStorageDialog
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
@@ -107,7 +103,6 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
 
     private lateinit var mMediaPresenter: MediaPresenter
     private var mSavedInstanceState = Bundle()
-    private var mCastContext: CastContext? = null
 
     init {
         mLocalBroadcastReceiverCb = LocalBroadcastReceiverCallback()
@@ -148,8 +143,6 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
 
         DependencyRegistryCommonUi.inject(this)
 
-        mCastContext = mMediaPresenter.getCastContext()
-
         BatteryOptimizationDialog.handle(applicationContext, supportFragmentManager)
     }
 
@@ -167,8 +160,6 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.menu_main, menu)
-        // Set up a MediaRouteButton to allow the user to control the current media playback route.
-        CastButtonFactory.setUpMediaRouteButton(applicationContext, menu, R.id.action_cast)
         return true
     }
 
@@ -271,12 +262,6 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
                     dialog.show(transaction, SleepTimerDialog.DIALOG_TAG)
                 }
 
-                R.id.nav_cloud_storage -> {
-                    // Show Cloud Storage Dialog
-                    val dialog = BaseDialogFragment.newInstance(CloudStorageDialog::class.java.name)
-                    dialog.show(transaction, CloudStorageDialog.DIALOG_TAG)
-                }
-
                 R.id.nav_file_storage -> {
                     // Show File Storage Dialog
                     val dialog = BaseDialogFragment.newInstance(FileStorageDialog::class.java.name)
@@ -307,10 +292,6 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
             }
             drawer.closeDrawer(GravityCompat.START)
             true
-        }
-
-        if (DependencyRegistryCommon.isGoogleApiAvailable.not()) {
-            navigationView.menu.removeItem(R.id.nav_cloud_storage)
         }
 
         // Handle Add Radio Station button.

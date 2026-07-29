@@ -22,7 +22,6 @@ import android.os.Bundle
 import android.view.View
 import androidx.media3.common.MediaLibraryInfo
 import com.yuriy.openradio.shared.R
-import com.yuriy.openradio.shared.utils.AnalyticsUtils
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.IntentUtils
 import com.yuriy.openradio.shared.utils.findImageView
@@ -61,8 +60,6 @@ class AboutDialog : BaseDialogFragment() {
         setOnClickOnText(context, view, R.id.about_playlist_parser_name_view, PLAY_LIST_PARSER_URL)
         setOnClickOnText(context, view, R.id.about_easy_swipe_name_view, SWIPE_EFFECT_URL)
         setOnClickOnImage(context, view, R.id.about_item_support_btn, SUPPORT_LINK)
-
-        AnalyticsUtils.logAboutOpen()
 
         return createAlertDialog(view)
     }

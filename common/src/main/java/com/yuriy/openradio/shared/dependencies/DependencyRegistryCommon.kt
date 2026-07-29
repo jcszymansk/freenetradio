@@ -21,11 +21,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.net.ConnectivityManager
 import androidx.multidex.MultiDexApplication
-import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.GoogleApiAvailability
 import com.yuriy.openradio.shared.model.ModelLayerImpl
-import com.yuriy.openradio.shared.model.cast.CastLayer
-import com.yuriy.openradio.shared.model.cast.CastLayerImpl
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.eq.EqualizerLayerImpl
 import com.yuriy.openradio.shared.model.filter.FilterImpl
@@ -38,8 +34,6 @@ import com.yuriy.openradio.shared.model.net.NetworkLayerImpl
 import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
 import com.yuriy.openradio.shared.model.net.UrlLayerWebRadioImpl
-import com.yuriy.openradio.shared.model.parser.FeaturedParserLayer
-import com.yuriy.openradio.shared.model.parser.FeaturedParserLayerFirestone
 import com.yuriy.openradio.shared.model.parser.ParserLayer
 import com.yuriy.openradio.shared.model.parser.ParserLayerRadioBrowserImpl
 import com.yuriy.openradio.shared.model.parser.ParserLayerWebRadioImpl
@@ -86,14 +80,12 @@ object DependencyRegistryCommon {
     private lateinit var sOpenRadioServicePresenter: OpenRadioServicePresenterImpl
     private lateinit var sSleepTimerModel: SleepTimerModel
     private lateinit var sSourcesLayer: SourcesLayer
-    private lateinit var sCastLayer: CastLayer
 
     /**
      * Flag that indicates whether application runs over normal Android or Android TV.
      */
     private var sIsTv = AtomicBoolean(false)
     private var sIsCar = AtomicBoolean(false)
-    private var sIsGoogleApiAvailable = AtomicBoolean(false)
 
     @Volatile
     private var sInit = AtomicBoolean(false)
@@ -127,11 +119,6 @@ object DependencyRegistryCommon {
             false
         }
 
-        val connectionResult = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
-        isGoogleApiAvailable = connectionResult == ConnectionResult.SUCCESS
-        AppLogger.i("Google API:$connectionResult")
-
-        sCastLayer = CastLayerImpl(context)
         sSourcesLayer = SourcesLayerImpl(context)
         sNetworkLayer = NetworkLayerImpl(
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -139,13 +126,12 @@ object DependencyRegistryCommon {
         val countriesCache = TreeSet<Country>()
         val source = sSourcesLayer.getActiveSource()
         val parser = getParserLayer(source, countriesCache)
-        val featuredParser = FeaturedParserLayerFirestone()
         val urlLayer = getUrlLayer(source)
         val downloader = HTTPDownloaderImpl(urlLayer)
         val apiCachePersistent = PersistentApiCache(context, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         val apiCacheInMemory = InMemoryApiCache()
         val modelLayer = ModelLayerImpl(
-            context, parser, featuredParser, sNetworkLayer, downloader, apiCachePersistent, apiCacheInMemory
+            context, parser, sNetworkLayer, downloader, apiCachePersistent, apiCacheInMemory
         )
         val contextRef = WeakReference(context)
         sFavoritesStorage = FavoritesStorage(contextRef)
@@ -182,18 +168,11 @@ object DependencyRegistryCommon {
             apiCacheInMemory,
             sSleepTimerModel,
             countriesCache,
-            listenerProxy,
-            sCastLayer
+            listenerProxy
         )
 
         sInit.set(true)
     }
-
-    var isGoogleApiAvailable: Boolean
-        get() = sIsGoogleApiAvailable.get()
-        set(value) {
-            sIsGoogleApiAvailable.set(value)
-        }
 
     var isTv: Boolean
         get() = sIsTv.get()
@@ -221,9 +200,6 @@ object DependencyRegistryCommon {
 
     fun injectSourcesLayer(dependency: SourcesLayerDependency) {
         dependency.configureWith(sSourcesLayer)
-    }
-    fun injectCastLayer(dependency: CastLayerDependency) {
-        dependency.configureWith(sCastLayer)
     }
 
     fun injectNetworkLayer(dependency: NetworkLayerDependency) {

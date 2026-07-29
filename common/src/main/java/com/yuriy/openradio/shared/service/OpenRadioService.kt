@@ -59,7 +59,6 @@ import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.timer.SleepTimerListener
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.service.player.OpenRadioPlayer
-import com.yuriy.openradio.shared.utils.AnalyticsUtils
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.IntentUtils
@@ -93,8 +92,7 @@ class OpenRadioService : MediaLibraryService() {
             applicationContext,
             PlayerListener(),
             mPresenter.getEqualizerLayer(),
-            mBrowseTree,
-            mPresenter.getCastLayer()
+            mBrowseTree
         )
     }
 
@@ -300,7 +298,7 @@ class OpenRadioService : MediaLibraryService() {
      */
     private fun handleUnrecognizedInputFormatException() {
         val playlistUrl = mActiveRS.getStreamUrlFixed()
-        AnalyticsUtils.logMessage("UnrecognizedInputFormat:$playlistUrl")
+        AppLogger.i("UnrecognizedInputFormat:$playlistUrl")
         handleStopRequest()
         mScope.launch(Dispatchers.IO) {
             withTimeout(API_CALL_TIMEOUT_MS) {
@@ -637,7 +635,7 @@ class OpenRadioService : MediaLibraryService() {
         override fun onGetLibraryRoot(
             session: MediaLibrarySession, browser: MediaSession.ControllerInfo, params: LibraryParams?
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            AnalyticsUtils.logMessage(
+            AppLogger.i(
                 "$TAG [$browser] GetLibraryRoot for clientPkgName=${browser.packageName}, clientUid=${browser.uid}"
             )
             mBrowser = browser
@@ -815,14 +813,14 @@ class OpenRadioService : MediaLibraryService() {
             if (items.isEmpty()) {
                 val newItems = mutableListOf<MediaItem>()
                 for (item in mBrowseTree.getMediaItemsByMediaId(mCurrentParentId)) {
-                    // Firebase reported many instances with invalid configuration
+                    // Skip media items that can not be played.
                     if (item.localConfiguration == null) {
                         val msg = try {
                             "${item.mediaId}-${IntentUtils.bundleToString(item.mediaMetadata.toBundle())}"
                         } catch (exception: Exception) {
                             "Can't create a message: ${exception.message}"
                         }
-                        AnalyticsUtils.logEmptyLocalConfig(msg)
+                        AppLogger.w(msg)
                         continue
                     }
                     newItems.add(item)

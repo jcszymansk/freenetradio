@@ -217,7 +217,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
         if (mediaItem == MediaItem.EMPTY) {
             return
         }
-        // The current media item from the CastPlayer may have lost some information.
+        // Reload the complete item from the service.
         val mediaItemFuture = mMediaBrowser?.getItem(mediaItem.mediaId)
         mediaItemFuture?.addListener(
             { mNowPlaying = mediaItemFuture.get().value },

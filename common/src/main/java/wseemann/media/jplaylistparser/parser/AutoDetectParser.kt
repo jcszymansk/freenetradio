@@ -17,7 +17,6 @@
 package wseemann.media.jplaylistparser.parser
 
 import com.yuriy.openradio.shared.extentions.equalsIgnoreCase
-import com.yuriy.openradio.shared.utils.AnalyticsUtils
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.NetUtils
@@ -194,20 +193,11 @@ class AutoDetectParser(private val mTimeout: Int) {
         return fileExtension
     }
 
-    fun getStreamExtension(url: String, withAnalytics: Boolean = true): String {
-        if (withAnalytics) {
-            AnalyticsUtils.logMessage("UnsupportedPlaylist:$url")
-        }
+    fun getStreamExtension(url: String): String {
         var result = AppUtils.EMPTY_STRING
         val httpUrl = HttpUrl.parse(url)
         if (httpUrl == null) {
-            if (withAnalytics) {
-                AnalyticsUtils.logUnsupportedInvalidPlaylist(url)
-            }
             return result
-        }
-        if (withAnalytics) {
-            AnalyticsUtils.logUnsupportedPlaylist(url)
         }
         val client = OkHttpClient.Builder()
                 .followRedirects(true)

@@ -22,6 +22,9 @@ import android.app.job.JobScheduler
 import android.content.Context
 import android.content.Intent
 import android.location.Geocoder
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
 import android.os.Message
@@ -29,13 +32,6 @@ import android.os.Messenger
 import android.os.RemoteException
 import android.view.View
 import androidx.core.app.JobIntentService
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationAvailability
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.permission.PermissionChecker
 import com.yuriy.openradio.shared.utils.AppLogger
@@ -43,7 +39,6 @@ import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.IntentUtils
 import java.util.Locale
 import java.util.TreeMap
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Created by Yuriy Chernyshov
@@ -422,11 +417,11 @@ class LocationService : JobIntentService() {
         }
     }
 
-    private var mFusedLocationClient: FusedLocationProviderClient? = null
+    private lateinit var mLocationManager: LocationManager
 
     override fun onCreate() {
         super.onCreate()
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        mLocationManager = getSystemService(LOCATION_SERVICE) as LocationManager
     }
 
     override fun onDestroy() {
@@ -458,94 +453,62 @@ class LocationService : JobIntentService() {
     }
 
     /**
-     * Do requests country code from fuse client.
-     * Before call this service, permission check is done at Activity.
-     *
-     * @param context Context of callee.
-     * @param listener Listener to the location event.
+     * Requests the country code from Android's location manager.
+     * Before calling this service, permission check is done at Activity.
      */
     @SuppressLint("MissingPermission")
     private fun requestCountryCode(context: Context, listener: LocationServiceListener) {
-        val locationListener = LocationListenerImpl(
-            listener, context, mFusedLocationClient!!
-        )
-        val interval = 100L
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval).build()
-        mFusedLocationClient?.requestLocationUpdates(
-            request,
-            locationListener,
-            Looper.getMainLooper()
-        )
+        val providers = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+            .filter(mLocationManager::isProviderEnabled)
+        if (providers.isEmpty()) {
+            listener.onCountryCodeLocated(Country.COUNTRY_CODE_DEFAULT)
+            return
+        }
+        val locationListener = LocationListenerImpl(listener, context, mLocationManager)
+        for (provider in providers) {
+            mLocationManager.requestLocationUpdates(provider, 0L, 0f, locationListener, Looper.getMainLooper())
+        }
     }
 
-    /**
-     * Define a listener that responds to location updates.
-     */
     private class LocationListenerImpl(
-        private var mListener: LocationServiceListener,
+        private val listener: LocationServiceListener,
         context: Context,
-        fusedLocationClient: FusedLocationProviderClient
-    ) : LocationCallback() {
-        private var mContext: Context?
-        private var mFusedLocationClient: FusedLocationProviderClient?
-        private val mCounter: AtomicInteger
-        override fun onLocationAvailability(availability: LocationAvailability) {
-            super.onLocationAvailability(availability)
-            if (!availability.isLocationAvailable) {
-                clear()
-            }
-        }
+        private var locationManager: LocationManager?
+    ) : LocationListener {
+        private var context: Context? = context
 
-        override fun onLocationResult(result: LocationResult) {
-            super.onLocationResult(result)
-            if (mCounter.getAndIncrement() < MAX_COUNT) {
-                return
-            }
-            if (mContext == null) {
-                return
-            }
-
+        override fun onLocationChanged(location: Location) {
+            val context = context ?: return
             var countryCode = Country.COUNTRY_CODE_DEFAULT
-            val location = result.lastLocation
             try {
-                mContext?.let {
-                    val geocoder = Geocoder(it, Locale.getDefault())
-                    val addresses = geocoder.getFromLocation(
-                        location?.latitude ?: Country.LAT_DEFAULT,
-                        location?.longitude ?: Country.LONG_DEFAULT,
-                        1
-                    )
-                    if (addresses?.isNotEmpty() == true) {
-                        countryCode = addresses[0].countryCode
-                    } else {
-                        AppLogger.e("$TAG Addresses are empty")
-                    }
+                val addresses = Geocoder(context, Locale.getDefault()).getFromLocation(
+                    location.latitude,
+                    location.longitude,
+                    1
+                )
+                if (addresses?.isNotEmpty() == true) {
+                    countryCode = addresses[0].countryCode
+                } else {
+                    AppLogger.e("$TAG Addresses are empty")
                 }
             } catch (e: Exception) {
                 AppLogger.e("$TAG Exception while access Addresses", e)
             }
-
-            mListener.onCountryCodeLocated(countryCode)
+            listener.onCountryCodeLocated(countryCode)
             clear()
         }
 
+        override fun onProviderDisabled(provider: String) = Unit
+
+        override fun onProviderEnabled(provider: String) = Unit
+
+        @Deprecated("Deprecated in Android")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+
         private fun clear() {
-            if (mContext == null) {
-                return
-            }
-            mFusedLocationClient?.removeLocationUpdates(this)
-            mContext = null
-            mFusedLocationClient = null
-        }
-
-        companion object {
-            private const val MAX_COUNT = 0
-        }
-
-        init {
-            mContext = context
-            mFusedLocationClient = fusedLocationClient
-            mCounter = AtomicInteger(0)
+            locationManager?.removeUpdates(this)
+            locationManager = null
+            context = null
         }
     }
 }

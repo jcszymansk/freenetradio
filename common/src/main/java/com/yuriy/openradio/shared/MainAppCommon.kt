@@ -17,23 +17,17 @@
 package com.yuriy.openradio.shared
 
 import android.content.Context
-import android.os.Build
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.multidex.MultiDex
 import androidx.multidex.MultiDexApplication
-import com.google.android.gms.security.ProviderInstaller
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
-import com.yuriy.openradio.shared.utils.AnalyticsUtils
-import com.yuriy.openradio.shared.utils.AppLogger
-import com.yuriy.openradio.shared.utils.AppUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import javax.net.ssl.SSLContext
 
 /**
  * Created with Android Studio.
@@ -50,18 +44,8 @@ open class MainAppCommon : MultiDexApplication() {
         super.onCreate()
         MultiDex.install(applicationContext)
         DependencyRegistryCommon.init(applicationContext)
-        // Address devices API 19 and lower.
-        try {
-            ProviderInstaller.installIfNeeded(applicationContext)
-            val sslContext = SSLContext.getInstance("TLSv1.2")
-            sslContext.init(null, null, null)
-            sslContext.createSSLEngine()
-        } catch (e: Throwable) {
-            AppLogger.e("$CLASS_NAME can't install the provider", e)
-        }
 
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true)
-        sendStats(applicationContext)
 
         mAppScope.launch(Dispatchers.IO) {
             correctBufferSettings(applicationContext)
@@ -69,19 +53,6 @@ open class MainAppCommon : MultiDexApplication() {
     }
 
     companion object {
-        /**
-         * Tag string to use in logging message.
-         */
-        private val CLASS_NAME = MainAppCommon::class.java.simpleName
-
-        /**
-         * Send stats of the device to the cloud.
-         */
-        private fun sendStats(context: Context) {
-            AnalyticsUtils.logMessage("OS ver: " + Build.VERSION.RELEASE)
-            AnalyticsUtils.logMessage("SDK ver: " + Build.VERSION.SDK_INT)
-            AnalyticsUtils.logMessage("Density: : " + AppUtils.getDensityDpi(context))
-        }
 
         /**
          * Correct mal formatted values entered by user.

@@ -18,6 +18,4 @@
     <string name="eq_label">Equalizer</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
-    <!-- Cast menu item -->
-    <string name="media_route_menu_title">Cast</string>
 </resources>

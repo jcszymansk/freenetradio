@@ -111,23 +111,6 @@ object MediaItemBuilder {
             .build()
     }
 
-    fun buildFeaturedMenuItem(context: Context): MediaItem {
-        val bundle = Bundle()
-        MediaItemHelper.setDrawableId(bundle, R.drawable.ic_featured)
-        return MediaItem.Builder()
-            .setMediaId(MediaId.MEDIA_ID_FEATURED_LIST)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS)
-                    .setTitle(context.getString(R.string.featured_list_title))
-                    .setExtras(bundle)
-                    .setIsBrowsable(true)
-                    .setIsPlayable(false)
-                    .build()
-            )
-            .build()
-    }
-
     fun buildNewStationsMenuItem(context: Context): MediaItem {
         val bundle = Bundle()
         MediaItemHelper.setDrawableId(bundle, R.drawable.ic_fiber_new_black_24dp)
