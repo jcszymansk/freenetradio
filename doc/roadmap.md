@@ -54,6 +54,8 @@ A clean checkout builds without private files, installs under a new identity, pl
 
 ### 4. Restore a clean, secret-free build
 
+**Progress:** mandatory `sign.properties` loading and inherited signing assignments have been removed. Gradle configuration succeeds; debug builds use Android's standard debug key and now stop at the separate inherited Google Services configuration.
+
 - Make the Gradle wrapper build a debug APK from a fresh checkout.
 - Stop `sign.gradle` from requiring `sign.properties` for ordinary builds.
 - Require release signing configuration only when a signed release is explicitly requested.

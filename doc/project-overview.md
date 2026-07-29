@@ -269,7 +269,7 @@ The shared application manifest enables cleartext traffic and exports `ImagesPro
 
 OkHttp and the Firebase BOM are pinned to versions compatible with API 17.
 
-The configured release version is `15.0.0`; `version.properties` contains version code `716`. `sign.gradle` reads a gitignored `sign.properties`, signs builds with that keystore, and increments the version code after `signReleaseBundle` completes.
+The configured release version is `15.0.0`; `version.properties` contains version code `716`. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project establishes its independent identity and signing key.
 
 Historical APKs are retained under `app/store/`. No continuous-integration workflow is present under `.github`; release signing and version advancement are developer-run Gradle tasks.
 

@@ -11,17 +11,6 @@ if (versionPropsFile.canRead()) {
 }
 println "Version code:" + project.ext.versionCode
 
-def signConfFile = file("../sign.properties")
-if (signConfFile.canRead()) {
-    Properties signProps = new Properties()
-    signProps.load(new FileInputStream(signConfFile))
-    project.ext.storeFileProp = signProps["file"].toString()
-    aliasProp = signProps["alias"].toString()
-    pwdProp = signProps["pwd"].toString()
-} else {
-    throw new GradleException("Could not read sign.properties. File exists: ${signConfFile.exists()}")
-}
-
 tasks.configureEach { task ->
     if (task.name == "signReleaseBundle") {
         task.doLast() {

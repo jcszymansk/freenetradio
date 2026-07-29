@@ -30,24 +30,6 @@ android {
         jvmTarget = project.ext.kotlinJvmTarget
     }
 
-    signingConfigs {
-        config {
-            keyAlias aliasProp
-            keyPassword pwdProp
-            storeFile file(project.ext.storeFileProp)
-            storePassword pwdProp
-        }
-    }
-
-    buildTypes {
-        debug {
-            signingConfig signingConfigs.config
-        }
-        release {
-            signingConfig signingConfigs.config
-        }
-    }
-
     testOptions {
         unitTests.returnDefaultValues = true
     }
