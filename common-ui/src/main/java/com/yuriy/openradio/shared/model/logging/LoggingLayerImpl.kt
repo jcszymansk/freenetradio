@@ -20,19 +20,6 @@ import android.content.Context
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
-import com.yuriy.openradio.shared.R
-import com.yuriy.openradio.shared.utils.AppUtils
-import jakarta.activation.DataHandler
-import jakarta.activation.FileDataSource
-import jakarta.mail.Authenticator
-import jakarta.mail.Message
-import jakarta.mail.PasswordAuthentication
-import jakarta.mail.Session
-import jakarta.mail.Transport
-import jakarta.mail.internet.InternetAddress
-import jakarta.mail.internet.MimeBodyPart
-import jakarta.mail.internet.MimeMessage
-import jakarta.mail.internet.MimeMultipart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,19 +32,11 @@ import java.io.FileOutputStream
 import java.io.FileWriter
 import java.io.IOException
 import java.io.InputStreamReader
-import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class LoggingLayerImpl(private val mContext: Context) : LoggingLayer {
 
-    private var mUser = AppUtils.EMPTY_STRING
-    private var mPwd = AppUtils.EMPTY_STRING
-
-    init {
-        mUser = mContext.resources.openRawResource(R.raw.email_usr).bufferedReader().use { it.readText() }
-        mPwd = mContext.resources.openRawResource(R.raw.email_pwd).bufferedReader().use { it.readText() }
-    }
 
     override fun collectAdbLogs(onSuccess: (file: File) -> Unit, onError: (msg: String) -> Unit) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -96,14 +75,6 @@ class LoggingLayerImpl(private val mContext: Context) : LoggingLayer {
         }
     }
 
-    override fun sendLogsViaEmail(zipFile: File, onSuccess: () -> Unit, onError: (msg: String) -> Unit) {
-        try {
-            Transport.send(createEmailMessage(zipFile))
-            onSuccess()
-        } catch (throwable: Throwable) {
-            onError(throwable.message.toString())
-        }
-    }
 
     override fun clearLogs() {
         val logFile = File(getInternalStorageDir(mContext), "$LOGS_FILE_NAME.txt")
@@ -120,48 +91,6 @@ class LoggingLayerImpl(private val mContext: Context) : LoggingLayer {
         }
     }
 
-    private fun createEmailMessage(zipFile: File): Message {
-
-        val properties = Properties().apply {
-            put("mail.smtp.auth", "true")
-            put("mail.smtp.starttls.enable", "true")
-            put("mail.smtp.host", "smtp.gmail.com")
-            put("mail.smtp.port", "587")
-        }
-
-        val session = Session.getInstance(properties, object : Authenticator() {
-
-            override fun getPasswordAuthentication(): PasswordAuthentication {
-                return PasswordAuthentication(mUser, mPwd)
-            }
-        })
-
-        val message = MimeMessage(session).apply {
-            setFrom(InternetAddress(mUser))
-            setRecipients(Message.RecipientType.TO, InternetAddress.parse(mUser))
-            setSubject("ADB logs for Open Radio")
-
-            // Create a multipart message
-            val multipart = MimeMultipart()
-
-            // Create a body part for the email text
-            val textPart = MimeBodyPart()
-            textPart.setText("Attached are the ADB logs from the device.")
-            multipart.addBodyPart(textPart)
-
-            // Create a body part for the zip file
-            val zipPart = MimeBodyPart()
-            val dataSource = FileDataSource(zipFile.absolutePath)
-            zipPart.dataHandler = DataHandler(dataSource)
-            zipPart.fileName = "adb_logs.zip"
-            multipart.addBodyPart(zipPart)
-
-            // Set the multipart as the content of the message
-            setContent(multipart)
-        }
-
-        return message
-    }
 
     private fun zipLogFile(logFile: File): File {
         val zipFile = File(getInternalStorageDir(mContext), "$LOGS_FILE_NAME.zip")

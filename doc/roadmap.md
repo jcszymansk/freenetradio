@@ -54,7 +54,7 @@ A clean checkout builds without private files, installs under a new identity, pl
 
 ### 4. Restore a clean, secret-free build
 
-**Progress:** mandatory `sign.properties` loading, inherited signing assignments, and the unconditional Google Services and Crashlytics plugins have been removed. Gradle configuration succeeds; debug builds use Android's standard debug key. A complete APK build remains blocked by the legacy SMTP logging implementation covered by task 6.
+**Progress:** mandatory `sign.properties` loading, inherited signing assignments, unconditional Google Services and Crashlytics plugins, and direct SMTP logging have been removed. A debug APK now builds with Android's standard debug key.
 
 - Make the Gradle wrapper build a debug APK from a fresh checkout.
 - Stop `sign.gradle` from requiring `sign.properties` for ordinary builds.
@@ -91,7 +91,7 @@ Review other Google dependencies individually:
 
 ### 6. Replace direct log email with explicit sharing
 
-The recovered implementation is not acceptable as-is. `LoggingLayerImpl` reads SMTP credentials from packaged resources and sends logs directly through Gmail using Jakarta Mail. Pressing the settings button begins collection and transmission without handing the final send decision to the user.
+**Status: completed.** `LoggingLayerImpl` no longer reads packaged credentials or sends mail. The settings action asks for confirmation, collects the report, and opens an `ACTION_SEND` chooser with a `FileProvider` attachment. The user selects the recipient and confirms transmission in the external application.
 
 Replace it with a user-mediated diagnostic flow:
 

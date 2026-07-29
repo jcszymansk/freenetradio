@@ -34,6 +34,4 @@ dependencies {
     implementation project(':common')
     implementation "androidx.constraintlayout:constraintlayout:$constraintlayoutAndroidXVersion"
     implementation "androidx.fragment:fragment-ktx:$fragmentKtxVersion"
-    // https://mvnrepository.com/artifact/com.sun.mail/jakarta.mail
-    implementation "com.sun.mail:jakarta.mail:2.0.1"
 }

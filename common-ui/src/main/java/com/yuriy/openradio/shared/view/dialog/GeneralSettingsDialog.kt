@@ -17,6 +17,8 @@
 package com.yuriy.openradio.shared.view.dialog
 
 import android.app.Dialog
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
@@ -25,6 +27,7 @@ import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.SeekBar
+import androidx.core.content.FileProvider
 import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.LoggingLayerDependency
@@ -47,6 +50,7 @@ import com.yuriy.openradio.shared.utils.findTextView
 import com.yuriy.openradio.shared.utils.gone
 import com.yuriy.openradio.shared.utils.visible
 import com.yuriy.openradio.shared.view.list.CountriesArrayAdapter
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -163,46 +167,58 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
         spinner.adapter = adapter
         spinner.setSelection(idx)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val code = array[position].code
-                mMediaPresenter.onLocationChanged(code)
+                mMediaPresenter.onLocationChanged(array[position].code)
             }
 
-            override fun onNothingSelected(parent: AdapterView<*>?) {
-                // Not used.
-            }
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
 
         val sendLogsProgress = view.findViewById<ProgressBar>(R.id.send_logs_progress_view)
         val sendLogs = view.findButton(R.id.send_logs_btn)
         sendLogs.setOnClickListener {
-            sendLogsProgress.visible()
-            mLoggingLayer.collectAdbLogs(
-                {
-                    mLoggingLayer.sendLogsViaEmail(
-                        it,
+            androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setMessage(R.string.diagnostic_report_warning)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.diagnostic_report_continue) { _, _ ->
+                    sendLogsProgress.visible()
+                    mLoggingLayer.collectAdbLogs(
                         {
                             activity.runOnUiThread {
                                 sendLogsProgress.gone()
-                                SafeToast.showAnyThread(context, context.getString(R.string.success))
+                                shareLogs(it)
                             }
                         },
                         {
-                            activity.runOnUiThread { sendLogsProgress.gone() }
-                            SafeToast.showAnyThread(context, context.getString(R.string.failure))
+                            activity.runOnUiThread {
+                                sendLogsProgress.gone()
+                                SafeToast.showAnyThread(context, context.getString(R.string.failure))
+                            }
                         }
                     )
-                },
-                {
-                    activity.runOnUiThread { sendLogsProgress.gone() }
-                    SafeToast.showAnyThread(context, context.getString(R.string.failure))
                 }
-            )
+                .show()
         }
 
         return createAlertDialog(view)
     }
+    private fun shareLogs(zipFile: File) {
+        val context = requireContext()
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", zipFile)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/zip"
+            putExtra(Intent.EXTRA_SUBJECT, getString(R.string.diagnostic_report_subject))
+            putExtra(Intent.EXTRA_TEXT, getString(R.string.diagnostic_report_text))
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(Intent.createChooser(intent, getString(R.string.diagnostic_report_share)))
+        } catch (_: ActivityNotFoundException) {
+            SafeToast.showAnyThread(context, context.getString(R.string.failure))
+        }
+    }
+
 
     override fun onPause() {
         super.onPause()

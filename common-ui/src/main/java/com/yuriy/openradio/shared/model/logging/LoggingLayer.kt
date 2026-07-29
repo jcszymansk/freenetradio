@@ -25,11 +25,6 @@ interface LoggingLayer {
         onError: (msg: String) -> Unit
     )
 
-    fun sendLogsViaEmail(
-        zipFile: File,
-        onSuccess: () -> Unit,
-        onError: (msg: String) -> Unit
-    )
 
     fun clearLogs()
 }
