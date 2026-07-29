@@ -35,6 +35,8 @@ A clean checkout builds without private files, installs under a new identity, pl
 
 ### 2. Reduce the supported product surface
 
+**Status: completed.**
+
 - Remove `:tv` and `:automotive` from `settings.gradle`.
 - Delete the `tv/` and `automotive/` application modules.
 - Remove dependencies and configuration used exclusively by those modules.
