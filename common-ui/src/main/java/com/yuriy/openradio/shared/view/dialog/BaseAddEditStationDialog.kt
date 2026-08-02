@@ -30,8 +30,11 @@ import android.widget.Spinner
 import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
+import com.yuriy.openradio.shared.dependencies.ServiceCommanderDependency
 import com.yuriy.openradio.shared.dependencies.SourcesLayerDependency
+import com.yuriy.openradio.shared.model.ServiceCommander
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
+import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.permission.PermissionChecker
 import com.yuriy.openradio.shared.service.location.LocationService
@@ -46,6 +49,9 @@ import com.yuriy.openradio.shared.utils.findLinearLayout
 import com.yuriy.openradio.shared.utils.findView
 import com.yuriy.openradio.shared.utils.invisible
 import com.yuriy.openradio.shared.utils.visible
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Created by Yuriy Chernyshov
@@ -56,14 +62,17 @@ import com.yuriy.openradio.shared.utils.visible
  *
  * Base dialog to use by Edit and Add dialogs.
  */
-abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDependency {
+abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDependency,
+    ServiceCommanderDependency {
 
     protected lateinit var mPresenter: AddEditStationDialogPresenter
     protected lateinit var mNameEdit: EditText
     protected lateinit var mUrlEdit: EditText
+    protected lateinit var mHomePageEdit: EditText
     protected lateinit var mCountriesSpinner: Spinner
     protected lateinit var mGenresSpinner: Spinner
     protected lateinit var mAddToFavCheckView: CheckBox
+    private lateinit var mServiceCommander: ServiceCommander
 
     /**
      * Text view for Image Url.
@@ -78,6 +87,10 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
         mPresenter = presenter
     }
 
+    override fun configureWith(serviceCommander: ServiceCommander) {
+        mServiceCommander = serviceCommander
+    }
+
     override fun configureWith(sourcesLayer: SourcesLayer) {
         mSourcesLayer = sourcesLayer
     }
@@ -86,6 +99,7 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
         super.onCreate(savedInstanceState)
         DependencyRegistryCommonUi.inject(this)
         DependencyRegistryCommon.injectSourcesLayer(this)
+        DependencyRegistryCommonUi.injectServiceCommander(this)
     }
 
     override fun onCreateView(
@@ -99,7 +113,7 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
         )
         val root = view.findLinearLayout(R.id.add_edit_station_dialog_root)
         root.layoutParams = layoutParams
-        val homePageEdit = view.findEditText(R.id.add_edit_station_home_page_edit)
+        mHomePageEdit = view.findEditText(R.id.add_edit_station_home_page_edit)
         mNameEdit = view.findEditText(R.id.add_edit_station_name_edit)
         mUrlEdit = view.findEditText(R.id.add_edit_station_stream_url_edit)
         mImageLocalUrlEdit = view.findEditText(R.id.add_edit_station_image_url_edit)
@@ -150,7 +164,7 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
                 mNameEdit.text.toString(),
                 mUrlEdit.text.toString(),
                 mImageLocalUrlEdit.text.toString(),
-                homePageEdit.text.toString(),
+                mHomePageEdit.text.toString(),
                 mGenresSpinner.selectedItem.toString(),
                 mCountriesSpinner.selectedItem.toString(),
                 mAddToFavCheckView.isChecked
@@ -180,6 +194,9 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
     protected fun onSuccess(message: String) {
         mProgressView.invisible()
         SafeToast.showAnyThread(context, message)
+        CoroutineScope(Dispatchers.Main).launch {
+            mServiceCommander.sendCommand(OpenRadioService.CMD_UPDATE_TREE)
+        }
         dialog?.dismiss()
     }
 

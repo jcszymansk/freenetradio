@@ -24,11 +24,11 @@ class RemoveStationDialogPresenterImpl(private val mContext: Context,
                                        private val mRadioStationManagerLayer: RadioStationManagerLayer) :
     RemoveStationDialogPresenter {
 
-    override fun removeRadioStation(mediaId: String?) {
+    override fun removeRadioStation(mediaId: String?, onSuccess: () -> Unit) {
         if (mediaId.isNullOrEmpty()) {
             AppLogger.e("Can't remove radio station with invalid media id")
             return
         }
-        mRadioStationManagerLayer.removeRadioStation(mContext, mediaId)
+        mRadioStationManagerLayer.removeRadioStation(mContext, mediaId, onSuccess)
     }
 }

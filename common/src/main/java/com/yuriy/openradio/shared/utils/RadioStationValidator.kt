@@ -55,7 +55,7 @@ class RadioStationValidator(
                 return@launch
             }
             val homePage = rsToAdd.homePage
-            if (!NetUtils.checkResource(context, homePage)) {
+            if (homePage.isNotEmpty() && !NetUtils.checkResource(context, homePage)) {
                 mUiScope.launch { onWarning("Radio Station's home page is invalid") }
             }
             mUiScope.launch { onSuccess("Radio Station validated successfully") }

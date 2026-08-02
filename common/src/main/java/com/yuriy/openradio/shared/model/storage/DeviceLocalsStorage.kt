@@ -61,6 +61,7 @@ class DeviceLocalsStorage(
      * @param name     Name of Radio Station.
      * @param url      URL of stream associated with Radio Station.
      * @param imageUrl URL of image associated with Radio Stream.
+     * @param homePage URL of the Radio Station's home page.
      * @param genre    Genre of Radio Station.
      * @param country  Country associated with Radio Station.
      * @param addToFav Whether or not Radio Station is in Favorite category.
@@ -68,7 +69,7 @@ class DeviceLocalsStorage(
      */
     @Synchronized
     fun update(
-        mediaId: String, name: String, url: String, imageUrl: String?,
+        mediaId: String, name: String, url: String, imageUrl: String?, homePage: String?,
         genre: String?, country: String?, addToFav: Boolean
     ): Boolean {
         var result = false
@@ -80,6 +81,7 @@ class DeviceLocalsStorage(
                 radioStation.name = name
                 radioStation.setVariant(BIT_RATE_DEFAULT, url)
                 radioStation.imageUrl = imageUrl ?: AppUtils.EMPTY_STRING
+                radioStation.homePage = homePage ?: AppUtils.EMPTY_STRING
                 radioStation.genre = genre ?: AppUtils.EMPTY_STRING
                 radioStation.country = country ?: AppUtils.EMPTY_STRING
                 if (addToFav) {

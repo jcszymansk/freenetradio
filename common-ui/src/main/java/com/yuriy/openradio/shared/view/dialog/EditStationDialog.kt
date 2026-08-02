@@ -111,6 +111,7 @@ class EditStationDialog : BaseAddEditStationDialog() {
     private fun handleUI(radioStation: RadioStation) {
         mNameEdit.setText(radioStation.name)
         mUrlEdit.setText(radioStation.getStreamUrlFixed())
+        mHomePageEdit.setText(radioStation.homePage)
         mCountriesSpinner.setSelection(getCountryPosition(radioStation.country))
         mGenresSpinner.setSelection(getGenrePosition(radioStation.genre))
         mAddToFavCheckView.isChecked = mEditStationPresenter.isRadioStationFavorite(radioStation)

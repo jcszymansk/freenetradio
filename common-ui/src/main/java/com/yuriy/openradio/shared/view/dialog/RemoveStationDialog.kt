@@ -19,9 +19,15 @@ import android.app.Dialog
 import android.os.Bundle
 import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
+import com.yuriy.openradio.shared.dependencies.ServiceCommanderDependency
+import com.yuriy.openradio.shared.model.ServiceCommander
+import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.findButton
 import com.yuriy.openradio.shared.utils.findTextView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Created by Yuriy Chernyshov
@@ -29,17 +35,23 @@ import com.yuriy.openradio.shared.utils.findTextView
  * On 12/20/14
  * E-Mail: chernyshov.yuriy@gmail.com
  */
-class RemoveStationDialog : BaseDialogFragment() {
+class RemoveStationDialog : BaseDialogFragment(), ServiceCommanderDependency {
 
     private lateinit var mRemoveStationDialogPresenter: RemoveStationDialogPresenter
+    private lateinit var mServiceCommander: ServiceCommander
 
     fun configureWith(presenter: RemoveStationDialogPresenter) {
         mRemoveStationDialogPresenter = presenter
     }
 
+    override fun configureWith(serviceCommander: ServiceCommander) {
+        mServiceCommander = serviceCommander
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DependencyRegistryCommonUi.inject(this)
+        DependencyRegistryCommonUi.injectServiceCommander(this)
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
@@ -54,7 +66,11 @@ class RemoveStationDialog : BaseDialogFragment() {
         textView.text = getString(R.string.remove_station_dialog_main_text, name)
         val removeBtn = view.findButton(R.id.remove_station_dialog_add_btn_view)
         removeBtn.setOnClickListener {
-            mRemoveStationDialogPresenter.removeRadioStation(mediaId)
+            mRemoveStationDialogPresenter.removeRadioStation(mediaId) {
+                CoroutineScope(Dispatchers.Main).launch {
+                    mServiceCommander.sendCommand(OpenRadioService.CMD_UPDATE_TREE)
+                }
+            }
             dialog?.dismiss()
         }
         val cancelBtn = view.findButton(R.id.remove_station_dialog_cancel_btn_view)

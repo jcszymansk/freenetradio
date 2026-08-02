@@ -34,8 +34,7 @@ class RadioStationManagerLayerImpl(
     urlLayer: UrlLayer,
     private val mDeviceLocalsStorage: DeviceLocalsStorage,
     private val mFavoritesStorage: FavoritesStorage,
-    private val mImagesPersistenceLayer: ImagesPersistenceLayer,
-    private val mListener: RadioStationManagerLayerListener
+    private val mImagesPersistenceLayer: ImagesPersistenceLayer
 ) : RadioStationManagerLayer {
 
     private var mUiScope = CoroutineScope(Dispatchers.Main)
@@ -49,8 +48,7 @@ class RadioStationManagerLayerImpl(
     ) {
         mRadioStationValidator.validate(
             context, rsToAdd,
-            { msg ->
-                onSuccess(msg)
+            { _ ->
                 run {
                     val radioStation = RadioStation.makeDefaultInstance(
                         mDeviceLocalsStorage.getId()
@@ -58,6 +56,7 @@ class RadioStationManagerLayerImpl(
                     radioStation.name = rsToAdd.name
                     radioStation.setVariant(MediaStream.BIT_RATE_DEFAULT, rsToAdd.url)
                     radioStation.imageUrl = rsToAdd.imageLocalUrl
+                    radioStation.homePage = rsToAdd.homePage
                     radioStation.genre = rsToAdd.genre
                     radioStation.country = rsToAdd.country
                     radioStation.isLocal = true
@@ -65,7 +64,6 @@ class RadioStationManagerLayerImpl(
                     if (rsToAdd.isAddToFav) {
                         mFavoritesStorage.add(radioStation)
                     }
-                    mListener.notifyChildrenChangedBundle(MediaId.MEDIA_ID_ROOT)
                     onSuccess("Radio Station added successfully")
                 }
             },
@@ -83,21 +81,17 @@ class RadioStationManagerLayerImpl(
             mImagesPersistenceLayer.delete(mediaId)
 
             val result = mDeviceLocalsStorage.update(
-                mediaId, rsToAdd.name, rsToAdd.url, rsToAdd.imageLocalUrl, rsToAdd.genre, rsToAdd.country,
-                rsToAdd.isAddToFav
+                mediaId, rsToAdd.name, rsToAdd.url, rsToAdd.imageLocalUrl, rsToAdd.homePage,
+                rsToAdd.genre, rsToAdd.country, rsToAdd.isAddToFav
             )
             if (result) {
-                mUiScope.launch {
-                    mListener.notifyChildrenChangedBundle(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-                    onSuccess("Radio Station updated successfully")
-                }
+                mUiScope.launch { onSuccess("Radio Station updated successfully") }
             } else {
                 mUiScope.launch { onFailure("Can not update Radio Station") }
             }
         }
     }
-
-    override fun removeRadioStation(context: Context?, mediaId: String?) {
+    override fun removeRadioStation(context: Context?, mediaId: String?, onSuccess: () -> Unit) {
         if (context == null) {
             return
         }
@@ -110,8 +104,7 @@ class RadioStationManagerLayerImpl(
                 context.contentResolver.delete(ImagesStore.getDeleteUri(mediaId), AppUtils.EMPTY_STRING, emptyArray())
                 mDeviceLocalsStorage.remove(radioStation)
             }
-            mListener.removeByMediaIdBundle(mediaId)
-            mListener.notifyChildrenChangedBundle(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+            mUiScope.launch { onSuccess() }
         }
     }
 }

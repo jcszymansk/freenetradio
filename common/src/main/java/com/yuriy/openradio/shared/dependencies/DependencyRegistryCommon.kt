@@ -27,7 +27,6 @@ import com.yuriy.openradio.shared.model.eq.EqualizerLayerImpl
 import com.yuriy.openradio.shared.model.filter.FilterImpl
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayer
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImpl
-import com.yuriy.openradio.shared.model.media.RadioStationManagerLayerListener
 import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.net.NetworkLayerImpl
@@ -144,9 +143,8 @@ object DependencyRegistryCommon {
         val imagesDatabase = ImagesDatabase.getInstance(context)
         sImagesPersistenceLayer = ImagesPersistenceLayerImpl(context, downloader, imagesDatabase)
 
-        val listenerProxy = RadioStationManagerLayerListenerImpl()
         sRadioStationManagerLayer = RadioStationManagerLayerImpl(
-            modelLayer, urlLayer, sDeviceLocalsStorage, sFavoritesStorage, sImagesPersistenceLayer, listenerProxy
+            modelLayer, urlLayer, sDeviceLocalsStorage, sFavoritesStorage, sImagesPersistenceLayer
         )
         sLocationStorage = LocationStorage(contextRef)
         sNetworkSettingsStorage = NetworkSettingsStorage(contextRef)
@@ -167,8 +165,7 @@ object DependencyRegistryCommon {
             apiCachePersistent,
             apiCacheInMemory,
             sSleepTimerModel,
-            countriesCache,
-            listenerProxy
+            countriesCache
         )
 
         sInit.set(true)
@@ -247,17 +244,6 @@ object DependencyRegistryCommon {
             ParserLayerRadioBrowserImpl(FilterImpl())
         } else {
             ParserLayerWebRadioImpl(set)
-        }
-    }
-
-    private class RadioStationManagerLayerListenerImpl : RadioStationManagerLayerListener {
-
-        override fun notifyChildrenChangedBundle(parentId: String) {
-
-        }
-
-        override fun removeByMediaIdBundle(mediaId: String) {
-
         }
     }
 }

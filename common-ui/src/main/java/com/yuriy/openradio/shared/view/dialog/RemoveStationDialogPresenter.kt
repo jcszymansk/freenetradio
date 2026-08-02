@@ -21,5 +21,5 @@ package com.yuriy.openradio.shared.view.dialog
  */
 interface RemoveStationDialogPresenter {
 
-    fun removeRadioStation(mediaId: String?)
+    fun removeRadioStation(mediaId: String?, onSuccess: () -> Unit)
 }

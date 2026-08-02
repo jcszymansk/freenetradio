@@ -16,5 +16,5 @@ interface RadioStationManagerLayer {
         onFailure: (msg: String) -> Unit
     )
 
-    fun removeRadioStation(context: Context?, mediaId: String?)
+    fun removeRadioStation(context: Context?, mediaId: String?, onSuccess: () -> Unit)
 }
