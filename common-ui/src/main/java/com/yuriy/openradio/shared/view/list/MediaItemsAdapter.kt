@@ -102,6 +102,13 @@ abstract class MediaItemsAdapter : RecyclerView.Adapter<MediaItemViewHolder>() {
         mAdapterData.clear()
     }
 
+    fun updateData(value: List<MediaItem>, replace: Boolean) {
+        if (replace) {
+            clearData()
+        }
+        addAll(value)
+    }
+
     open fun clear() {
         clearData()
     }

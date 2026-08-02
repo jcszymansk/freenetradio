@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.model
 
 import android.os.Bundle
+import com.yuriy.openradio.shared.service.OpenRadioService
 
 interface ServiceCommander {
 
@@ -27,4 +28,8 @@ interface ServiceCommander {
         parameters: Bundle = Bundle(),
         resultCallback: ((Int, Bundle?) -> Unit)
     ): Boolean
+}
+
+internal suspend fun ServiceCommander.updateBrowseTree(): Boolean {
+    return sendCommand(OpenRadioService.CMD_UPDATE_TREE)
 }

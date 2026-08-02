@@ -21,7 +21,7 @@ import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.ServiceCommanderDependency
 import com.yuriy.openradio.shared.model.ServiceCommander
-import com.yuriy.openradio.shared.service.OpenRadioService
+import com.yuriy.openradio.shared.model.updateBrowseTree
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.findButton
 import com.yuriy.openradio.shared.utils.findTextView
@@ -68,7 +68,7 @@ class RemoveStationDialog : BaseDialogFragment(), ServiceCommanderDependency {
         removeBtn.setOnClickListener {
             mRemoveStationDialogPresenter.removeRadioStation(mediaId) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    mServiceCommander.sendCommand(OpenRadioService.CMD_UPDATE_TREE)
+                    mServiceCommander.updateBrowseTree()
                 }
             }
             dialog?.dismiss()

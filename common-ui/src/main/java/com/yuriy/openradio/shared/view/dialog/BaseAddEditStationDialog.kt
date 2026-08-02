@@ -34,7 +34,7 @@ import com.yuriy.openradio.shared.dependencies.ServiceCommanderDependency
 import com.yuriy.openradio.shared.dependencies.SourcesLayerDependency
 import com.yuriy.openradio.shared.model.ServiceCommander
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
-import com.yuriy.openradio.shared.service.OpenRadioService
+import com.yuriy.openradio.shared.model.updateBrowseTree
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.permission.PermissionChecker
 import com.yuriy.openradio.shared.service.location.LocationService
@@ -195,7 +195,7 @@ abstract class BaseAddEditStationDialog : BaseDialogFragment(), SourcesLayerDepe
         mProgressView.invisible()
         SafeToast.showAnyThread(context, message)
         CoroutineScope(Dispatchers.Main).launch {
-            mServiceCommander.sendCommand(OpenRadioService.CMD_UPDATE_TREE)
+            mServiceCommander.updateBrowseTree()
         }
         dialog?.dismiss()
     }

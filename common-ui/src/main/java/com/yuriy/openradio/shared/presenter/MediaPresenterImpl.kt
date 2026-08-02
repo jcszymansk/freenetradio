@@ -505,10 +505,7 @@ class MediaPresenterImpl(
             return
         }
         mAdapter?.parentId = parentId
-        if (replace || isSameCatalogue.not()) {
-            mAdapter?.clearData()
-        }
-        mAdapter?.addAll(children)
+        mAdapter?.updateData(children, replace || isSameCatalogue.not())
         mAdapter?.notifyDataSetChanged()
         restoreSelectedPosition(parentId)
     }
