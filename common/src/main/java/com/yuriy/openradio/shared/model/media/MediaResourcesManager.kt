@@ -214,6 +214,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
             mSubscribedParentId = parentId
             mSubscriptionCallback = callback
             browser.subscribe(parentId, null).await()
+            callback.onChildrenLoaded(parentId, getChildren(parentId, bundle = bundle).toMutableList(), true)
         }
     }
 
