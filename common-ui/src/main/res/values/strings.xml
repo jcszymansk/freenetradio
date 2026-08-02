@@ -94,7 +94,7 @@
     <string name="send_logs_lbl">Prepare diagnostic report</string>
     <string name="diagnostic_report_warning">The report may contain application logs, station and stream URLs, application version, and device information. Continue?</string>
     <string name="diagnostic_report_continue">Prepare report</string>
-    <string name="diagnostic_report_subject">Open Radio diagnostic report</string>
+    <string name="diagnostic_report_subject">FreeNetRadio diagnostic report</string>
     <string name="diagnostic_report_text">Diagnostic report attached. Review the recipients and contents before sending.</string>
     <string name="diagnostic_report_share">Share diagnostic report</string>
     <string name="success">Success</string>

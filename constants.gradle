@@ -54,7 +54,7 @@ project.ext {
     /**
      * Application constants
      */
-    applicationId = "com.yuriy.openradio"
+    applicationId = "com.github.jcszymansk.freenetradio"
     versionName = "15.0.0"
     versionCode = 0
 

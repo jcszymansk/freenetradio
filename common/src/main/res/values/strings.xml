@@ -15,8 +15,8 @@
     limitations under the License.
 -->
 <resources>
-    <string name="app_name">Open Radio</string>
-    <string name="app_name_user_agent">OpenRadio</string>
+    <string name="app_name">FreeNetRadio</string>
+    <string name="app_name_user_agent">FreeNetRadio</string>
     <string name="user_agent_can_not_apply">Can not apply User Agent</string>
     <string name="ok_label">OK</string>
     <string name="buffering">Buffering</string>
@@ -60,8 +60,8 @@
     </string>
     <string name="default_country_use_location">Use Location</string>
     <string name="mobile_network_disabled">Mobile network is disabled</string>
-    <string name="notif_close_app_label">Close Open Radio</string>
+    <string name="notif_close_app_label">Close FreeNetRadio</string>
     <!-- Notification Channel -->
     <string name="notification_channel">Now Playing</string>
-    <string name="notification_channel_description">Shows what music is currently playing on Open Radio</string>
+    <string name="notification_channel_description">Shows what music is currently playing on FreeNetRadio</string>
 </resources>

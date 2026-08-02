@@ -1,6 +1,6 @@
-# OpenRadio Project Overview
+# FreeNetRadio Project Overview
 
-OpenRadio is a Kotlin Android internet-radio client targeting phones, tablets, and Android Auto. It consumes station directories from [Radio Browser](https://www.radio-browser.info/) and [WebRadioDB](https://jcorporation.github.io/webradiodb/), then exposes browsing and playback through an Android Media3 `MediaLibraryService`.
+FreeNetRadio is a Kotlin Android internet-radio client targeting phones, tablets, and Android Auto. It consumes station directories from [Radio Browser](https://www.radio-browser.info/) and [WebRadioDB](https://jcorporation.github.io/webradiodb/), then exposes browsing and playback through an Android Media3 `MediaLibraryService`.
 
 The `app` module is a UI shell over shared networking, persistence, media-session, and playback code.
 
@@ -20,7 +20,7 @@ All three modules are declared in `settings.gradle`.
 | `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, file import/export, logging, and service-command glue |
 | `app/` | Phone/tablet UI and Android Auto metadata |
 
-The application uses `applicationId` `com.yuriy.openradio`; establishing an independent identity is a later roadmap item.
+The application uses `applicationId` `com.github.jcszymansk.freenetradio`. Kotlin namespaces retain the recovered source package names; they do not define the installed application identity.
 
 ## Core architecture
 
@@ -256,7 +256,7 @@ The shared application manifest enables cleartext traffic and exports `ImagesPro
 
 OkHttp is pinned to a version compatible with API 17.
 
-The configured release version is `15.0.0`; `version.properties` contains version code `716`. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project establishes its independent identity and signing key.
+The configured release version is `15.0.0`; `version.properties` contains version code `716`. The application ID is `com.github.jcszymansk.freenetradio` and the user-visible name is FreeNetRadio. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project creates its release signing key.
 
 Historical APKs are retained under `app/store/`. No continuous-integration workflow is present under `.github`; release signing and version advancement are developer-run Gradle tasks.
 

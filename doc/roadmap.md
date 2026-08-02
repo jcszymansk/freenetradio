@@ -46,6 +46,8 @@ A clean checkout builds without private files, installs under a new identity, pl
 
 ### 3. Establish an independent application identity
 
+**Progress:** the application is now named FreeNetRadio and uses application ID `com.github.jcszymansk.freenetradio`. Package-derived provider authorities, media-session command IDs, notification text, diagnostic report text, and the user agent use the new identity. New icons and a release signing identity remain outstanding.
+
 - Choose a new project and application name that cannot be confused with the commercial application.
 - Change `applicationId` before creating user data or publishing builds.
 - Replace package-dependent authorities, labels, icons, links, and contact details.
@@ -93,6 +95,10 @@ Review other Google dependencies individually:
 
 **Status: completed.** `LoggingLayerImpl` no longer reads packaged credentials or sends mail. The settings action asks for confirmation, collects the report, and opens an `ACTION_SEND` chooser with a `FileProvider` attachment. The user selects the recipient and confirms transmission in the external application.
 
+The chooser and attachment flow has been manually verified on a real phone. Cancellation semantics are intentionally delegated to the receiving application, which may cancel, save a draft, or send.
+
+**Follow-up:** move report files from internal persistent storage to cache storage and avoid deleting a report while a receiving application may still be reading it. Retest sharing after that change.
+
 Replace it with a user-mediated diagnostic flow:
 
 1. The user selects **Prepare diagnostic report** in settings.
@@ -138,6 +144,8 @@ Validate and repair the smallest useful feature set:
 Defer cloud synchronization, recommendation systems, accounts, telemetry, and new discovery features.
 
 ### 8. Validate Android Auto end to end
+
+**Progress:** phone and real-car Android Auto operation has been manually exercised for several hours, including weak coverage and recovery after ordinary signal loss. The application does not always resume after a signal outage lasting several minutes; investigate this before general availability.
 
 Use the actual phone and vehicle/head unit as the primary acceptance environment. The Desktop Head Unit may supplement, but not replace, that test.
 

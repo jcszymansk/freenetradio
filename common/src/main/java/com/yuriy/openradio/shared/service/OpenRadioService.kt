@@ -1085,15 +1085,17 @@ class OpenRadioService : MediaLibraryService() {
 
     companion object {
 
-        const val CMD_FAVORITE_ON = "com.yuriy.openradio.COMMAND.FAVORITE_ON"
-        const val CMD_FAVORITE_OFF = "com.yuriy.openradio.COMMAND.FAVORITE_OFF"
-        const val CMD_NET_CHANGED = "com.yuriy.openradio.COMMAND.NET_CHANGED"
-        const val CMD_STOP_SERVICE = "com.yuriy.openradio.COMMAND.STOP_SERVICE"
-        const val CMD_TOGGLE_LAST_PLAYED_ITEM = "com.yuriy.openradio.COMMAND.TOGGLE_LAST_PLAYED_ITEM"
-        const val CMD_UPDATE_SORT_IDS = "com.yuriy.openradio.COMMAND.UPDATE_SORT_IDS"
-        const val CMD_CLEAR_CACHE = "com.yuriy.openradio.COMMAND.CLEAR_CACHE"
-        const val CMD_MASTER_VOLUME_CHANGED = "com.yuriy.openradio.COMMAND.MASTER_VOLUME_CHANGED"
-        const val CMD_UPDATE_TREE = "com.yuriy.openradio.COMMAND.UPDATE_TREE"
+        const val CMD_FAVORITE_ON = "com.github.jcszymansk.freenetradio.COMMAND.FAVORITE_ON"
+        const val CMD_FAVORITE_OFF = "com.github.jcszymansk.freenetradio.COMMAND.FAVORITE_OFF"
+        const val CMD_NET_CHANGED = "com.github.jcszymansk.freenetradio.COMMAND.NET_CHANGED"
+        const val CMD_STOP_SERVICE = "com.github.jcszymansk.freenetradio.COMMAND.STOP_SERVICE"
+        const val CMD_TOGGLE_LAST_PLAYED_ITEM =
+            "com.github.jcszymansk.freenetradio.COMMAND.TOGGLE_LAST_PLAYED_ITEM"
+        const val CMD_UPDATE_SORT_IDS = "com.github.jcszymansk.freenetradio.COMMAND.UPDATE_SORT_IDS"
+        const val CMD_CLEAR_CACHE = "com.github.jcszymansk.freenetradio.COMMAND.CLEAR_CACHE"
+        const val CMD_MASTER_VOLUME_CHANGED =
+            "com.github.jcszymansk.freenetradio.COMMAND.MASTER_VOLUME_CHANGED"
+        const val CMD_UPDATE_TREE = "com.github.jcszymansk.freenetradio.COMMAND.UPDATE_TREE"
 
         private lateinit var TAG: String
 

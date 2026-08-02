@@ -1,9 +1,9 @@
-# Open Radio #
+# FreeNetRadio
 
 
 ### What is this ? ###
 
-* **Open Radio** uses Android's media framework to stream worldwide radio stations on phones, tablets, and Android Auto.
+* **FreeNetRadio** uses Android's media framework to stream worldwide radio stations on phones, tablets, and Android Auto.
 * This project is use [Community Radio Browser's API](http://www.radio-browser.info) and [Web Radio](https://jcorporation.github.io/webradiodb) - services that provide a list of radio stations broadcasting their live stream on the Internet.
 * Playlist parser is provided by [William Seemann](https://github.com/wseemann/JavaPlaylistParser)
 * Playback powered by [Exo Player](https://github.com/google/ExoPlayer)
