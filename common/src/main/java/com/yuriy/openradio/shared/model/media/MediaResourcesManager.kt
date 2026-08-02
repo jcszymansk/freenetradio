@@ -80,6 +80,8 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
     private val mPlayer: Player? get() = mMediaBrowser
 
     private var mNowPlaying: MediaItem? = null
+    private var mSubscribedParentId = AppUtils.EMPTY_STRING
+    private var mSubscriptionCallback: MediaItemsSubscription? = null
 
     /**
      * Constructor.
@@ -182,10 +184,36 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
         bundle: Bundle = Bundle()
     ) {
         AppLogger.i("$mClassName subscribe:$parentId, page:$page")
+        if (callback == null) {
+            AppLogger.e("$mClassName subscribe callback is null")
+            return
+        }
         mScope.launch {
-            callback?.onChildrenLoaded(
-                parentId, getChildren(parentId, page, bundle).toMutableList()
-            )
+            if (page != 0) {
+                callback.onChildrenLoaded(parentId, getChildren(parentId, page, bundle).toMutableList(), false)
+                return@launch
+            }
+
+            val browser = mMediaBrowser ?: return@launch
+            if (mSubscribedParentId.isNotEmpty() && mSubscribedParentId != parentId) {
+                browser.unsubscribe(mSubscribedParentId).await()
+                mSubscribedParentId = AppUtils.EMPTY_STRING
+                mSubscriptionCallback = null
+            }
+            if (parentId == MediaId.MEDIA_ID_SEARCH_FROM_APP ||
+                parentId == MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
+            ) {
+                callback.onChildrenLoaded(parentId, getChildren(parentId, bundle = bundle).toMutableList(), true)
+                return@launch
+            }
+            if (mSubscribedParentId == parentId) {
+                callback.onChildrenLoaded(parentId, getChildren(parentId, bundle = bundle).toMutableList(), true)
+                return@launch
+            }
+
+            mSubscribedParentId = parentId
+            mSubscriptionCallback = callback
+            browser.subscribe(parentId, null).await()
         }
     }
 
@@ -276,7 +304,14 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
             itemCount: Int,
             params: MediaLibraryService.LibraryParams?
         ) {
-            AppLogger.d("TODO: BrowserListener ChildrenChanged for $parentId")
+            AppLogger.d("$mClassName children changed for $parentId, count:$itemCount")
+            if (parentId != mSubscribedParentId) {
+                return
+            }
+            val callback = mSubscriptionCallback ?: return
+            mScope.launch {
+                callback.onChildrenLoaded(parentId, getChildren(parentId).toMutableList(), true)
+            }
         }
 
         override fun onSearchResultChanged(

@@ -493,7 +493,8 @@ class MediaPresenterImpl(
     @SuppressLint("NotifyDataSetChanged")
     override fun handleChildrenLoaded(
         parentId: String,
-        children: List<MediaItem>
+        children: List<MediaItem>,
+        replace: Boolean
     ) {
         // Check whether category has changed.
         val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
@@ -504,7 +505,7 @@ class MediaPresenterImpl(
             return
         }
         mAdapter?.parentId = parentId
-        if (isSameCatalogue.not()) {
+        if (replace || isSameCatalogue.not()) {
             mAdapter?.clearData()
         }
         mAdapter?.addAll(children)

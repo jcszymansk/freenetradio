@@ -100,7 +100,6 @@ class OpenRadioService : MediaLibraryService() {
      * Media Session.
      */
     private lateinit var mSession: MediaLibrarySession
-    private var mBrowser: MediaSession.ControllerInfo? = null
     private var mCurrentSearchQuery = AppUtils.EMPTY_STRING
 
     /**
@@ -275,10 +274,8 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     private fun notifyChildrenChanged(mediaId: String) {
-        mBrowser?.let {
-            mBrowseTree.invalidate(mediaId)
-            mSession.notifyChildrenChanged(it, mediaId, 250, null)
-        }
+        mBrowseTree.invalidate(mediaId)
+        mSession.notifyChildrenChanged(mediaId, Int.MAX_VALUE, null)
     }
 
     /**
@@ -586,7 +583,6 @@ class OpenRadioService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             AppLogger.d("$TAG [$controller] Playback Resumption")
-            mBrowser = controller
             val mediaItemCount = mPlayer.mediaItemCount
             if (mediaItemCount != 0) {
                 return Futures.immediateFuture(
@@ -606,7 +602,6 @@ class OpenRadioService : MediaLibraryService() {
             intent: Intent
         ): Boolean {
             AppLogger.d("$TAG [$controllerInfo] Media Button Event $intent")
-            mBrowser = controllerInfo
             return super.onMediaButtonEvent(session, controllerInfo, intent)
         }
 
@@ -617,7 +612,6 @@ class OpenRadioService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<Void>> {
             AppLogger.d("$TAG [$browser] Subscribe to $parentId")
-            mBrowser = browser
             return Futures.immediateFuture(LibraryResult.ofVoid())
         }
 
@@ -627,7 +621,6 @@ class OpenRadioService : MediaLibraryService() {
             parentId: String
         ): ListenableFuture<LibraryResult<Void>> {
             AppLogger.d("$TAG [$browser] Unsubscribe from $parentId")
-            mBrowser = browser
             return Futures.immediateFuture(LibraryResult.ofVoid())
         }
 
@@ -638,7 +631,6 @@ class OpenRadioService : MediaLibraryService() {
             AppLogger.i(
                 "$TAG [$browser] GetLibraryRoot for clientPkgName=${browser.packageName}, clientUid=${browser.uid}"
             )
-            mBrowser = browser
             val rootExtras = Bundle().apply {
                 putBoolean(
                     MediaConstants.BROWSER_SERVICE_EXTRAS_KEY_SEARCH_SUPPORTED,
@@ -661,7 +653,6 @@ class OpenRadioService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             AppLogger.d("$TAG [$browser] GetChildren for $parentId page $page pageSize $pageSize")
-            mBrowser = browser
             return callWhenSourceReady(parentId, page, pageSize) {
                 val list = mBrowseTree[parentId] ?: ImmutableList.of()
                 val sublist = list.subList(it, list.size)
@@ -679,7 +670,6 @@ class OpenRadioService : MediaLibraryService() {
             mediaId: String
         ): ListenableFuture<LibraryResult<MediaItem>> {
             AppLogger.d("$TAG [$browser] GetItem for $mediaId")
-            mBrowser = browser
             val item = mBrowseTree.getMediaItemByMediaId(mediaId)
                 ?: return Futures.immediateFuture(
                     LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
@@ -694,7 +684,6 @@ class OpenRadioService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<Void>> {
             AppLogger.d("$TAG [$browser] Search for '$query'")
-            mBrowser = browser
             mCurrentSearchQuery = query
             return callWhenSearchReady(query) {
                 mSession.notifySearchResultChanged(browser, query, it, params)
@@ -710,7 +699,6 @@ class OpenRadioService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-            mBrowser = browser
             // This happens when search item clicked, browser provides no clue as to the query the item belongs to.
             // Maybe redesign is needed?
             val queryStr = if (query == AppUtils.USE_CUR_SEARCH_QUERY) {
@@ -928,7 +916,8 @@ class OpenRadioService : MediaLibraryService() {
                 }
 
                 CMD_UPDATE_TREE -> {
-                    notifyChildrenChanged(mCurrentParentId)
+                    notifyChildrenChanged(MediaId.MEDIA_ID_ROOT)
+                    notifyChildrenChanged(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
                     return mSessionCmdSuccess
                 }
 

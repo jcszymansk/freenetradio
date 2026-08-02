@@ -406,7 +406,9 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
         MediaItemsSubscription {
 
         override fun onChildrenLoaded(
-            parentId: String, children: List<MediaItem>
+            parentId: String,
+            children: List<MediaItem>,
+            replace: Boolean
         ) {
             AppLogger.i(
                 "$CLASS_NAME children loaded:$parentId, children:${children.size}"
@@ -437,7 +439,7 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
             if (PlayerUtils.isEndOfList(children)) {
                 return
             }
-            reference.mMediaPresenter.handleChildrenLoaded(parentId, children)
+            reference.mMediaPresenter.handleChildrenLoaded(parentId, children, replace)
         }
 
         override fun onError(parentId: String) {

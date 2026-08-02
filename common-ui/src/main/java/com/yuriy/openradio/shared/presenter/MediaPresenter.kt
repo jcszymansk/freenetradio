@@ -40,7 +40,8 @@ interface MediaPresenter {
 
     fun handleChildrenLoaded(
         parentId: String,
-        children: List<MediaItem>
+        children: List<MediaItem>,
+        replace: Boolean
     )
 
     fun handleClosePresenter()
