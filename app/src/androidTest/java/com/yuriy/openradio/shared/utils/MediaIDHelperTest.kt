@@ -35,7 +35,7 @@ class MediaIDHelperTest : TestCase() {
     fun testGetId() {
         val id = MediaId.MEDIA_ID_CHILD_CATEGORIES
         val startsWith = MediaId.MEDIA_ID_CHILD_CATEGORIES + "11"
-        MatcherAssert.assertThat(getId(startsWith, Country.COUNTRY_CODE_DEFAULT), Matchers.`is`(id))
+        MatcherAssert.assertThat(getId(startsWith, ""), Matchers.`is`(id))
     }
 
     fun testGetValidCountryCode() {
@@ -43,19 +43,28 @@ class MediaIDHelperTest : TestCase() {
         MatcherAssert.assertThat(getCountryCode(id, Country.COUNTRY_CODE_DEFAULT), Matchers.`is`("BR"))
     }
 
-    fun testGetInvalidCountryCodeFromValidValueSameSubName() {
+    fun testGetDefaultCountryCodeFromBaseCountriesId() {
         val id = MediaId.MEDIA_ID_COUNTRIES_LIST
-        MatcherAssert.assertThat(getCountryCode(id, Country.COUNTRY_CODE_DEFAULT), Matchers.nullValue())
+        MatcherAssert.assertThat(
+            getCountryCode(id, Country.COUNTRY_CODE_DEFAULT),
+            Matchers.`is`(Country.COUNTRY_CODE_DEFAULT)
+        )
     }
 
-    fun testGetInvalidCountryCodeFromValidValueDifferentSubName() {
+    fun testGetDefaultCountryCodeFromDifferentId() {
         val id = MediaId.MEDIA_ID_SEARCH_FROM_APP
-        MatcherAssert.assertThat(getCountryCode(id, Country.COUNTRY_CODE_DEFAULT), Matchers.nullValue())
+        MatcherAssert.assertThat(
+            getCountryCode(id, Country.COUNTRY_CODE_DEFAULT),
+            Matchers.`is`(Country.COUNTRY_CODE_DEFAULT)
+        )
     }
 
-    fun testGetInvalidCountryCodeFromNullValue() {
+    fun testGetDefaultCountryCodeFromNullValue() {
         val id: String? = null
-        MatcherAssert.assertThat(getCountryCode(id, Country.COUNTRY_CODE_DEFAULT), Matchers.nullValue())
+        MatcherAssert.assertThat(
+            getCountryCode(id, Country.COUNTRY_CODE_DEFAULT),
+            Matchers.`is`(Country.COUNTRY_CODE_DEFAULT)
+        )
     }
 
     fun testStartsWithAndEquals() {
