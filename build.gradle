@@ -28,3 +28,12 @@ allprojects {
 tasks.register('clean', Delete) {
     delete rootProject.buildDir
 }
+
+tasks.register('localCoverageReport') {
+    dependsOn ':common:createDebugUnitTestCoverageReport',
+            ':common-ui:createDebugUnitTestCoverageReport'
+}
+
+tasks.register('instrumentedCoverageReport') {
+    dependsOn ':app:createDebugAndroidTestCoverageReport'
+}
