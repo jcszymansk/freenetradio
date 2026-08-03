@@ -16,22 +16,44 @@
 
 package com.yuriy.openradio.shared.model.translation
 
-import com.yuriy.openradio.shared.model.media.MediaStream
 import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.getStreamBitrate
+import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.media.setVariant
-import org.hamcrest.CoreMatchers
-import org.hamcrest.MatcherAssert
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RadioStationJsonSerializerTest {
 
     @Test
-    fun serialization() {
-        val serializer = RadioStationJsonSerializer()
-        val radioStation = RadioStation.makeDefaultInstance("id-1")
-        radioStation.setVariant(MediaStream.BIT_RATE_DEFAULT, "http://www.stream-0.net")
-        val js = serializer.serialize(radioStation)
+    fun serializationRoundTrip() {
+        val expected = RadioStation.makeDefaultInstance("station-id").apply {
+            name = "Station"
+            setVariant(192, "https://example.com/stream")
+            country = "Poland"
+            countryCode = "PL"
+            genre = "Jazz"
+            homePage = "https://example.com"
+            codec = "MP3"
+            isLocal = true
+            sortId = 7
+            imageUrl = "https://example.com/image.png"
+        }
 
-        MatcherAssert.assertThat(js, CoreMatchers.notNullValue())
+        val serialized = RadioStationJsonSerializer().serialize(expected)
+        val actual = RadioStationJsonDeserializer().deserialize(serialized)
+
+        assertEquals(expected.id, actual.id)
+        assertEquals(expected.name, actual.name)
+        assertEquals(expected.getStreamBitrate(), actual.getStreamBitrate())
+        assertEquals(expected.getStreamUrlFixed(), actual.getStreamUrlFixed())
+        assertEquals(expected.country, actual.country)
+        assertEquals(expected.countryCode, actual.countryCode)
+        assertEquals(expected.genre, actual.genre)
+        assertEquals(expected.homePage, actual.homePage)
+        assertEquals(expected.codec, actual.codec)
+        assertEquals(expected.isLocal, actual.isLocal)
+        assertEquals(expected.sortId, actual.sortId)
+        assertEquals(expected.imageUrl, actual.imageUrl)
     }
 }

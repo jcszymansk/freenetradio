@@ -17,57 +17,33 @@
 package com.yuriy.openradio.shared.model.translation
 
 import com.yuriy.openradio.shared.model.eq.EqualizerState
-import org.hamcrest.CoreMatchers
-import org.hamcrest.MatcherAssert
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class EqualizerSerializationTest {
 
     @Test
-    fun testSerializationOfEqualizer() {
-        val list = ArrayList<String>()
-        list.add("One")
-        list.add("Two")
-        list.add("Three")
-        val state = EqualizerState()
-        state.presets = list
-        val bandRangeLow: Short = -1500
-        val bandRangeHigh: Short = 1500
-        val bandRange = ShortArray(2)
-        bandRange[0] = bandRangeLow
-        bandRange[1] = bandRangeHigh
-        state.bandLevelRange = bandRange
-        val bandLevel1: Short = 100
-        val bandLevel2: Short = 200
-        val bandLevel3: Short = 300
-        val bandLevel4: Short = 400
-        val bandLevel5: Short = 500
-        val bandLevels = ShortArray(5)
-        bandLevels[0] = bandLevel1
-        bandLevels[1] = bandLevel2
-        bandLevels[2] = bandLevel3
-        bandLevels[3] = bandLevel4
-        bandLevels[4] = bandLevel5
-        state.bandLevels = bandLevels
-        val serializer = EqualizerJsonStateSerializer()
-        val value = serializer.serialize(state)
-        val deserializer = EqualizerStateJsonDeserializer()
-        val newState = deserializer.deserialize(value)
-        val newList = newState.presets
-        MatcherAssert.assertThat(newList.size, CoreMatchers.`is`(3))
-        MatcherAssert.assertThat(newList[0], CoreMatchers.`is`("One"))
-        MatcherAssert.assertThat(newList[1], CoreMatchers.`is`("Two"))
-        MatcherAssert.assertThat(newList[2], CoreMatchers.`is`("Three"))
-        val newBandRange = newState.bandLevelRange
-        MatcherAssert.assertThat(newBandRange.size, CoreMatchers.`is`(2))
-        MatcherAssert.assertThat(newBandRange[0], CoreMatchers.`is`(bandRangeLow))
-        MatcherAssert.assertThat(newBandRange[1], CoreMatchers.`is`(bandRangeHigh))
-        val newBandLevels = newState.bandLevels
-        MatcherAssert.assertThat(newBandLevels.size, CoreMatchers.`is`(5))
-        MatcherAssert.assertThat(newBandLevels[0], CoreMatchers.`is`(bandLevel1))
-        MatcherAssert.assertThat(newBandLevels[1], CoreMatchers.`is`(bandLevel2))
-        MatcherAssert.assertThat(newBandLevels[2], CoreMatchers.`is`(bandLevel3))
-        MatcherAssert.assertThat(newBandLevels[3], CoreMatchers.`is`(bandLevel4))
-        MatcherAssert.assertThat(newBandLevels[4], CoreMatchers.`is`(bandLevel5))
+    fun serializationRoundTrip() {
+        val expected = EqualizerState().apply {
+            isEnabled = false
+            currentPreset = 2
+            numOfBands = 3
+            presets = listOf("One", "Two", "Three")
+            bandLevelRange = shortArrayOf(-1500, 1500)
+            centerFrequencies = intArrayOf(60_000, 1_000_000, 14_000_000)
+            bandLevels = shortArrayOf(100, 200, 300)
+        }
+
+        val serialized = EqualizerJsonStateSerializer().serialize(expected)
+        val actual = EqualizerStateJsonDeserializer().deserialize(serialized)
+
+        assertEquals(expected.isEnabled, actual.isEnabled)
+        assertEquals(expected.currentPreset, actual.currentPreset)
+        assertEquals(expected.numOfBands, actual.numOfBands)
+        assertEquals(expected.presets, actual.presets)
+        assertArrayEquals(expected.bandLevelRange, actual.bandLevelRange)
+        assertArrayEquals(expected.centerFrequencies, actual.centerFrequencies)
+        assertArrayEquals(expected.bandLevels, actual.bandLevels)
     }
 }
