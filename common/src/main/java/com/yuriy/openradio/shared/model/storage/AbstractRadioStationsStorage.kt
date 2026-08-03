@@ -62,11 +62,6 @@ abstract class AbstractRadioStationsStorage(contextRef: WeakReference<Context>, 
         removeKey(createKeyForRadioStation(radioStation))
     }
 
-    @Synchronized
-    fun clear() {
-        clearStorage()
-    }
-
     /**
      * Retrieves all data stored and returns as a String where Radio Station represented as String mapped to its key.
      *

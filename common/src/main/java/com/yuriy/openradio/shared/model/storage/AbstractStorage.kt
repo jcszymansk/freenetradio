@@ -88,6 +88,11 @@ abstract class AbstractStorage(private val mContextRef: WeakReference<Context>, 
         AppLogger.i("[$mName] removed '$key'")
     }
 
+    @Synchronized
+    fun clear() {
+        clearStorage()
+    }
+
     protected fun clearStorage() {
         val editor = getEditor()
         editor?.clear()

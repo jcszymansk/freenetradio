@@ -3,20 +3,45 @@ package com.yuriy.openradio.shared.view.dialog
 import android.os.Bundle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.model.ServiceCommander
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
+import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
+import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
 import com.yuriy.openradio.shared.service.OpenRadioService
+import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.lang.ref.WeakReference
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class AddStationDialogTest {
+
+    private lateinit var sleepTimerStorage: SleepTimerStorage
+    private lateinit var latestRadioStationStorage: LatestRadioStationStorage
+
+    @Before
+    fun setUp() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val contextRef = WeakReference(context)
+        sleepTimerStorage = SleepTimerStorage(contextRef)
+        sleepTimerStorage.clear()
+        latestRadioStationStorage = LatestRadioStationStorage(contextRef)
+        latestRadioStationStorage.clear()
+    }
+
+    @After
+    fun tearDown() {
+        sleepTimerStorage.clear()
+        latestRadioStationStorage.clear()
+    }
 
     @Test
     fun successfulAddRequestsBrowseTreeUpdate() {

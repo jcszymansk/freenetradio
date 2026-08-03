@@ -11,6 +11,7 @@ import com.yuriy.openradio.shared.model.media.MediaStream.Companion.BIT_RATE_DEF
 import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
 import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
+import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
 import com.yuriy.openradio.shared.service.OpenRadioService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -31,17 +32,23 @@ class MediaResourcesManagerTest {
 
     private lateinit var context: Context
     private lateinit var localsStorage: DeviceLocalsStorage
+    private lateinit var latestRadioStationStorage: LatestRadioStationStorage
+    private lateinit var sleepTimerStorage: SleepTimerStorage
     private var resourcesManager: MediaResourcesManager? = null
 
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         val contextRef = WeakReference(context)
+        latestRadioStationStorage = LatestRadioStationStorage(contextRef)
         localsStorage = DeviceLocalsStorage(
             contextRef,
             FavoritesStorage(contextRef),
-            LatestRadioStationStorage(contextRef)
+            latestRadioStationStorage
         )
+        sleepTimerStorage = SleepTimerStorage(contextRef)
+        sleepTimerStorage.clear()
+        latestRadioStationStorage.clear()
         localsStorage.clear()
     }
 
@@ -51,6 +58,8 @@ class MediaResourcesManagerTest {
             InstrumentationRegistry.getInstrumentation().runOnMainSync(manager::clean)
         }
         localsStorage.clear()
+        latestRadioStationStorage.clear()
+        sleepTimerStorage.clear()
     }
 
     @Test
