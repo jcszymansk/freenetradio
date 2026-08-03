@@ -2,6 +2,8 @@
 
 OpenRadio is being revived as a trustworthy, local-first internet radio application. The immediate purpose is personal use, particularly through Android Auto. Public distribution comes only after that version is stable and useful.
 
+> **Paused:** complete the separate [testing roadmap](testing-roadmap.md) before resuming this roadmap.
+
 The roadmap has three targets:
 
 1. A reliable personal-use application
