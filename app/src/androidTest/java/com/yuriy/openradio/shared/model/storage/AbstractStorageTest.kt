@@ -18,8 +18,9 @@ package com.yuriy.openradio.shared.model.storage
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.shared.model.media.MediaStream.Companion.BIT_RATE_DEFAULT
 import com.yuriy.openradio.shared.model.media.RadioStation
-import com.yuriy.openradio.shared.vo.RadioStationTest
+import com.yuriy.openradio.shared.model.media.setVariant
 import org.hamcrest.CoreMatchers
 import org.hamcrest.MatcherAssert
 import org.junit.After
@@ -71,7 +72,10 @@ class AbstractStorageTest {
         val num = 10
         val list = TreeSet<RadioStation>()
         for (i in 0..num) {
-            list.add(RadioStationTest.makeTestInstance("id-$i", i))
+            list.add(RadioStation.makeDefaultInstance("id-$i").apply {
+                setVariant(BIT_RATE_DEFAULT, "https://example.test/stream-$i")
+                sortId = i
+            })
         }
 
         storage.addAll(list)
