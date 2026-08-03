@@ -16,7 +16,9 @@
 
 package com.yuriy.openradio.shared.model.translation
 
+import com.yuriy.openradio.shared.model.media.MediaStream
 import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.setVariant
 import org.hamcrest.CoreMatchers
 import org.hamcrest.MatcherAssert
 import org.junit.Test
@@ -27,6 +29,7 @@ class RadioStationJsonSerializerTest {
     fun serialization() {
         val serializer = RadioStationJsonSerializer()
         val radioStation = RadioStation.makeDefaultInstance("id-1")
+        radioStation.setVariant(MediaStream.BIT_RATE_DEFAULT, "http://www.stream-0.net")
         val js = serializer.serialize(radioStation)
 
         MatcherAssert.assertThat(js, CoreMatchers.notNullValue())
