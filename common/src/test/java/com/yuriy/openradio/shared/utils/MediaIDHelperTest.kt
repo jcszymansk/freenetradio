@@ -21,8 +21,8 @@ import com.yuriy.openradio.shared.model.media.MediaId.getCountryCode
 import com.yuriy.openradio.shared.model.media.MediaId.getId
 import com.yuriy.openradio.shared.service.location.Country
 import junit.framework.TestCase
+import org.hamcrest.CoreMatchers
 import org.hamcrest.MatcherAssert
-import org.hamcrest.Matchers
 
 /**
  * Created by Yuriy Chernyshov
@@ -35,19 +35,19 @@ class MediaIDHelperTest : TestCase() {
     fun testGetId() {
         val id = MediaId.MEDIA_ID_CHILD_CATEGORIES
         val startsWith = MediaId.MEDIA_ID_CHILD_CATEGORIES + "11"
-        MatcherAssert.assertThat(getId(startsWith, ""), Matchers.`is`(id))
+        MatcherAssert.assertThat(getId(startsWith, ""), CoreMatchers.`is`(id))
     }
 
     fun testGetValidCountryCode() {
         val id = MediaId.MEDIA_ID_COUNTRIES_LIST + "BR"
-        MatcherAssert.assertThat(getCountryCode(id, Country.COUNTRY_CODE_DEFAULT), Matchers.`is`("BR"))
+        MatcherAssert.assertThat(getCountryCode(id, Country.COUNTRY_CODE_DEFAULT), CoreMatchers.`is`("BR"))
     }
 
     fun testGetDefaultCountryCodeFromBaseCountriesId() {
         val id = MediaId.MEDIA_ID_COUNTRIES_LIST
         MatcherAssert.assertThat(
             getCountryCode(id, Country.COUNTRY_CODE_DEFAULT),
-            Matchers.`is`(Country.COUNTRY_CODE_DEFAULT)
+            CoreMatchers.`is`(Country.COUNTRY_CODE_DEFAULT)
         )
     }
 
@@ -55,7 +55,7 @@ class MediaIDHelperTest : TestCase() {
         val id = MediaId.MEDIA_ID_SEARCH_FROM_APP
         MatcherAssert.assertThat(
             getCountryCode(id, Country.COUNTRY_CODE_DEFAULT),
-            Matchers.`is`(Country.COUNTRY_CODE_DEFAULT)
+            CoreMatchers.`is`(Country.COUNTRY_CODE_DEFAULT)
         )
     }
 
@@ -63,14 +63,14 @@ class MediaIDHelperTest : TestCase() {
         val id: String? = null
         MatcherAssert.assertThat(
             getCountryCode(id, Country.COUNTRY_CODE_DEFAULT),
-            Matchers.`is`(Country.COUNTRY_CODE_DEFAULT)
+            CoreMatchers.`is`(Country.COUNTRY_CODE_DEFAULT)
         )
     }
 
     fun testStartsWithAndEquals() {
         val name = MediaId.MEDIA_ID_COUNTRIES_LIST
         val id = MediaId.MEDIA_ID_COUNTRIES_LIST
-        MatcherAssert.assertThat(name.startsWith(id), Matchers.`is`(true))
-        MatcherAssert.assertThat(name == id, Matchers.`is`(true))
+        MatcherAssert.assertThat(name.startsWith(id), CoreMatchers.`is`(true))
+        MatcherAssert.assertThat(name == id, CoreMatchers.`is`(true))
     }
 }

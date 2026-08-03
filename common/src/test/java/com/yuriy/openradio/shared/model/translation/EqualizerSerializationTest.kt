@@ -16,14 +16,11 @@
 
 package com.yuriy.openradio.shared.model.translation
 
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.yuriy.openradio.shared.model.eq.EqualizerState
 import org.hamcrest.CoreMatchers
 import org.hamcrest.MatcherAssert
 import org.junit.Test
-import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
 class EqualizerSerializationTest {
 
     @Test
