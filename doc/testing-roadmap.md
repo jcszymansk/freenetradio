@@ -31,11 +31,23 @@ Do not optimize for a blanket repository-wide coverage percentage. That would re
 | End-to-end | One narrow service integration test | Covers first-local-station root refresh |
 | Coverage reporting | None | No JaCoCo or Kover configuration |
 
-Commands verified while preparing this roadmap:
+Canonical commands (with `ANDROID_HOME` configured):
 
 ```sh
-ANDROID_HOME=/home/jsz/Android/Sdk ./gradlew test
-ANDROID_HOME=/home/jsz/Android/Sdk ./gradlew :app:assembleDebugAndroidTest
+# JVM tests
+./gradlew test
+
+# Instrumentation compilation
+./gradlew :app:assembleDebugAndroidTest
+
+# Instrumented tests on a running emulator, with external networking disabled
+adb shell svc wifi disable
+adb shell svc data disable
+./gradlew :app:connectedDebugAndroidTest
+
+# Local and instrumented coverage reports
+./gradlew localCoverageReport
+./gradlew instrumentedCoverageReport
 ```
 
 Known problems in the current suite:
