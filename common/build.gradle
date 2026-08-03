@@ -17,6 +17,13 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildTypes {
+        debug {
+            enableUnitTestCoverage true
+            enableAndroidTestCoverage true
+        }
+    }
+
     compileOptions {
         sourceCompatibility project.ext.javaVersion
         targetCompatibility project.ext.javaVersion

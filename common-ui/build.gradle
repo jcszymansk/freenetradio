@@ -13,11 +13,8 @@ android {
 
     buildTypes {
         debug {
-
-        }
-
-        release {
-
+            enableUnitTestCoverage true
+            enableAndroidTestCoverage true
         }
     }
 
