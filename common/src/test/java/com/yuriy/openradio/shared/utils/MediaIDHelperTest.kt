@@ -20,9 +20,9 @@ import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.MediaId.getCountryCode
 import com.yuriy.openradio.shared.model.media.MediaId.getId
 import com.yuriy.openradio.shared.service.location.Country
-import junit.framework.TestCase
 import org.hamcrest.CoreMatchers
 import org.hamcrest.MatcherAssert
+import org.junit.Test
 
 /**
  * Created by Yuriy Chernyshov
@@ -30,19 +30,22 @@ import org.hamcrest.MatcherAssert
  * On 10/13/15
  * E-Mail: chernyshov.yuriy@gmail.com
  */
-class MediaIDHelperTest : TestCase() {
+class MediaIDHelperTest {
 
+    @Test
     fun testGetId() {
         val id = MediaId.MEDIA_ID_CHILD_CATEGORIES
         val startsWith = MediaId.MEDIA_ID_CHILD_CATEGORIES + "11"
         MatcherAssert.assertThat(getId(startsWith, ""), CoreMatchers.`is`(id))
     }
 
+    @Test
     fun testGetValidCountryCode() {
         val id = MediaId.MEDIA_ID_COUNTRIES_LIST + "BR"
         MatcherAssert.assertThat(getCountryCode(id, Country.COUNTRY_CODE_DEFAULT), CoreMatchers.`is`("BR"))
     }
 
+    @Test
     fun testGetDefaultCountryCodeFromBaseCountriesId() {
         val id = MediaId.MEDIA_ID_COUNTRIES_LIST
         MatcherAssert.assertThat(
@@ -51,6 +54,7 @@ class MediaIDHelperTest : TestCase() {
         )
     }
 
+    @Test
     fun testGetDefaultCountryCodeFromDifferentId() {
         val id = MediaId.MEDIA_ID_SEARCH_FROM_APP
         MatcherAssert.assertThat(
@@ -59,6 +63,7 @@ class MediaIDHelperTest : TestCase() {
         )
     }
 
+    @Test
     fun testGetDefaultCountryCodeFromNullValue() {
         val id: String? = null
         MatcherAssert.assertThat(
@@ -67,6 +72,7 @@ class MediaIDHelperTest : TestCase() {
         )
     }
 
+    @Test
     fun testStartsWithAndEquals() {
         val name = MediaId.MEDIA_ID_COUNTRIES_LIST
         val id = MediaId.MEDIA_ID_COUNTRIES_LIST
