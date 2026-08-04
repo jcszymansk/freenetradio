@@ -91,22 +91,22 @@ Use end-to-end tests only where integration is the contract:
 - Playback of a local audio fixture
 - Persistence across activity and service recreation
 
-## Phase 1: Repair the foundation
+## [x] Phase 1: Repair the foundation
 
 **Purpose:** make the existing suite honest, deterministic, and measurable.
 
-1. Delete or restore the assertion-free storage merge test.
-2. Move pure tests from `app/src/androidTest` to `common/src/test`:
+1. [x] Delete or restore the assertion-free storage merge test.
+2. [x] Move pure tests from `app/src/androidTest` to `common/src/test`:
    - `MediaIDHelperTest`
    - `RadioStationJsonSerializerTest`
    - `EqualizerSerializationTest`
-3. Convert the legacy JUnit3 media-ID test to JUnit4.
-4. Strengthen serializer tests into complete round trips.
-5. Ensure every test owns and clears its SharedPreferences, files, and database state.
-6. Introduce shared station factories, provider fixtures, and recording fakes only where duplication appears.
-7. Enable the Android Gradle Plugin's JaCoCo support without adding another coverage framework.
-8. Produce separate local and instrumented coverage reports.
-9. Establish canonical commands for JVM tests, instrumentation compilation, offline emulator tests, and coverage generation.
+3. [x] Convert the legacy JUnit3 media-ID test to JUnit4.
+4. [x] Strengthen serializer tests into complete round trips.
+5. [x] Ensure every test owns and clears its SharedPreferences, files, and database state.
+6. [x] Introduce shared station factories, provider fixtures, and recording fakes only where duplication appears.
+7. [x] Enable the Android Gradle Plugin's JaCoCo support without adding another coverage framework.
+8. [x] Produce separate local and instrumented coverage reports.
+9. [x] Establish canonical commands for JVM tests, instrumentation compilation, offline emulator tests, and coverage generation.
 
 **Exit check:** no assertion-free, disabled, order-dependent, or externally networked test remains. Existing behavior is covered at least as strongly as before.
 
@@ -118,48 +118,48 @@ Use end-to-end tests only where integration is the contract:
 
 Test `ParserLayerRadioBrowserImpl` and `ParserLayerWebRadioImpl` for:
 
-- Valid station mapping
-- Missing station ID
-- Missing stream URL
-- Malformed and empty JSON
-- Unknown fields
-- Country-code mapping
-- Category counts and title normalization
-- Filtered stations
-- WebRadioDB category, country, and case-insensitive search filtering
+- [ ] Valid station mapping
+- [ ] Missing station ID
+- [ ] Missing stream URL
+- [ ] Malformed and empty JSON
+- [ ] Unknown fields
+- [ ] Country-code mapping
+- [ ] Category counts and title normalization
+- [ ] Filtered stations
+- [ ] WebRadioDB category, country, and case-insensitive search filtering
 
 ### Cache and download policy
 
 Test `ModelLayerImpl` with recording fakes:
 
-- No connectivity returns no data and touches no cache or downloader.
-- A memory hit bypasses persistence and download.
-- A persistent hit is promoted to memory.
-- Empty and `[]` cache values are misses.
-- A successful download replaces both cache levels.
-- An empty download is not cached.
-- The parser receives exactly the selected response.
+- [ ] No connectivity returns no data and touches no cache or downloader.
+- [ ] A memory hit bypasses persistence and download.
+- [ ] A persistent hit is promoted to memory.
+- [ ] Empty and `[]` cache values are misses.
+- [ ] A successful download replaces both cache levels.
+- [ ] An empty download is not cached.
+- [ ] The parser receives exactly the selected response.
 
 ### Identifiers and browse state
 
 Test:
 
-- `MediaId` construction, normalization, search IDs, country IDs, and sortable and refreshable classifications
-- `BrowseTree` replacement, append, item lookup, station lookup, parent-list lookup, and invalidation
-- Indexable command page reset and advancement
-- Catalogue-change decisions
+- [ ] `MediaId` construction, normalization, search IDs, country IDs, and sortable and refreshable classifications
+- [ ] `BrowseTree` replacement, append, item lookup, station lookup, parent-list lookup, and invalidation
+- [ ] Indexable command page reset and advancement
+- [ ] Catalogue-change decisions
 
 ### Serialization and local utilities
 
 Test:
 
-- Complete `RadioStation` round trips
-- Complete equalizer-state round trips and malformed data
-- Map import and export with malformed and missing entries
-- Playlist dispatch for M3U, M3U8, PLS, ASX, and XSPF using in-memory streams
-- In-memory API cache operations
-- URL construction, query encoding, and pagination
-- Filter rules, including empty-stream behavior
+- [ ] Complete `RadioStation` round trips
+- [ ] Complete equalizer-state round trips and malformed data
+- [ ] Map import and export with malformed and missing entries
+- [ ] Playlist dispatch for M3U, M3U8, PLS, ASX, and XSPF using in-memory streams
+- [ ] In-memory API cache operations
+- [ ] URL construction, query encoding, and pagination
+- [ ] Filter rules, including empty-stream behavior
 
 **Exit check:** the selected pure-core package set reaches at least 80% line coverage and 70% branch coverage, and every listed class has normal, edge, and failure-path tests.
 
@@ -169,14 +169,14 @@ Test:
 
 Cover these components with instrumented tests:
 
-- `FavoritesStorage`: add, remove, duplicate handling, lookup, and sort IDs
-- `DeviceLocalsStorage`: ID allocation, add, edit, remove, and propagation to favorites and latest station
-- `LatestRadioStationStorage`: empty default, save, reload, and clear
-- Settings storage: defaults, writes, reloads, and invalid values
-- Abstract station deserialization: invalid records, ordering, and sort-ID normalization
-- Storage merge: duplicates, conflicts, and empty inputs
-- `PersistentApiCache`: put, get, remove, clear, replacement, and expiry boundary
-- File import and export through app-private temporary files, including malformed and partial input
+- [ ] `FavoritesStorage`: add, remove, duplicate handling, lookup, and sort IDs
+- [ ] `DeviceLocalsStorage`: ID allocation, add, edit, remove, and propagation to favorites and latest station
+- [ ] `LatestRadioStationStorage`: empty default, save, reload, and clear
+- [ ] Settings storage: defaults, writes, reloads, and invalid values
+- [ ] Abstract station deserialization: invalid records, ordering, and sort-ID normalization
+- [ ] Storage merge: duplicates, conflicts, and empty inputs
+- [ ] `PersistentApiCache`: put, get, remove, clear, replacement, and expiry boundary
+- [ ] File import and export through app-private temporary files, including malformed and partial input
 
 Each test must get fresh application state or explicitly clear every store it touches.
 
@@ -188,28 +188,28 @@ Each test must get fresh application state or explicitly clear every store it to
 
 First test `OpenRadioServicePresenterImpl` and each `MediaItemCommand` with fake collaborators:
 
-- Root composition
-- Favorites and Locals appearing only when populated
-- Country entry rules
-- Phone versus car root command registration
-- Categories, countries, popular, new, and search nodes
-- Playable and browsable metadata
-- Empty-state behavior
-- Pagination and refresh
-- Invalid stations being omitted
+- [ ] Root composition
+- [ ] Favorites and Locals appearing only when populated
+- [ ] Country entry rules
+- [ ] Phone versus car root command registration
+- [ ] Categories, countries, popular, new, and search nodes
+- [ ] Playable and browsable metadata
+- [ ] Empty-state behavior
+- [ ] Pagination and refresh
+- [ ] Invalid stations being omitted
 
 Then expand the existing real `MediaBrowser` to `OpenRadioService` instrumentation pattern:
 
-1. Connect before any Activity exists.
-2. Fetch the library root and root children.
-3. Seed favorites and locals, then verify their browse nodes.
-4. Subscribe to root and child nodes.
-5. Add, edit, and remove a local station and verify immediate subscription refresh.
-6. Toggle favorite state and verify storage plus browse refresh.
-7. Verify sort-update commands and invalid command arguments.
-8. Verify unknown custom commands return not supported.
-9. Search using a seeded local cache fixture.
-10. Clear app data and reconnect successfully.
+1. [ ] Connect before any Activity exists.
+2. [ ] Fetch the library root and root children.
+3. [ ] Seed favorites and locals, then verify their browse nodes.
+4. [ ] Subscribe to root and child nodes.
+5. [ ] Add, edit, and remove a local station and verify immediate subscription refresh.
+6. [ ] Toggle favorite state and verify storage plus browse refresh.
+7. [ ] Verify sort-update commands and invalid command arguments.
+8. [ ] Verify unknown custom commands return not supported.
+9. [ ] Search using a seeded local cache fixture.
+10. [ ] Clear app data and reconnect successfully.
 
 **Exit check:** all offline browse nodes and supported custom commands are exercised through a real Media3 connection, including cold service startup without an Activity.
 
@@ -219,26 +219,26 @@ Then expand the existing real `MediaBrowser` to `OpenRadioService` instrumentati
 
 Add only the smallest testability seams needed:
 
-- Inject or isolate player error classification in `OpenRadioPlayer`.
-- Inject `RadioStationValidator` into `RadioStationManagerLayerImpl` so mutation tests do not probe the internet.
-- Reuse existing interfaces instead of introducing a DI framework.
+- [ ] Inject or isolate player error classification in `OpenRadioPlayer`.
+- [ ] Inject `RadioStationValidator` into `RadioStationManagerLayerImpl` so mutation tests do not probe the internet.
+- [ ] Reuse existing interfaces instead of introducing a DI framework.
 
 Test:
 
-- Playback of a generated local WAV file
-- Expanding a selected item to the expected parent playlist
-- Switching stations
-- Pause, resume, stop, previous, and next
-- Current-item and metadata updates
-- Last-station persistence
-- Malformed and unsupported playlist handling
-- Network-error and HTTP 403/404 classification
-- The mobile-data-disabled gate
-- Network loss and recovery transitions
-- Becoming-noisy pause
-- Bluetooth-connect decision logic using broadcast intents
-- Sleep-timer start, replacement, cancellation, and completion
-- Playback resumption with and without an existing playlist
+- [ ] Playback of a generated local WAV file
+- [ ] Expanding a selected item to the expected parent playlist
+- [ ] Switching stations
+- [ ] Pause, resume, stop, previous, and next
+- [ ] Current-item and metadata updates
+- [ ] Last-station persistence
+- [ ] Malformed and unsupported playlist handling
+- [ ] Network-error and HTTP 403/404 classification
+- [ ] The mobile-data-disabled gate
+- [ ] Network loss and recovery transitions
+- [ ] Becoming-noisy pause
+- [ ] Bluetooth-connect decision logic using broadcast intents
+- [ ] Sleep-timer start, replacement, cancellation, and completion
+- [ ] Playback resumption with and without an existing playlist
 
 Do not invoke the service's process-killing stop path inside instrumentation. Extract its decision logic for a component test and retain one manual lifecycle check.
 
@@ -250,26 +250,26 @@ Do not invoke the service's process-killing stop path inside instrumentation. Ex
 
 Keep the suite deliberately small:
 
-1. **Cold launch**
+1. [ ] **Cold launch**
    - Clear application data.
    - Launch `MainActivity`.
    - Verify the root list loads without network.
-2. **Local station lifecycle**
+2. [ ] **Local station lifecycle**
    - Add a local station through the dialog.
    - Verify Locals appears immediately.
    - Edit and remove the station.
    - Restart and verify persistence.
-3. **Favorite lifecycle**
+3. [ ] **Favorite lifecycle**
    - Seed or browse a local station.
    - Add and remove the favorite.
    - Verify the Favorites node and persisted state.
-4. **Offline playback**
+4. [ ] **Offline playback**
    - Select a local WAV-backed station.
    - Verify now-playing metadata and controls.
-5. **Settings persistence**
+5. [ ] **Settings persistence**
    - Change network, buffering, and general settings.
    - Recreate the Activity and verify their values.
-6. **Service-first startup**
+6. [ ] **Service-first startup**
    - Start and browse the service before opening the Activity.
    - Open the Activity and verify consistent state.
 
@@ -281,15 +281,15 @@ Parser errors, cache branches, and storage boundaries belong in cheaper test lay
 
 The main roadmap restarts only when:
 
-- All JVM tests pass.
-- Instrumentation tests compile and pass on the canonical emulator.
-- All offline end-to-end journeys pass.
-- Critical pure-core coverage is at least 80% line and 70% branch.
-- No critical class is considered covered solely because another class happened to execute it.
-- Every fixed bug has a regression test at the lowest appropriate layer.
-- The suite makes no external network requests.
-- No ignored, commented-out, assertion-free, or retry-masked tests exist.
-- Android Auto manual checks have a recorded result for the current build.
+- [ ] All JVM tests pass.
+- [ ] Instrumentation tests compile and pass on the canonical emulator.
+- [ ] All offline end-to-end journeys pass.
+- [ ] Critical pure-core coverage is at least 80% line and 70% branch.
+- [ ] No critical class is considered covered solely because another class happened to execute it.
+- [ ] Every fixed bug has a regression test at the lowest appropriate layer.
+- [ ] The suite makes no external network requests.
+- [ ] No ignored, commented-out, assertion-free, or retry-masked tests exist.
+- [ ] Android Auto manual checks have a recorded result for the current build.
 
 Run policy:
 
@@ -306,13 +306,13 @@ Automated Media3 service tests can cover the protocol shared by the phone and An
 
 Keep these manual:
 
-- Android Auto controller classification
-- Desktop Head Unit and real head-unit rendering and navigation
-- Steering-wheel and media-button behavior
-- Voice search integration
-- Real Bluetooth disconnection
-- Calls and navigation audio interruption
-- Wired and wireless reconnection
+- [ ] Android Auto controller classification
+- [ ] Desktop Head Unit and real head-unit rendering and navigation
+- [ ] Steering-wheel and media-button behavior
+- [ ] Voice search integration
+- [ ] Real Bluetooth disconnection
+- [ ] Calls and navigation audio interruption
+- [ ] Wired and wireless reconnection
 
 Android's guidance specifically calls for service startup before an Activity, force-stop and clear-data scenarios, the Media Controller Test app, Desktop Head Unit testing, and real-vehicle testing.
 
