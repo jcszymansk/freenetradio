@@ -153,6 +153,27 @@ class ParserLayerMappingTest {
     }
 
     @Test
+    fun categoriesIncludeCountsAndNormalizedTitles() {
+        val radioBrowserCategories = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCategories(
+            """[{"name":"rock","stationcount":4},{"name":"jazz","stationcount":2}]"""
+        ).toList()
+        assertEquals(2, radioBrowserCategories.size)
+        assertEquals("rock", radioBrowserCategories[0].id)
+        assertEquals("Rock", radioBrowserCategories[0].title)
+        assertEquals("jazz", radioBrowserCategories[1].id)
+        assertEquals("Jazz", radioBrowserCategories[1].title)
+
+        val webRadioCategories = ParserLayerWebRadioImpl(emptySet()).getAllCategories(
+            """{"radio-one":{"Genre":["Rock","Jazz"]},"radio-two":{"Genre":["Rock"]}}"""
+        ).toList()
+        assertEquals(2, webRadioCategories.size)
+        assertEquals("Rock", webRadioCategories[0].id)
+        assertEquals("Rock", webRadioCategories[0].title)
+        assertEquals("Jazz", webRadioCategories[1].id)
+        assertEquals("Jazz", webRadioCategories[1].title)
+    }
+
+    @Test
     fun countryCodesAreMappedByBothParsers() {
         val radioBrowserCountries = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCountries(
             """[{"iso_3166_1":"PL"},{"iso_3166_1":"??"}]"""

@@ -124,7 +124,7 @@ Test `ParserLayerRadioBrowserImpl` and `ParserLayerWebRadioImpl` for:
 - [x] Malformed and empty JSON
 - [x] Unknown fields
 - [x] Country-code mapping
-- [ ] Category counts and title normalization
+- [x] Category counts and title normalization
 - [ ] Filtered stations
 - [ ] WebRadioDB category, country, and case-insensitive search filtering
 
