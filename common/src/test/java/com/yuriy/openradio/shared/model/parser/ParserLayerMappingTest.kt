@@ -120,4 +120,16 @@ class ParserLayerMappingTest {
         assertTrue(webRadioStations.isEmpty())
     }
 
+    @Test
+    fun malformedAndEmptyJsonReturnNoStations() {
+        val radioBrowser = ParserLayerRadioBrowserImpl(FilterImpl())
+        assertTrue(radioBrowser.getRadioStations("", MediaIdBuilderDefault(), TestUri("")).isEmpty())
+        assertTrue(radioBrowser.getRadioStations("{", MediaIdBuilderDefault(), TestUri("")).isEmpty())
+
+        val webRadio = ParserLayerWebRadioImpl(emptySet())
+        val categoryUri = TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        assertTrue(webRadio.getRadioStations("", MediaIdBuilderDefault(), categoryUri).isEmpty())
+        assertTrue(webRadio.getRadioStations("[", MediaIdBuilderDefault(), categoryUri).isEmpty())
+    }
+
 }
