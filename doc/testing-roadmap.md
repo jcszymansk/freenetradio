@@ -125,7 +125,7 @@ Test `ParserLayerRadioBrowserImpl` and `ParserLayerWebRadioImpl` for:
 - [x] Unknown fields
 - [x] Country-code mapping
 - [x] Category counts and title normalization
-- [ ] Filtered stations
+- [x] Filtered stations
 - [ ] WebRadioDB category, country, and case-insensitive search filtering
 
 ### Cache and download policy

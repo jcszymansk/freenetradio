@@ -153,6 +153,36 @@ class ParserLayerMappingTest {
     }
 
     @Test
+    fun filteredStationsAreExcluded() {
+        val stations = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
+            """
+                [
+                  {
+                    "stationuuid": "blocked-stream",
+                    "name": "Blocked Stream",
+                    "url": "https://stream.radiojar.com/z4qyckhr9druv"
+                  },
+                  {
+                    "stationuuid": "blocked-homepage",
+                    "name": "Blocked Homepage",
+                    "homepage": "https://radiosindia.com",
+                    "url": "https://radio.example/blocked"
+                  },
+                  {
+                    "stationuuid": "allowed",
+                    "name": "Allowed",
+                    "url": "https://radio.example/allowed"
+                  }
+                ]
+            """.trimIndent(),
+            MediaIdBuilderDefault(),
+            TestUri("")
+        )
+
+        assertEquals("allowed", stations.single().id)
+    }
+
+    @Test
     fun categoriesIncludeCountsAndNormalizedTitles() {
         val radioBrowserCategories = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCategories(
             """[{"name":"rock","stationcount":4},{"name":"jazz","stationcount":2}]"""
