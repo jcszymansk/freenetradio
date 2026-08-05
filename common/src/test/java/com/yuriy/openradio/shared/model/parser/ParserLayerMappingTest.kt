@@ -8,6 +8,7 @@ import com.yuriy.openradio.shared.model.net.UrlLayerWebRadioImpl
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ParserLayerMappingTest {
@@ -84,4 +85,22 @@ class ParserLayerMappingTest {
         assertEquals(64, station.getStreamBitrate())
         assertEquals("https://webradio.example/stream", station.getStreamUrlFixed())
     }
+
+    @Test
+    fun missingStationIdIsRejectedByBothParsers() {
+        val radioBrowserStations = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
+            """[{"name":"No ID","url":"https://radio.example/stream"}]""",
+            MediaIdBuilderDefault(),
+            TestUri("")
+        )
+        assertTrue(radioBrowserStations.isEmpty())
+
+        val webRadioStations = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
+            """{"":{"Genre":["Rock"],"Name":"No ID","StreamUri":"https://webradio.example/stream"}}""",
+            MediaIdBuilderDefault(),
+            TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        )
+        assertTrue(webRadioStations.isEmpty())
+    }
+
 }

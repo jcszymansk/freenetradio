@@ -16,7 +16,6 @@
 
 package com.yuriy.openradio.shared.model.media
 
-import android.text.TextUtils
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.storage.images.ImagesStore
 import com.yuriy.openradio.shared.service.location.LocationService
@@ -36,7 +35,7 @@ import java.util.Locale
 
 fun RadioStation.isInvalid(): Boolean {
     return this == RadioStation.INVALID_INSTANCE
-            || TextUtils.isEmpty(this.id)
+            || id.isEmpty()
 }
 
 fun RadioStation.getStreamUrlFixed(): String {

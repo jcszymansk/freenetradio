@@ -119,7 +119,7 @@ Use end-to-end tests only where integration is the contract:
 Test `ParserLayerRadioBrowserImpl` and `ParserLayerWebRadioImpl` for:
 
 - [x] Valid station mapping
-- [ ] Missing station ID
+- [x] Missing station ID
 - [ ] Missing stream URL
 - [ ] Malformed and empty JSON
 - [ ] Unknown fields
