@@ -6,6 +6,7 @@ import com.yuriy.openradio.shared.model.media.getStreamBitrate
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.net.UrlLayerWebRadioImpl
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
+import com.yuriy.openradio.shared.service.location.Country
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -149,6 +150,19 @@ class ParserLayerMappingTest {
         ).single()
         assertEquals("Known Web Radio", webRadioStation.name)
         assertEquals("https://webradio.example/stream", webRadioStation.getStreamUrlFixed())
+    }
+
+    @Test
+    fun countryCodesAreMappedByBothParsers() {
+        val radioBrowserCountries = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCountries(
+            """[{"iso_3166_1":"PL"},{"iso_3166_1":"??"}]"""
+        )
+        assertEquals(setOf(Country("Poland", "PL")), radioBrowserCountries)
+
+        val webRadioCountries = ParserLayerWebRadioImpl(emptySet()).getAllCountries(
+            """["Poland","Unknown"]"""
+        )
+        assertEquals(setOf(Country("Poland", "PL")), webRadioCountries)
     }
 
 }

@@ -123,7 +123,7 @@ Test `ParserLayerRadioBrowserImpl` and `ParserLayerWebRadioImpl` for:
 - [x] Missing stream URL
 - [x] Malformed and empty JSON
 - [x] Unknown fields
-- [ ] Country-code mapping
+- [x] Country-code mapping
 - [ ] Category counts and title normalization
 - [ ] Filtered stations
 - [ ] WebRadioDB category, country, and case-insensitive search filtering
