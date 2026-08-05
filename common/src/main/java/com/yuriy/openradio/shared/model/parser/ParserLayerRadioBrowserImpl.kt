@@ -175,12 +175,13 @@ class ParserLayerRadioBrowserImpl(private val mFilter: Filter) : ParserLayer {
         radioStation.urlResolved = JsonUtils.getStringValue(jsonObject, KEY_URL_RESOLVED)
         radioStation.codec = JsonUtils.getStringValue(jsonObject, KEY_CODEC)
         radioStation.lastCheckOk = JsonUtils.getIntValue(jsonObject, KEY_LAST_CHECK_OK)
-        if (jsonObject.has(KEY_URL)) {
+        val streamUrl = JsonUtils.getStringValue(jsonObject, KEY_URL)
+        if (streamUrl.isNotEmpty()) {
             var bitrate = 0
             if (jsonObject.has(KEY_BIT_RATE)) {
                 bitrate = jsonObject.getInt(KEY_BIT_RATE)
             }
-            radioStation.setVariant(bitrate, jsonObject.getString(KEY_URL))
+            radioStation.setVariant(bitrate, streamUrl)
         }
         if (mFilter.filter(radioStation)) {
             AppLogger.e("Exclude:$radioStation")

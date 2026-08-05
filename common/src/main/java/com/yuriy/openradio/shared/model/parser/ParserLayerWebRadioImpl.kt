@@ -171,6 +171,10 @@ class ParserLayerWebRadioImpl(private val mCountriesCache:Set<Country>) : Parser
     }
 
     private fun getRadioStation(jsonObject: JSONObject, uuid: String): RadioStation {
+        val streamUrl = JsonUtils.getStringValue(jsonObject, KEY_URL)
+        if (streamUrl.isEmpty()) {
+            return RadioStation.INVALID_INSTANCE
+        }
         val radioStation = RadioStation.makeDefaultInstance(uuid)
         radioStation.name = JsonUtils.getStringValue(jsonObject, KEY_NAME)
         radioStation.homePage = JsonUtils.getStringValue(jsonObject, KEY_HOME_PAGE)
@@ -182,7 +186,7 @@ class ParserLayerWebRadioImpl(private val mCountriesCache:Set<Country>) : Parser
         if (jsonObject.has(KEY_BIT_RATE)) {
             bitrate = jsonObject.getInt(KEY_BIT_RATE)
         }
-        radioStation.setVariant(bitrate, jsonObject.getString(KEY_URL))
+        radioStation.setVariant(bitrate, streamUrl)
         return radioStation
     }
 

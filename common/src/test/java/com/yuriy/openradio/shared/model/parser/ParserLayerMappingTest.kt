@@ -103,4 +103,21 @@ class ParserLayerMappingTest {
         assertTrue(webRadioStations.isEmpty())
     }
 
+    @Test
+    fun missingStreamUrlIsRejectedByBothParsers() {
+        val radioBrowserStations = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
+            """[{"stationuuid":"radio-browser-id","name":"No stream"},{"stationuuid":"empty-stream-id","name":"Empty stream","url":""}]""",
+            MediaIdBuilderDefault(),
+            TestUri("")
+        )
+        assertTrue(radioBrowserStations.isEmpty())
+
+        val webRadioStations = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
+            """{"web-radio-id":{"Genre":["Rock"],"Name":"No stream"},"empty-stream-id":{"Genre":["Rock"],"Name":"Empty stream","StreamUri":""}}""",
+            MediaIdBuilderDefault(),
+            TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        )
+        assertTrue(webRadioStations.isEmpty())
+    }
+
 }

@@ -120,7 +120,7 @@ Test `ParserLayerRadioBrowserImpl` and `ParserLayerWebRadioImpl` for:
 
 - [x] Valid station mapping
 - [x] Missing station ID
-- [ ] Missing stream URL
+- [x] Missing stream URL
 - [ ] Malformed and empty JSON
 - [ ] Unknown fields
 - [ ] Country-code mapping
