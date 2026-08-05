@@ -132,4 +132,23 @@ class ParserLayerMappingTest {
         assertTrue(webRadio.getRadioStations("[", MediaIdBuilderDefault(), categoryUri).isEmpty())
     }
 
+    @Test
+    fun unknownFieldsDoNotAffectMapping() {
+        val radioBrowserStation = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
+            """[{"stationuuid":"radio-browser-id","name":"Known Radio","url":"https://radio.example/stream","unknown":"ignored","nested":{"ignored":true}}]""",
+            MediaIdBuilderDefault(),
+            TestUri("")
+        ).single()
+        assertEquals("Known Radio", radioBrowserStation.name)
+        assertEquals("https://radio.example/stream", radioBrowserStation.getStreamUrlFixed())
+
+        val webRadioStation = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
+            """{"web-radio-id":{"Genre":["Rock"],"Name":"Known Web Radio","StreamUri":"https://webradio.example/stream","Unknown":"ignored","Nested":{"ignored":true}}}""",
+            MediaIdBuilderDefault(),
+            TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        ).single()
+        assertEquals("Known Web Radio", webRadioStation.name)
+        assertEquals("https://webradio.example/stream", webRadioStation.getStreamUrlFixed())
+    }
+
 }
