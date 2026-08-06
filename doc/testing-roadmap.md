@@ -132,7 +132,7 @@ Test `ParserLayerRadioBrowserImpl` and `ParserLayerWebRadioImpl` for:
 
 Test `ModelLayerImpl` with recording fakes:
 
-- [ ] No connectivity returns no data and touches no cache or downloader.
+- [x] No connectivity returns no data and touches no cache or downloader.
 - [ ] A memory hit bypasses persistence and download.
 - [ ] A persistent hit is promoted to memory.
 - [ ] Empty and `[]` cache values are misses.
