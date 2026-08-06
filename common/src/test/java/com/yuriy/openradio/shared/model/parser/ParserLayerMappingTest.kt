@@ -216,4 +216,55 @@ class ParserLayerMappingTest {
         assertEquals(setOf(Country("Poland", "PL")), webRadioCountries)
     }
 
+
+    @Test
+    fun webRadioFiltersByCategoryCountryAndCaseInsensitiveSearch() {
+        val data = """
+            {
+              "rock-station": {
+                "Genre": ["Rock"],
+                "Name": "Morning Rock",
+                "StreamUri": "https://radio.example/rock",
+                "Country": "Poland"
+              },
+              "jazz-station": {
+                "Genre": ["Jazz"],
+                "Name": "Evening Jazz",
+                "StreamUri": "https://radio.example/jazz",
+                "Country": "Germany"
+              },
+              "mixed-station": {
+                "Genre": ["Rock", "Jazz"],
+                "Name": "Mixed Selection",
+                "StreamUri": "https://radio.example/mixed",
+                "Country": "Poland"
+              }
+            }
+        """.trimIndent()
+        val categoryUri = TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        val countryUri = TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_COUNTRY_ID}PL")
+        val searchUri = TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_SEARCH_ID}ROCK")
+
+        assertEquals(
+            setOf("rock-station", "mixed-station"),
+            ParserLayerWebRadioImpl(emptySet())
+                .getRadioStations(data, MediaIdBuilderDefault(), categoryUri)
+                .map { it.id }
+                .toSet()
+        )
+        assertEquals(
+            setOf("rock-station", "mixed-station"),
+            ParserLayerWebRadioImpl(setOf(Country("Poland", "PL")))
+                .getRadioStations(data, MediaIdBuilderDefault(), countryUri)
+                .map { it.id }
+                .toSet()
+        )
+        assertEquals(
+            setOf("rock-station"),
+            ParserLayerWebRadioImpl(emptySet())
+                .getRadioStations(data, MediaIdBuilderDefault(), searchUri)
+                .map { it.id }
+                .toSet()
+        )
+    }
 }
