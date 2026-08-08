@@ -18,11 +18,14 @@ package wseemann.media.jplaylistparser.parser
 
 import org.hamcrest.MatcherAssert
 import org.hamcrest.core.Is
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import wseemann.media.jplaylistparser.parser.m3u.M3UPlaylistParser
 import wseemann.media.jplaylistparser.parser.m3u8.M3U8PlaylistParser
 import wseemann.media.jplaylistparser.parser.pls.PLSPlaylistParser
-
+import wseemann.media.jplaylistparser.playlist.Playlist
+import wseemann.media.jplaylistparser.playlist.PlaylistEntry
+import java.io.ByteArrayInputStream
 /**
  * Created by Chernyshov Yurii
  * At Android Studio
@@ -60,5 +63,56 @@ class AutoDetectParserTest {
                 AutoDetectParser.getFileExtFromHeaderParam(param2),
                 Is.`is`("playlist_9068.pls")
         )
+    }
+
+    @Test
+    fun dispatchesSupportedFormatsFromStreams() {
+        data class Fixture(val extension: String, val uri: String, val content: String)
+
+        val fixtures = listOf(
+            Fixture(
+                ".m3u",
+                "https://example.com/stream?format=m3u",
+                "#EXTM3U\n#EXTINF:-1,Station\nhttps://example.com/stream?format=m3u"
+            ),
+            Fixture(
+                ".m3u8",
+                "https://example.com/stream?format=m3u8",
+                "#EXTM3U\n#EXTINF:-1,Station\nhttps://example.com/stream?format=m3u8"
+            ),
+            Fixture(
+                ".pls",
+                "https://example.com/stream?format=pls",
+                "[playlist]\nFile1=https://example.com/stream?format=pls\nTitle1=Station\nLength1=-1"
+            ),
+            Fixture(
+                ".asx",
+                "ftp://example.com/stream-asx",
+                "<ASX><ENTRY><TITLE>Station</TITLE>" +
+                        "<REF href=\"ftp://example.com/stream-asx\"/></ENTRY></ASX>"
+            ),
+            Fixture(
+                ".xspf",
+                "https://example.com/stream?format=xspf",
+                "<PLAYLIST><TRACKLIST><TRACK><LOCATION>" +
+                        "https://example.com/stream?format=xspf</LOCATION>" +
+                        "<TITLE>Station</TITLE></TRACK></TRACKLIST></PLAYLIST>"
+            )
+        )
+
+        fixtures.forEach { fixture ->
+            val playlist = Playlist()
+            AutoDetectParser(1000).parse(
+                "https://example.com/playlist${fixture.extension}",
+                if (fixture.extension == ".asx") "video/x-ms-asf" else null,
+                ByteArrayInputStream(fixture.content.toByteArray()),
+                playlist
+            )
+
+            assertEquals(fixture.extension, 1, playlist.playlistEntries.size)
+            val entry = playlist.playlistEntries.single()
+            assertEquals(fixture.uri, entry[PlaylistEntry.URI])
+            assertEquals("Station", entry[PlaylistEntry.PLAYLIST_METADATA])
+        }
     }
 }
