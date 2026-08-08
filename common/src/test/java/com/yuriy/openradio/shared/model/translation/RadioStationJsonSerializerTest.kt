@@ -21,6 +21,7 @@ import com.yuriy.openradio.shared.model.media.getStreamBitrate
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.media.setVariant
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Test
 
 class RadioStationJsonSerializerTest {
@@ -55,5 +56,23 @@ class RadioStationJsonSerializerTest {
         assertEquals(expected.isLocal, actual.isLocal)
         assertEquals(expected.sortId, actual.sortId)
         assertEquals(expected.imageUrl, actual.imageUrl)
+    }
+
+    @Test
+    fun emptyStationSerializesToEmptyObject() {
+        val serialized = RadioStationJsonSerializer().serialize(
+            RadioStation.makeDefaultInstance("empty-station")
+        )
+
+        assertEquals("{}", serialized)
+    }
+
+    @Test
+    fun malformedAndMarkerValuesDeserializeAsInvalid() {
+        val deserializer = RadioStationJsonDeserializer()
+
+        listOf("", "true", "false", "{").forEach { value ->
+            assertSame(RadioStation.INVALID_INSTANCE, deserializer.deserialize(value))
+        }
     }
 }
