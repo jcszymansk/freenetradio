@@ -38,7 +38,7 @@ class FilterImplTest {
     }
 
     @Test
-    fun testFilter7() {
+    fun emptyStreamIsRejected() {
         val rs = RadioStation.makeDefaultInstance("123")
         Assert.assertFalse(mFilter.filter(rs))
     }
@@ -68,5 +68,14 @@ class FilterImplTest {
         rs.homePage = ""
         rs.setVariant(96, "directes-radio-int.ccma.cat")
         Assert.assertFalse(mFilter.filter(rs))
+    }
+
+    @Test
+    fun matchesHomePageCaseInsensitively() {
+        val rs = RadioStation.makeDefaultInstance("123")
+        rs.homePage = "HTTPS://RADIOSINDIA.COM/station"
+        rs.setVariant(125, "https://unrelated.example/stream")
+
+        Assert.assertTrue(mFilter.filter(rs))
     }
 }
