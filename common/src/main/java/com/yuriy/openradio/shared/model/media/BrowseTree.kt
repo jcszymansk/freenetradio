@@ -28,6 +28,12 @@ class BrowseTree {
     operator fun get(mediaId: String) = mMediaIdToChildren[mediaId]
 
     operator fun set(mediaId: String, browseData: BrowseData) {
+        mMediaIdToChildren[mediaId]?.forEach { mediaItem ->
+            mMediaIdToMediaItem.remove(mediaItem.mediaId)
+        }
+        mMediaIdToChildrenRadioStations[mediaId]?.forEach { radioStation ->
+            mMediaIdToRadioStation.remove(radioStation.id)
+        }
         mMediaIdToChildren[mediaId] = browseData.children
         mMediaIdToChildrenRadioStations[mediaId] = browseData.radioStations
         browseData.children.forEach { mediaItem ->

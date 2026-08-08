@@ -145,7 +145,7 @@ Test `ModelLayerImpl` with recording fakes:
 Test:
 
 - [x] `MediaId` construction, normalization, search IDs, country IDs, and sortable and refreshable classifications
-- [ ] `BrowseTree` replacement, append, item lookup, station lookup, parent-list lookup, and invalidation
+- [x] `BrowseTree` replacement, append, item lookup, station lookup, parent-list lookup, and invalidation
 - [ ] Indexable command page reset and advancement
 - [ ] Catalogue-change decisions
 
