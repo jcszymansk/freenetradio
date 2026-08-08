@@ -19,6 +19,7 @@ package com.yuriy.openradio.shared.model.translation
 import com.yuriy.openradio.shared.model.eq.EqualizerState
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EqualizerSerializationTest {
@@ -45,5 +46,30 @@ class EqualizerSerializationTest {
         assertArrayEquals(expected.bandLevelRange, actual.bandLevelRange)
         assertArrayEquals(expected.centerFrequencies, actual.centerFrequencies)
         assertArrayEquals(expected.bandLevels, actual.bandLevels)
+    }
+
+    @Test
+    fun emptyStateRoundTripKeepsEmptyCollections() {
+        val actual = EqualizerStateJsonDeserializer().deserialize(
+            EqualizerJsonStateSerializer().serialize(EqualizerState())
+        )
+
+        assertTrue(actual.presets.isEmpty())
+        assertTrue(actual.centerFrequencies.isEmpty())
+        assertTrue(actual.bandLevels.isEmpty())
+    }
+
+    @Test
+    fun malformedDataReturnsDefaultState() {
+        val deserializer = EqualizerStateJsonDeserializer()
+
+        listOf("{", """{"BandLevels":"1,not-a-number"}""").forEach { value ->
+            val state = deserializer.deserialize(value)
+
+            assertTrue(state.isEnabled)
+            assertEquals(0.toShort(), state.currentPreset)
+            assertEquals(0.toShort(), state.numOfBands)
+            assertTrue(state.presets.isEmpty())
+        }
     }
 }

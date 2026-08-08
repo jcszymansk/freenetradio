@@ -32,13 +32,26 @@ class EqualizerStateJsonDeserializer : EqualizerStateDeserializer {
             AppLogger.e("Error while de-marshall $value", e)
             return state
         }
-        state.isEnabled = JsonUtils.getBooleanValue(jsonObject, EqualizerJsonHelper.KEY_ENABLED)
-        state.currentPreset = JsonUtils.getIntValue(jsonObject, EqualizerJsonHelper.KEY_CURRENT_PRESET).toShort()
-        state.numOfBands = JsonUtils.getIntValue(jsonObject, EqualizerJsonHelper.KEY_NUM_OF_BANDS).toShort()
-        state.presets = JsonUtils.getListValue(jsonObject, EqualizerJsonHelper.KEY_PRESETS)
-        state.bandLevelRange = JsonUtils.getShortArray(jsonObject, EqualizerJsonHelper.KEY_BAND_LEVEL_RANGE)
-        state.bandLevels = JsonUtils.getShortArray(jsonObject, EqualizerJsonHelper.KEY_BAND_LEVELS)
-        state.centerFrequencies = JsonUtils.getIntArray(jsonObject, EqualizerJsonHelper.KEY_CENTER_FREQUENCIES)
-        return state
+        return try {
+            state.isEnabled = JsonUtils.getBooleanValue(jsonObject, EqualizerJsonHelper.KEY_ENABLED)
+            state.currentPreset = JsonUtils.getIntValue(
+                jsonObject, EqualizerJsonHelper.KEY_CURRENT_PRESET
+            ).toShort()
+            state.numOfBands = JsonUtils.getIntValue(
+                jsonObject, EqualizerJsonHelper.KEY_NUM_OF_BANDS
+            ).toShort()
+            state.presets = JsonUtils.getListValue(jsonObject, EqualizerJsonHelper.KEY_PRESETS)
+            state.bandLevelRange = JsonUtils.getShortArray(
+                jsonObject, EqualizerJsonHelper.KEY_BAND_LEVEL_RANGE
+            )
+            state.bandLevels = JsonUtils.getShortArray(jsonObject, EqualizerJsonHelper.KEY_BAND_LEVELS)
+            state.centerFrequencies = JsonUtils.getIntArray(
+                jsonObject, EqualizerJsonHelper.KEY_CENTER_FREQUENCIES
+            )
+            state
+        } catch (e: Exception) {
+            AppLogger.e("Error while de-marshall $value", e)
+            EqualizerState()
+        }
     }
 }

@@ -59,6 +59,9 @@ object JsonUtils {
     fun <T> getListValue(jsonObject: JSONObject, key: String): List<T> {
         if (jsonObject.has(key)) {
             val obj = jsonObject.getString(key)
+            if (obj.isEmpty()) {
+                return emptyList()
+            }
             val list = ArrayList<T>()
             val array = obj.split(",".toRegex()).toTypedArray()
             for (o in array) {
