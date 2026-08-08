@@ -91,6 +91,34 @@ class ModelLayerImplTest {
         assertEquals(1, memoryCache.puts)
         assertEquals(0, downloader.calls)
     }
+    @Test
+    fun emptyAndArrayCacheValuesAreMisses() {
+        val data = """[{"name":"rock","stationcount":1}]"""
+        for (cachedData in listOf("", "[]")) {
+            val network = RecordingNetworkLayer(true)
+            val downloader = RecordingDownloader(data)
+            val persistentCache = RecordingApiCache(cachedData)
+            val memoryCache = RecordingApiCache(cachedData)
+            val model = ModelLayerImpl(
+                ContextWrapper(null),
+                ParserLayerRadioBrowserImpl(FilterImpl()),
+                network,
+                downloader,
+                persistentCache,
+                memoryCache
+            )
+
+            val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+
+            assertEquals("rock", categories.single().id)
+            assertEquals(1, persistentCache.gets)
+            assertEquals(1, memoryCache.gets)
+            assertEquals(1, downloader.calls)
+            assertEquals(data, persistentCache.lastPutData)
+            assertEquals(data, memoryCache.lastPutData)
+        }
+    }
+
 
 
 
@@ -109,7 +137,7 @@ class ModelLayerImplTest {
         override fun isMobileNetwork() = false
     }
 
-    private class RecordingDownloader : DownloaderLayer {
+    private class RecordingDownloader(private val data: String = "") : DownloaderLayer {
         var calls = 0
 
         override fun downloadDataFromUri(
@@ -119,7 +147,7 @@ class ModelLayerImplTest {
             contentTypeFilter: String?
         ): ByteArray {
             calls++
-            return ByteArray(0)
+            return data.toByteArray()
         }
     }
 
