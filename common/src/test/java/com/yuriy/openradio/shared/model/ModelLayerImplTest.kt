@@ -41,6 +41,31 @@ class ModelLayerImplTest {
         assertEquals(0, downloader.calls)
     }
 
+    @Test
+    fun memoryHitBypassesPersistentCacheAndDownloader() {
+        val network = RecordingNetworkLayer(true)
+        val downloader = RecordingDownloader()
+        val persistentCache = RecordingApiCache()
+        val memoryCache = RecordingApiCache("""[{"name":"rock","stationcount":1}]""")
+        val model = ModelLayerImpl(
+            ContextWrapper(null),
+            ParserLayerRadioBrowserImpl(FilterImpl()),
+            network,
+            downloader,
+            persistentCache,
+            memoryCache
+        )
+
+        val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+
+        assertEquals("rock", categories.single().id)
+        assertEquals(1, network.connectivityChecks)
+        assertEquals(0, persistentCache.operations)
+        assertEquals(1, memoryCache.operations)
+        assertEquals(0, downloader.calls)
+    }
+
+
     private class RecordingNetworkLayer(private val connected: Boolean) : NetworkLayer {
         var connectivityChecks = 0
 
@@ -70,12 +95,12 @@ class ModelLayerImplTest {
         }
     }
 
-    private class RecordingApiCache : ApiCache {
+    private class RecordingApiCache(private val data: String = "") : ApiCache {
         var operations = 0
 
         override fun get(key: String): String {
             operations++
-            return ""
+            return data
         }
 
         override fun put(key: String, data: String) {
