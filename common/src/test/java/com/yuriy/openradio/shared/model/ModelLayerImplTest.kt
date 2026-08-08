@@ -64,6 +64,34 @@ class ModelLayerImplTest {
         assertEquals(1, memoryCache.operations)
         assertEquals(0, downloader.calls)
     }
+    @Test
+    fun persistentHitIsPromotedToMemory() {
+        val data = """[{"name":"rock","stationcount":1}]"""
+        val network = RecordingNetworkLayer(true)
+        val downloader = RecordingDownloader()
+        val persistentCache = RecordingApiCache(data)
+        val memoryCache = RecordingApiCache()
+        val model = ModelLayerImpl(
+            ContextWrapper(null),
+            ParserLayerRadioBrowserImpl(FilterImpl()),
+            network,
+            downloader,
+            persistentCache,
+            memoryCache
+        )
+
+        val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+
+        assertEquals("rock", categories.single().id)
+        assertEquals(data, memoryCache.lastPutData)
+        assertEquals(1, network.connectivityChecks)
+        assertEquals(1, persistentCache.gets)
+        assertEquals(1, memoryCache.gets)
+        assertEquals(1, memoryCache.removes)
+        assertEquals(1, memoryCache.puts)
+        assertEquals(0, downloader.calls)
+    }
+
 
 
     private class RecordingNetworkLayer(private val connected: Boolean) : NetworkLayer {
@@ -96,23 +124,30 @@ class ModelLayerImplTest {
     }
 
     private class RecordingApiCache(private val data: String = "") : ApiCache {
-        var operations = 0
+        var gets = 0
+        var puts = 0
+        var removes = 0
+        var clears = 0
+        var lastPutData = ""
+        val operations: Int
+            get() = gets + puts + removes + clears
 
         override fun get(key: String): String {
-            operations++
+            gets++
             return data
         }
 
         override fun put(key: String, data: String) {
-            operations++
+            puts++
+            lastPutData = data
         }
 
         override fun remove(key: String) {
-            operations++
+            removes++
         }
 
         override fun clear() {
-            operations++
+            clears++
         }
     }
 }

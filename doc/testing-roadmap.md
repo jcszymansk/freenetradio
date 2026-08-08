@@ -134,7 +134,7 @@ Test `ModelLayerImpl` with recording fakes:
 
 - [x] No connectivity returns no data and touches no cache or downloader.
 - [x] A memory hit bypasses persistence and download.
-- [ ] A persistent hit is promoted to memory.
+- [x] A persistent hit is promoted to memory.
 - [ ] Empty and `[]` cache values are misses.
 - [ ] A successful download replaces both cache levels.
 - [ ] An empty download is not cached.
