@@ -137,7 +137,7 @@ Test `ModelLayerImpl` with recording fakes:
 - [x] A persistent hit is promoted to memory.
 - [x] Empty and `[]` cache values are misses.
 - [x] A successful download replaces both cache levels.
-- [ ] An empty download is not cached.
+- [x] An empty download is not cached.
 - [ ] The parser receives exactly the selected response.
 
 ### Identifiers and browse state

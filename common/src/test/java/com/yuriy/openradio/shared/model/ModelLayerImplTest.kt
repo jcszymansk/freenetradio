@@ -145,6 +145,33 @@ class ModelLayerImplTest {
         assertEquals(1, memoryCache.puts)
         assertEquals(data, memoryCache.lastPutData)
     }
+    @Test
+    fun emptyDownloadsAreNotCached() {
+        for (downloadedData in listOf("", "[]")) {
+            val network = RecordingNetworkLayer(true)
+            val downloader = RecordingDownloader(downloadedData)
+            val persistentCache = RecordingApiCache()
+            val memoryCache = RecordingApiCache()
+            val model = ModelLayerImpl(
+                ContextWrapper(null),
+                ParserLayerRadioBrowserImpl(FilterImpl()),
+                network,
+                downloader,
+                persistentCache,
+                memoryCache
+            )
+
+            val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+
+            assertTrue(categories.isEmpty())
+            assertEquals(1, downloader.calls)
+            assertEquals(0, persistentCache.removes)
+            assertEquals(0, persistentCache.puts)
+            assertEquals(0, memoryCache.removes)
+            assertEquals(0, memoryCache.puts)
+        }
+    }
+
 
 
 
