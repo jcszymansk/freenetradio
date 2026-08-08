@@ -118,6 +118,34 @@ class ModelLayerImplTest {
             assertEquals(data, memoryCache.lastPutData)
         }
     }
+    @Test
+    fun successfulDownloadReplacesBothCaches() {
+        val data = """[{"name":"rock","stationcount":1}]"""
+        val network = RecordingNetworkLayer(true)
+        val downloader = RecordingDownloader(data)
+        val persistentCache = RecordingApiCache()
+        val memoryCache = RecordingApiCache()
+        val model = ModelLayerImpl(
+            ContextWrapper(null),
+            ParserLayerRadioBrowserImpl(FilterImpl()),
+            network,
+            downloader,
+            persistentCache,
+            memoryCache
+        )
+
+        val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+
+        assertEquals("rock", categories.single().id)
+        assertEquals(1, downloader.calls)
+        assertEquals(1, persistentCache.removes)
+        assertEquals(1, persistentCache.puts)
+        assertEquals(data, persistentCache.lastPutData)
+        assertEquals(1, memoryCache.removes)
+        assertEquals(1, memoryCache.puts)
+        assertEquals(data, memoryCache.lastPutData)
+    }
+
 
 
 
