@@ -49,12 +49,12 @@ class UrlLayerWebRadioImpl : UrlLayer {
     }
 
     override fun getStationsInCategory(categoryId: String, pageNumber: Int): Uri {
-        val url = "$URL$KEY_CATEGORY_ID$categoryId"
+        val url = "$URL$KEY_CATEGORY_ID${Uri.encode(categoryId)}"
         return Uri.parse(url)
     }
 
     override fun getStationsByCountry(countryCode: String, pageNumber: Int): Uri {
-        val url = "$URL$KEY_COUNTRY_ID$countryCode"
+        val url = "$URL$KEY_COUNTRY_ID${Uri.encode(countryCode)}"
         return Uri.parse(url)
     }
 
@@ -67,7 +67,7 @@ class UrlLayerWebRadioImpl : UrlLayer {
     }
 
     override fun getSearchUrl(query: String): Uri {
-        val url = "$URL$KEY_SEARCH_ID$query"
+        val url = "$URL$KEY_SEARCH_ID${Uri.encode(query)}"
         return Uri.parse(url)
     }
 

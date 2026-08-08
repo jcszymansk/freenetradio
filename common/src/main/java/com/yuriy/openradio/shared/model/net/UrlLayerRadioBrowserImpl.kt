@@ -151,7 +151,7 @@ class UrlLayerRadioBrowserImpl : UrlLayer {
      * @return
      */
     private fun encodeValue(value: String): String {
-        return value.replace(" ".toRegex(), "%20")
+        return Uri.encode(value)
     }
 
     companion object {
