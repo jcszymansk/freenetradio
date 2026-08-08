@@ -6,11 +6,16 @@ import android.net.TestUri
 import android.net.Uri
 import androidx.core.util.Pair
 import com.yuriy.openradio.shared.model.filter.FilterImpl
+import com.yuriy.openradio.shared.model.media.Category
+import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
+import com.yuriy.openradio.shared.model.parser.ParserLayer
 import com.yuriy.openradio.shared.model.parser.ParserLayerRadioBrowserImpl
 import com.yuriy.openradio.shared.model.storage.cache.api.ApiCache
+import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
+import com.yuriy.openradio.shared.service.location.Country
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -171,6 +176,50 @@ class ModelLayerImplTest {
             assertEquals(0, memoryCache.puts)
         }
     }
+    @Test
+    fun parserReceivesExactlyDownloadedResponse() {
+        val data = "selected response"
+        val parser = RecordingParserLayer()
+        val network = RecordingNetworkLayer(true)
+        val downloader = RecordingDownloader(data)
+        val model = ModelLayerImpl(
+            ContextWrapper(null),
+            parser,
+            network,
+            downloader,
+            RecordingApiCache(),
+            RecordingApiCache()
+        )
+
+        model.getAllCategories(TestUri("https://radio.example/categories"))
+
+        assertEquals(data, parser.receivedData)
+        assertEquals(1, downloader.calls)
+    }
+
+    private class RecordingParserLayer : ParserLayer {
+        var receivedData = ""
+
+        override fun getRadioStation(
+            data: String,
+            mediaIdBuilder: MediaIdBuilder,
+            uri: Uri
+        ) = RadioStation.makeDefaultInstance("")
+
+        override fun getRadioStations(
+            data: String,
+            mediaIdBuilder: MediaIdBuilder,
+            uri: Uri
+        ): Set<RadioStation> = emptySet()
+
+        override fun getAllCategories(data: String): Set<Category> {
+            receivedData = data
+            return emptySet()
+        }
+
+        override fun getAllCountries(data: String): Set<Country> = emptySet()
+    }
+
 
 
 
