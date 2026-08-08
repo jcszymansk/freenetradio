@@ -153,13 +153,13 @@ Test:
 
 Test:
 
-- [ ] Complete `RadioStation` round trips
-- [ ] Complete equalizer-state round trips and malformed data
-- [ ] Map import and export with malformed and missing entries
-- [ ] Playlist dispatch for M3U, M3U8, PLS, ASX, and XSPF using in-memory streams
-- [ ] In-memory API cache operations
-- [ ] URL construction, query encoding, and pagination
-- [ ] Filter rules, including empty-stream behavior
+- [x] Complete `RadioStation` round trips
+- [x] Complete equalizer-state round trips and malformed data
+- [x] Map import and export with malformed and missing entries
+- [x] Playlist dispatch for M3U, M3U8, PLS, ASX, and XSPF using in-memory streams
+- [x] In-memory API cache operations
+- [x] URL construction, query encoding, and pagination
+- [x] Filter rules, including empty-stream behavior
 
 **Exit check:** the selected pure-core package set reaches at least 80% line coverage and 70% branch coverage, and every listed class has normal, edge, and failure-path tests.
 
