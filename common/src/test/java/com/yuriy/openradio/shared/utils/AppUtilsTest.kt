@@ -1,5 +1,6 @@
 package com.yuriy.openradio.shared.utils
 
+import com.yuriy.openradio.shared.model.media.MediaId
 import org.junit.Assert
 import org.junit.Test
 
@@ -23,5 +24,23 @@ class AppUtilsTest {
 
         val deserializedEmpty = AppUtils.deserializeMap(null)
         Assert.assertTrue(deserializedEmpty.isEmpty())
+    }
+
+    @Test
+    fun identifiesCatalogueChanges() {
+        Assert.assertTrue(AppUtils.isSameCatalogue("rock", "rock"))
+        Assert.assertFalse(AppUtils.isSameCatalogue("rock", "jazz"))
+        Assert.assertFalse(
+            AppUtils.isSameCatalogue(MediaId.MEDIA_ID_ROOT, MediaId.MEDIA_ID_ROOT)
+        )
+        Assert.assertFalse(
+            AppUtils.isSameCatalogue(MediaId.MEDIA_ID_FAVORITES_LIST, MediaId.MEDIA_ID_FAVORITES_LIST)
+        )
+        Assert.assertFalse(
+            AppUtils.isSameCatalogue(
+                MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
+                MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
+            )
+        )
     }
 }

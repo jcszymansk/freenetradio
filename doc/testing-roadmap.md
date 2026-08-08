@@ -147,7 +147,7 @@ Test:
 - [x] `MediaId` construction, normalization, search IDs, country IDs, and sortable and refreshable classifications
 - [x] `BrowseTree` replacement, append, item lookup, station lookup, parent-list lookup, and invalidation
 - [x] Indexable command page reset and advancement
-- [ ] Catalogue-change decisions
+- [x] Catalogue-change decisions
 
 ### Serialization and local utilities
 
