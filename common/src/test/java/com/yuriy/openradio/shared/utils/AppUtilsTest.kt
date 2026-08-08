@@ -27,6 +27,18 @@ class AppUtilsTest {
     }
 
     @Test
+    fun malformedDataAndMissingEntriesAreSafe() {
+        val imported = AppUtils.deserializeMap(
+            AppUtils.serializeMap(mapOf("KEY_FAV" to "favorites"))
+        )
+
+        Assert.assertEquals("favorites", imported["KEY_FAV"])
+        Assert.assertFalse(imported.containsKey("KEY_LOC"))
+        Assert.assertTrue(AppUtils.deserializeMap(byteArrayOf()).isEmpty())
+        Assert.assertTrue(AppUtils.deserializeMap(byteArrayOf(1, 2, 3)).isEmpty())
+    }
+
+    @Test
     fun identifiesCatalogueChanges() {
         Assert.assertTrue(AppUtils.isSameCatalogue("rock", "rock"))
         Assert.assertFalse(AppUtils.isSameCatalogue("rock", "jazz"))
