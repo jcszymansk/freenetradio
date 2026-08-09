@@ -19,11 +19,14 @@ package wseemann.media.jplaylistparser.parser
 import org.hamcrest.MatcherAssert
 import org.hamcrest.core.Is
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import wseemann.media.jplaylistparser.parser.m3u.M3UPlaylistParser
 import wseemann.media.jplaylistparser.parser.m3u8.M3U8PlaylistParser
 import wseemann.media.jplaylistparser.parser.pls.PLSPlaylistParser
 import wseemann.media.jplaylistparser.playlist.Playlist
+import wseemann.media.jplaylistparser.exception.JPlaylistParserException
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.ByteArrayInputStream
 /**
@@ -113,6 +116,91 @@ class AutoDetectParserTest {
             val entry = playlist.playlistEntries.single()
             assertEquals(fixture.uri, entry[PlaylistEntry.URI])
             assertEquals("Station", entry[PlaylistEntry.PLAYLIST_METADATA])
+        }
+    }
+
+    @Test
+    fun dispatchesFromMimeTypesWithParameters() {
+        data class Fixture(val mimeType: String, val uri: String, val content: String)
+
+        val fixtures = listOf(
+            Fixture(
+                "audio/x-mpegurl",
+                "https://example.com/mime-m3u",
+                "#EXTM3U\n#EXTINF:-1,Station\nhttps://example.com/mime-m3u"
+            ),
+            Fixture(
+                "audio/x-scpls",
+                "https://example.com/mime-pls",
+                "[playlist]\nFile1=https://example.com/mime-pls\nTitle1=Station\nLength1=-1"
+            ),
+            Fixture(
+                "video/x-ms-asf",
+                "ftp://example.com/mime-asx",
+                "<ASX><ENTRY><TITLE>Station</TITLE>" +
+                        "<REF href=\"ftp://example.com/mime-asx\"/></ENTRY></ASX>"
+            ),
+            Fixture(
+                "video/application/xspf+xml",
+                "https://example.com/mime-xspf",
+                "<PLAYLIST><TRACKLIST><TRACK><LOCATION>" +
+                        "https://example.com/mime-xspf</LOCATION>" +
+                        "<TITLE>Station</TITLE></TRACK></TRACKLIST></PLAYLIST>"
+            )
+        )
+
+        fixtures.forEach { fixture ->
+            val playlist = Playlist()
+            AutoDetectParser(0).parse(
+                "not-a-url",
+                "${fixture.mimeType}; charset=UTF-8",
+                ByteArrayInputStream(fixture.content.toByteArray()),
+                playlist
+            )
+
+            assertEquals(fixture.mimeType, fixture.uri, playlist.playlistEntries.single()[PlaylistEntry.URI])
+        }
+    }
+
+    @Test
+    fun extensionsAreCaseInsensitive() {
+        val playlist = Playlist()
+
+        AutoDetectParser(0).parse(
+            "https://example.com/playlist.PLS",
+            null,
+            ByteArrayInputStream(
+                "[playlist]\nFile1=https://example.com/stream\nTitle1=Station\nLength1=-1".toByteArray()
+            ),
+            playlist
+        )
+
+        assertEquals("https://example.com/stream", playlist.playlistEntries.single()[PlaylistEntry.URI])
+    }
+
+    @Test
+    fun malformedPlaylistProducesNoEntries() {
+        val playlist = Playlist()
+
+        AutoDetectParser(0).parse(
+            "https://example.com/playlist.pls",
+            null,
+            ByteArrayInputStream("not a playlist".toByteArray()),
+            playlist
+        )
+
+        assertTrue(playlist.playlistEntries.isEmpty())
+    }
+
+    @Test
+    fun unsupportedFormatIsRejectedWithoutNetworking() {
+        assertThrows(JPlaylistParserException::class.java) {
+            AutoDetectParser(0).parse(
+                "not-a-url",
+                "application/octet-stream",
+                ByteArrayInputStream(byteArrayOf()),
+                Playlist()
+            )
         }
     }
 }
