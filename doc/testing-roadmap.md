@@ -110,7 +110,7 @@ Use end-to-end tests only where integration is the contract:
 
 **Exit check:** no assertion-free, disabled, order-dependent, or externally networked test remains. Existing behavior is covered at least as strongly as before.
 
-## Phase 2: Cover the pure data and domain core
+## [x] Phase 2: Cover the pure data and domain core
 
 **Purpose:** establish the large, fast base of the test pyramid.
 
