@@ -72,7 +72,7 @@ class EqualizerState() {
     var bandLevelRange: ShortArray
         get() = if (mBandLevelRange.size == 2) {
             mBandLevelRange.copyOf(mBandLevelRange.size)
-        } else shortArrayOf(1500, -1500)
+        } else shortArrayOf(-1500, 1500)
         set(value) {
             mBandLevelRange = value.copyOf(value.size)
         }

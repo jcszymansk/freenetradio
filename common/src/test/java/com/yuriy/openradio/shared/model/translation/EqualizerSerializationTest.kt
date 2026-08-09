@@ -72,4 +72,49 @@ class EqualizerSerializationTest {
             assertTrue(state.presets.isEmpty())
         }
     }
+
+    @Test
+    fun invalidPresetAndBandRangeUseSafeDefaults() {
+        val state = EqualizerState().apply {
+            currentPreset = -1
+            bandLevelRange = shortArrayOf(100)
+        }
+
+        assertEquals(0.toShort(), state.currentPreset)
+        assertArrayEquals(shortArrayOf(-1500, 1500), state.bandLevelRange)
+    }
+
+    @Test
+    fun mutableStateIsDefensivelyCopied() {
+        val bandRange = shortArrayOf(-100, 100)
+        val frequencies = intArrayOf(1_000, 2_000)
+        val levels = shortArrayOf(10, 20)
+        val presets = mutableListOf("One", "Two")
+        val state = EqualizerState().apply {
+            bandLevelRange = bandRange
+            centerFrequencies = frequencies
+            bandLevels = levels
+            this.presets = presets
+        }
+
+        bandRange[0] = 0
+        frequencies[0] = 0
+        levels[0] = 0
+        presets.clear()
+
+        assertArrayEquals(shortArrayOf(-100, 100), state.bandLevelRange)
+        assertArrayEquals(intArrayOf(1_000, 2_000), state.centerFrequencies)
+        assertArrayEquals(shortArrayOf(10, 20), state.bandLevels)
+        assertEquals(listOf("One", "Two"), state.presets)
+
+        state.bandLevelRange[0] = 0
+        state.centerFrequencies[0] = 0
+        state.bandLevels[0] = 0
+        (state.presets as MutableList).clear()
+
+        assertArrayEquals(shortArrayOf(-100, 100), state.bandLevelRange)
+        assertArrayEquals(intArrayOf(1_000, 2_000), state.centerFrequencies)
+        assertArrayEquals(shortArrayOf(10, 20), state.bandLevels)
+        assertEquals(listOf("One", "Two"), state.presets)
+    }
 }
