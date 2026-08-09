@@ -137,6 +137,7 @@ class RadioStation : Serializable, Comparable<RadioStation> {
         lastCheckOkTime = radioStation.lastCheckOkTime
         imageUrl = radioStation.imageUrl
         codec = radioStation.codec
+        description = radioStation.description
     }
 
     /**
