@@ -2,6 +2,7 @@ package com.yuriy.openradio.shared.model.parser
 
 import android.net.TestUri
 import com.yuriy.openradio.shared.model.filter.FilterImpl
+import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamBitrate
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.net.UrlLayerWebRadioImpl
@@ -9,6 +10,7 @@ import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -330,6 +332,32 @@ class ParserLayerMappingTest {
                 )
                 .map { it.id }
                 .toSet()
+        )
+    }
+
+    @Test
+    fun radioBrowserHandlesMalformedProviderShapesIndependently() {
+        val parser = ParserLayerRadioBrowserImpl(FilterImpl())
+        val stations = parser.getRadioStations(
+            """[42,{"stationuuid":"valid","name":"Valid","url":"https://radio.example/stream"}]""",
+            MediaIdBuilderDefault(),
+            TestUri("")
+        )
+        val categories = parser.getAllCategories(
+            """[false,{"name":"rock","stationcount":1}]"""
+        )
+        val countries = parser.getAllCountries(
+            """["invalid",{"iso_3166_1":"PL"}]"""
+        )
+
+        assertEquals(setOf("valid"), stations.map { it.id }.toSet())
+        assertEquals(setOf("rock"), categories.map { it.id }.toSet())
+        assertEquals(setOf(Country("Poland", "PL")), countries)
+        assertTrue(parser.getAllCategories("{").isEmpty())
+        assertTrue(parser.getAllCountries("{").isEmpty())
+        assertSame(
+            RadioStation.INVALID_INSTANCE,
+            parser.getRadioStation("[]", MediaIdBuilderDefault(), TestUri(""))
         )
     }
 }
