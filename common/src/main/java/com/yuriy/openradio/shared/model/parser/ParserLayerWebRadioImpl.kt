@@ -247,7 +247,7 @@ class ParserLayerWebRadioImpl(private val mCountriesCache:Set<Country>) : Parser
     }
 
     private fun getRadioStationByName(uuid: String, jsonObject: JSONObject, searchId: String): RadioStation {
-        if (jsonObject.has(KEY_COUNTRY).not()) {
+        if (jsonObject.has(KEY_NAME).not()) {
             return RadioStation.INVALID_INSTANCE
         }
         val name = try {

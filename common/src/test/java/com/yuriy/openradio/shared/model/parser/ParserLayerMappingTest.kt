@@ -267,4 +267,69 @@ class ParserLayerMappingTest {
                 .toSet()
         )
     }
+
+    @Test
+    fun webRadioSkipsMalformedEntriesAndMissingCriteria() {
+        val data = """
+            {
+              "not-an-object": "invalid",
+              "bad-genres": {
+                "Genre": "Rock",
+                "Name": "Bad Genres",
+                "StreamUri": "https://radio.example/bad-genres"
+              },
+              "missing-genre": {
+                "Name": "Missing Genre",
+                "StreamUri": "https://radio.example/missing-genre"
+              }
+            }
+        """.trimIndent()
+        val parser = ParserLayerWebRadioImpl(emptySet())
+
+        assertTrue(parser.getAllCategories(data).isEmpty())
+        assertTrue(
+            parser.getRadioStations(
+                data,
+                MediaIdBuilderDefault(),
+                TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+            ).isEmpty()
+        )
+        assertTrue(
+            parser.getRadioStations(
+                data,
+                MediaIdBuilderDefault(),
+                TestUri("https://example.com")
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun webRadioSearchUsesNameWithoutRequiringCountry() {
+        val data = """
+            {
+              "matching-station": {
+                "Genre": ["Rock"],
+                "Name": "Morning Rock",
+                "StreamUri": "https://radio.example/rock"
+              },
+              "missing-name": {
+                "Genre": ["Rock"],
+                "StreamUri": "https://radio.example/missing-name",
+                "Country": "Poland"
+              }
+            }
+        """.trimIndent()
+
+        assertEquals(
+            setOf("matching-station"),
+            ParserLayerWebRadioImpl(emptySet())
+                .getRadioStations(
+                    data,
+                    MediaIdBuilderDefault(),
+                    TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_SEARCH_ID}rock")
+                )
+                .map { it.id }
+                .toSet()
+        )
+    }
 }
