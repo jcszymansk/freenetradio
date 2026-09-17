@@ -176,7 +176,15 @@ class FileStoreManager : StorageManagerDependency {
         private const val KEY_LOC = "locals"
         private const val FILE_NAME = "openradio_data"
         private const val FILE_TYPE = "text/plain"
-        private const val REQUEST_CODE_CREATE_FILE = 1234
-        private const val REQUEST_CODE_OPEN_FILE = 5678
+
+        /**
+         * Request code of the "save the data file" activity result.
+         */
+        const val REQUEST_CODE_CREATE_FILE = 1234
+
+        /**
+         * Request code of the "open the data file" activity result.
+         */
+        const val REQUEST_CODE_OPEN_FILE = 5678
     }
 }

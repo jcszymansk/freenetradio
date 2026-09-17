@@ -71,4 +71,6 @@ dependencies {
             {exclude group: "com.android.support", module: "support-annotations"}
     )
     androidTestImplementation "androidx.test.ext:junit:$junitAndroidXVersion"
+    // The Room API cache is exercised through its DAO, which :common keeps off the app classpath.
+    androidTestImplementation "androidx.room:room-runtime:$roomVersion"
 }
