@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="android.net.UriTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-17T21:03:01" hostname="enki" time="0.011">
+<testsuite name="android.net.UriTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-17T21:09:49" hostname="enki" time="0.012">
   <properties/>
   <testcase name="equalityAndOrderFollowTheStringForm" classname="android.net.UriTest" time="0.005"/>
   <testcase name="buildUponPreservesTheOriginalAndAppends" classname="android.net.UriTest" time="0.0"/>
   <testcase name="parseKeepsOpaqueAndRelativeFormsIntact" classname="android.net.UriTest" time="0.0"/>
   <testcase name="parseSplitsEveryHierarchicalPart" classname="android.net.UriTest" time="0.003"/>
-  <testcase name="encodeKeepsUnreservedSymbolsAndDecodeRestoresThem" classname="android.net.UriTest" time="0.002"/>
+  <testcase name="encodeKeepsUnreservedSymbolsAndDecodeRestoresThem" classname="android.net.UriTest" time="0.003"/>
   <testcase name="builderEncodesSegmentsAndParameters" classname="android.net.UriTest" time="0.0"/>
   <testcase name="decodeLeavesMalformedEscapesAlone" classname="android.net.UriTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
