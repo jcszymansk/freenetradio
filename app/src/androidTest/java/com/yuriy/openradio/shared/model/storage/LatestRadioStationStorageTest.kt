@@ -76,9 +76,11 @@ class LatestRadioStationStorageTest {
     }
 
     @Test
-    fun clearDoesNotResetTheInMemoryCacheOfTheSameInstance() {
-        // Pins current behaviour: the cached value outlives clear() on the instance that holds it,
-        // so callers that need a cleared value have to read through a fresh storage.
+    fun clearCurrentlyLeavesTheCachedStationReadableOnTheSameInstance() {
+        // Pins the defect tracked as TASK-027: clear() wipes the preference file but not the
+        // cached station, and the registry hands out one instance per process, so clearing the
+        // cache through the service still leaves a station to autoplay. Update this test together
+        // with the fix.
         mStorage.add(makeStation("1"))
 
         mStorage.clear()
