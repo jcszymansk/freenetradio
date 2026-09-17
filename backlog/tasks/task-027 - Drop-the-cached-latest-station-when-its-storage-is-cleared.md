@@ -4,6 +4,7 @@ title: Drop the cached latest station when its storage is cleared
 status: To Do
 assignee: []
 created_date: '2026-09-17 19:45'
+updated_date: '2026-09-17 21:07'
 labels: []
 dependencies: []
 type: bug
@@ -22,3 +23,9 @@ LatestRadioStationStorage keeps the last station in an mRadioStation field and A
 - [ ] #2 Clearing the cache through the service leaves no station to autoplay on the next start
 - [ ] #3 LatestRadioStationStorageTest asserts the cleared value instead of the stale cached one
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+TASK-004.01 added a second pin for this defect: OpenRadioServicePresenterImplTest.clearingDropsEveryCacheButStillHandsBackTheLatestStation asserts that presenter.clear() still hands back the cached station. Update it together with LatestRadioStationStorageTest when fixing.
+<!-- SECTION:NOTES:END -->
