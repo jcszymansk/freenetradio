@@ -4,3 +4,7 @@
 /local.properties
 *.iml
 sign.properties
+
+# Review loop artifacts
+/reviews
+/.claude/review-loop*

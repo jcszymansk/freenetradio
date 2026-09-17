@@ -34,7 +34,7 @@ lives in the tracker.
 | End-to-end | One narrow service integration test | Covers first-local-station root refresh |
 | Coverage reporting | None | No JaCoCo or Kover configuration |
 
-The canonical build, test, and coverage commands live in `CLAUDE.md` so there is one copy of them.
+The canonical build, test, and coverage commands live in `AGENTS.md` so there is one copy of them.
 
 Known problems recorded at that baseline:
 
