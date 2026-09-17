@@ -21,8 +21,8 @@
     <string name="about_web_radio_title">Community Web Radio</string>
     <string name="about_graphics">Graphics</string>
     <string name="about_graphics_link">Vector assets from Android Studio</string>
-    <string name="about_author">Author</string>
-    <string name="about_author_name">Yurii Chernyshov</string>
+    <string name="about_based_on">Based on</string>
+    <string name="about_based_on_name">Open Radio by Yurii Chernyshov</string>
     <string name="about_home_title">Project home</string>
     <string name="about_report_issue">Report issue</string>
     <string name="about_playlist_title">Playlist</string>

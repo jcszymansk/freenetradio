@@ -24,7 +24,6 @@ import androidx.media3.common.MediaLibraryInfo
 import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.IntentUtils
-import com.yuriy.openradio.shared.utils.findImageView
 import com.yuriy.openradio.shared.utils.findTextView
 
 /**
@@ -51,7 +50,6 @@ class AboutDialog : BaseDialogFragment() {
         val versionCodeView = view.findTextView(R.id.dialog_about_version_view)
         versionCodeView.text = versionText
 
-        setOnClickOnText(context, view, R.id.about_author_link_view, AUTHOR_PROFILE_URL)
         setOnClickOnText(context, view, R.id.about_project_link_view, PROJECT_HOME_URL)
         setOnClickOnText(context, view, R.id.about_exo_player_ver_link_view, EXO_PLAYER_URL)
         setOnClickOnText(context, view, R.id.about_report_issue_link_view, REPORT_ISSUE_URL)
@@ -59,7 +57,6 @@ class AboutDialog : BaseDialogFragment() {
         setOnClickOnText(context, view, R.id.about_web_radio_link_view, WEB_RADIO_URL)
         setOnClickOnText(context, view, R.id.about_playlist_parser_name_view, PLAY_LIST_PARSER_URL)
         setOnClickOnText(context, view, R.id.about_easy_swipe_name_view, SWIPE_EFFECT_URL)
-        setOnClickOnImage(context, view, R.id.about_item_support_btn, SUPPORT_LINK)
 
         return createAlertDialog(view)
     }
@@ -76,13 +73,9 @@ class AboutDialog : BaseDialogFragment() {
         val DIALOG_TAG = CLASS_NAME + "_DIALOG_TAG"
 
         /**
-         * My profile's url.
-         */
-        private const val AUTHOR_PROFILE_URL = "https://www.linkedin.com/in/yurii-chernyshov"
-        /**
          * Project's url
          */
-        private const val PROJECT_HOME_URL = "https://github.com/ChernyshovYuriy/OpenRadio"
+        private const val PROJECT_HOME_URL = "https://github.com/jcszymansk/freenetradio"
 
         private const val EXO_PLAYER_URL = "https://github.com/google/ExoPlayer"
 
@@ -90,22 +83,14 @@ class AboutDialog : BaseDialogFragment() {
 
         private const val SWIPE_EFFECT_URL = "https://github.com/xenione/swipe-maker"
 
-        private const val REPORT_ISSUE_URL = "https://github.com/ChernyshovYuriy/OpenRadio/issues"
+        private const val REPORT_ISSUE_URL = "https://github.com/jcszymansk/freenetradio/issues"
 
         private const val RADIO_BROWSER_URL = "https://www.radio-browser.info"
 
         private const val WEB_RADIO_URL = "https://jcorporation.github.io/webradiodb"
 
-        private const val SUPPORT_LINK = "https://ko-fi.com/I2I1LGFPH"
-
         private fun setOnClickOnText(context: Context, view: View, viewId: Int, linkUrl: String) {
             view.findTextView(viewId).setOnClickListener {
-                IntentUtils.startActivitySafe(context, IntentUtils.makeUrlBrowsableIntent(linkUrl))
-            }
-        }
-
-        private fun setOnClickOnImage(context: Context, view: View, viewId: Int, linkUrl: String) {
-            view.findImageView(viewId).setOnClickListener {
                 IntentUtils.startActivitySafe(context, IntentUtils.makeUrlBrowsableIntent(linkUrl))
             }
         }
