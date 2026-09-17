@@ -2,6 +2,24 @@ apply plugin: "java-library"
 apply plugin: "kotlin"
 apply from: "../constants.gradle"
 
+/**
+ * The stubs replace framework classes, so they compile against the platform they replace.
+ */
+def androidSdkDir = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+def localProperties = rootProject.file("local.properties")
+if (localProperties.exists()) {
+    def properties = new Properties()
+    localProperties.withInputStream { properties.load(it) }
+    androidSdkDir = properties.getProperty("sdk.dir", androidSdkDir)
+}
+if (androidSdkDir == null) {
+    throw new GradleException("Set ANDROID_HOME or local.properties sdk.dir to build :android-jvm-stubs")
+}
+def androidJar = file("$androidSdkDir/platforms/android-${project.ext.compileSdkVersion}/android.jar")
+if (!androidJar.exists()) {
+    throw new GradleException("Missing $androidJar; install the API ${project.ext.compileSdkVersion} platform")
+}
+
 java {
     sourceCompatibility = project.ext.javaVersion
     targetCompatibility = project.ext.javaVersion
@@ -14,5 +32,6 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
 }
 
 dependencies {
+    compileOnly files(androidJar)
     testImplementation group: "junit", name: "junit", version: "$junitVersion"
 }

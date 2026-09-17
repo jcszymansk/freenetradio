@@ -98,6 +98,22 @@ class MediaItemCarRootTest {
     }
 
     @Test
+    fun theUseLocationSentinelIsNotAKnownCountryInTheCar() {
+        val presenter = RecordingPresenter()
+        val listener = RecordingCommandListener()
+
+        MediaItemBrowseCar(Source.WEB_RADIO).execute(
+            listener.playbackStateListener,
+            dependencies(presenter, listener, countryCode = STRING_RESOURCE)
+        )
+
+        listener.awaitResult().assertMediaIds(
+            MediaId.MEDIA_ID_ALL_CATEGORIES,
+            MediaId.MEDIA_ID_COUNTRIES_LIST
+        )
+    }
+
+    @Test
     fun carEntriesAreBrowsableFolders() {
         val presenter = RecordingPresenter(mFavorites = stations("favorite"))
         val listener = RecordingCommandListener()

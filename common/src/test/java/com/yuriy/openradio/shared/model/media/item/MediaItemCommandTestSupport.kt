@@ -52,6 +52,12 @@ internal const val DEFAULT_COUNTRY_CODE = "PL"
 
 internal const val FLAG_DRAWABLE_ID = 4711
 
+/**
+ * What every string resource resolves to here. The generated test R class numbers all resources
+ * zero, so one value is all a test context can tell apart.
+ */
+internal const val STRING_RESOURCE = "string resource"
+
 @Suppress("DEPRECATION")
 internal fun testContext(): Context {
     val resources = object : Resources(null, null, null) {
@@ -59,6 +65,12 @@ internal fun testContext(): Context {
         override fun getIdentifier(name: String?, defType: String?, defPackage: String?): Int {
             return FLAG_DRAWABLE_ID
         }
+
+        override fun getString(id: Int): String = STRING_RESOURCE
+
+        override fun getString(id: Int, vararg formatArgs: Any?): String = STRING_RESOURCE
+
+        override fun getText(id: Int): CharSequence = STRING_RESOURCE
     }
     return object : ContextWrapper(null) {
 

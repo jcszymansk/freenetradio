@@ -111,6 +111,22 @@ class MediaItemRootTest {
     }
 
     @Test
+    fun theUseLocationSentinelIsNotAKnownCountry() {
+        val presenter = RecordingPresenter()
+        val listener = RecordingCommandListener()
+
+        MediaItemRoot(Source.WEB_RADIO).execute(
+            listener.playbackStateListener,
+            dependencies(presenter, listener, countryCode = STRING_RESOURCE)
+        )
+
+        listener.awaitResult().assertMediaIds(
+            MediaId.MEDIA_ID_ALL_CATEGORIES,
+            MediaId.MEDIA_ID_COUNTRIES_LIST
+        )
+    }
+
+    @Test
     fun anUnknownCountryLeavesTheCountryEntryOut() {
         val presenter = RecordingPresenter()
         val listener = RecordingCommandListener()
@@ -151,11 +167,11 @@ class MediaItemRootTest {
             )
             assertEquals(null, item.localConfiguration)
         }
-        assertEquals(
-            FLAG_DRAWABLE_ID,
-            MediaItemHelper.getDrawableId(
-                listener.items.single { it.mediaId == MediaId.MEDIA_ID_COUNTRY_STATIONS }.mediaMetadata.extras
-            )
-        )
+        for (item in listener.items.filter { it.mediaId != MediaId.MEDIA_ID_COUNTRY_STATIONS }) {
+            assertEquals("${item.mediaId} has no title", STRING_RESOURCE, item.mediaMetadata.title)
+        }
+        val country = listener.items.single { it.mediaId == MediaId.MEDIA_ID_COUNTRY_STATIONS }
+        assertEquals("Poland", country.mediaMetadata.title)
+        assertEquals(FLAG_DRAWABLE_ID, MediaItemHelper.getDrawableId(country.mediaMetadata.extras))
     }
 }
