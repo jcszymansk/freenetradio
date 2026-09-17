@@ -1,8 +1,14 @@
 # Roadmap
 
-OpenRadio is being revived as a trustworthy, local-first internet radio application. The immediate purpose is personal use, particularly through Android Auto. Public distribution comes only after that version is stable and useful.
+FreeNetRadio is a revival of the Apache-licensed OpenRadio source as a trustworthy, local-first internet radio
+application. The immediate purpose is personal use, particularly through Android Auto. Public distribution comes only after that version is stable and useful.
 
-> **Paused:** complete the separate [testing roadmap](testing-roadmap.md) before resuming this roadmap.
+> **Paused:** complete the separate [testing roadmap](testing-roadmap.md) before resuming this roadmap. The gate
+> is `TASK-007`; feature work here depends on it, so `backlog task list --ready --plain` will not offer it early.
+
+How far each section has got is recorded in the tracker, not here: every section names its task, and `backlog
+task view TASK-011 --plain` shows its state and remaining criteria. This document keeps the reasoning and the
+standard each section has to meet.
 
 The roadmap has three targets:
 
@@ -28,16 +34,14 @@ The roadmap has three targets:
 
 A clean checkout builds without private files, installs under a new identity, plays internet radio reliably on a phone, and provides a usable Android Auto media experience. The application makes no unexpected connections beyond the station-directory and selected stream services.
 
-### 1. Preserve the recovered baseline
+### 1. Preserve the recovered baseline — `TASK-009`
 
 - Record the source release and provenance in the repository.
 - Tag the recovered state before substantial modernization.
 - Retain `LICENSE`, `NOTICE`, and applicable file-level copyright notices.
 - Treat checked-in APKs as historical artifacts; do not use them as build inputs.
 
-### 2. Reduce the supported product surface
-
-**Status: completed.**
+### 2. Reduce the supported product surface — `TASK-010`
 
 - Remove `:tv` and `:automotive` from `settings.gradle`.
 - Delete the `tv/` and `automotive/` application modules.
@@ -46,9 +50,7 @@ A clean checkout builds without private files, installs under a new identity, pl
 - Remove shared TV or Automotive code only after reference checks and an Android Auto smoke test show that it is not needed.
 - Document phone/tablet and Android Auto as the only supported targets.
 
-### 3. Establish an independent application identity
-
-**Progress:** the application is now named FreeNetRadio and uses application ID `com.github.jcszymansk.freenetradio`. Package-derived provider authorities, media-session command IDs, notification text, diagnostic report text, and the user agent use the new identity. New icons and a release signing identity remain outstanding.
+### 3. Establish an independent application identity — `TASK-011`
 
 - Choose a new project and application name that cannot be confused with the commercial application.
 - Change `applicationId` before creating user data or publishing builds.
@@ -56,9 +58,7 @@ A clean checkout builds without private files, installs under a new identity, pl
 - Generate a new release signing key and store it outside the repository with an offline backup.
 - Keep debug builds on Android's normal debug signing path.
 
-### 4. Restore a clean, secret-free build
-
-**Progress:** mandatory `sign.properties` loading, inherited signing assignments, unconditional Google Services and Crashlytics plugins, and direct SMTP logging have been removed. A debug APK now builds with Android's standard debug key.
+### 4. Restore a clean, secret-free build — `TASK-012`
 
 - Make the Gradle wrapper build a debug APK from a fresh checkout.
 - Stop `sign.gradle` from requiring `sign.properties` for ordinary builds.
@@ -70,9 +70,7 @@ A clean checkout builds without private files, installs under a new identity, pl
 
 **Exit check:** a fresh checkout with no ignored secret files produces an installable debug APK using the documented command.
 
-### 5. Remove inherited online services
-
-**Status: completed.** Firebase Analytics, Crashlytics, Authentication, Firestore cloud backup, the hosted featured-stations feed, and their account/cloud UI have been removed. Google Cast was removed, and fused location was replaced with Android's platform location API. Local file import/export remains; the application has no Firebase or Google Play Services runtime dependencies.
+### 5. Remove inherited online services — `TASK-013`
 
 Remove features tied to unavailable, untrusted, or unnecessary infrastructure:
 
@@ -93,15 +91,9 @@ Review other Google dependencies individually:
 
 **Exit check:** the resolved runtime dependency graph contains no Firebase or Google Play Services artifacts; normal browsing and playback require no Google/Firebase project.
 
-### 6. Replace direct log email with explicit sharing
+### 6. Replace direct log email with explicit sharing — `TASK-014`
 
-**Status: completed.** `LoggingLayerImpl` no longer reads packaged credentials or sends mail. The settings action asks for confirmation, collects the report, and opens an `ACTION_SEND` chooser with a `FileProvider` attachment. The user selects the recipient and confirms transmission in the external application.
-
-The chooser and attachment flow has been manually verified on a real phone. Cancellation semantics are intentionally delegated to the receiving application, which may cancel, save a draft, or send.
-
-**Follow-up:** move report files from internal persistent storage to cache storage and avoid deleting a report while a receiving application may still be reading it. Retest sharing after that change.
-
-Replace it with a user-mediated diagnostic flow:
+Replace the direct log email with a user-mediated diagnostic flow:
 
 1. The user selects **Prepare diagnostic report** in settings.
 2. The application explains that the report may contain application logs, stream or station URLs, application version, and device/build information.
@@ -127,7 +119,7 @@ Review the collected fields before retaining them. Include only information usef
 
 **Exit check:** without visible user interaction through the Android chooser, no diagnostic data can leave the application.
 
-### 7. Restore core phone functionality
+### 7. Restore core phone functionality — `TASK-016`
 
 Validate and repair the smallest useful feature set:
 
@@ -145,9 +137,7 @@ Validate and repair the smallest useful feature set:
 
 Defer cloud synchronization, recommendation systems, accounts, telemetry, and new discovery features.
 
-### 8. Validate Android Auto end to end
-
-**Progress:** phone and real-car Android Auto operation has been manually exercised for several hours, including weak coverage and recovery after ordinary signal loss. The application does not always resume after a signal outage lasting several minutes; investigate this before general availability.
+### 8. Validate Android Auto end to end — `TASK-017`
 
 Use the actual phone and vehicle/head unit as the primary acceptance environment. The Desktop Head Unit may supplement, but not replace, that test.
 
@@ -170,7 +160,7 @@ Record the phone model, Android version, Android Auto version, connection type, 
 
 **Exit check:** the application can be used for routine listening in the real vehicle without ADB intervention after installation.
 
-### 9. Produce a personal release
+### 9. Produce a personal release — `TASK-019`
 
 - Build a locally signed release APK with the new signing identity.
 - Keep the signing key and passwords outside the repository.
@@ -180,7 +170,7 @@ Record the phone model, Android version, Android Auto version, connection type, 
 
 **Target 1 is complete when:** the application builds from a clean checkout, is the maintainer's normal Android Auto radio player, has no inherited backend dependency, and shares diagnostics only through an explicit per-report chooser.
 
-## Target 2: F-Droid release
+## Target 2: F-Droid release — `TASK-020`
 
 Start this target only after the personal release has been stable in regular use.
 
@@ -197,7 +187,7 @@ Start this target only after the personal release has been stable in regular use
 
 **Target 2 is complete when:** an F-Droid-compatible release is built from public source and accepted into the intended repository, with installation and Android Auto limitations documented honestly.
 
-## Target 3: Play Store release
+## Target 3: Play Store release — `TASK-021`
 
 This target is optional. Start it only if the application is stable, there is meaningful user interest, and the ongoing policy and support burden is justified.
 

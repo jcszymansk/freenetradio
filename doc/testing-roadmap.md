@@ -24,6 +24,9 @@ Do not optimize for a blanket repository-wide coverage percentage. That would re
 
 ## Baseline recorded on 2026-08-03
 
+A historical snapshot of the suite as it stood when this roadmap was written. It is not updated; current state
+lives in the tracker.
+
 | Layer | Current tests | Assessment |
 | --- | ---: | --- |
 | Local JVM | 15 distinct tests | Passed for debug and release |
@@ -31,26 +34,9 @@ Do not optimize for a blanket repository-wide coverage percentage. That would re
 | End-to-end | One narrow service integration test | Covers first-local-station root refresh |
 | Coverage reporting | None | No JaCoCo or Kover configuration |
 
-Canonical commands (with `ANDROID_HOME` configured):
+The canonical build, test, and coverage commands live in `CLAUDE.md` so there is one copy of them.
 
-```sh
-# JVM tests
-./gradlew test
-
-# Instrumentation compilation
-./gradlew :app:assembleDebugAndroidTest
-
-# Instrumented tests on a running emulator, with external networking disabled
-adb shell svc wifi disable
-adb shell svc data disable
-./gradlew :app:connectedDebugAndroidTest
-
-# Local and instrumented coverage reports
-./gradlew localCoverageReport
-./gradlew instrumentedCoverageReport
-```
-
-Known problems in the current suite:
+Known problems recorded at that baseline:
 
 - `app/src/androidTest/java/com/yuriy/openradio/shared/model/storage/RadioStationsStorageTest.kt` has no active assertions and therefore always passes.
 - `RadioStationJsonSerializerTest` only verifies that serialization returns a non-null value.
@@ -91,205 +77,84 @@ Use end-to-end tests only where integration is the contract:
 - Playback of a local audio fixture
 - Persistence across activity and service recreation
 
-## [x] Phase 1: Repair the foundation
+## Phases
+
+The phases run in order. Each one is a task in the tracker, and the coverage lists that used to appear here are
+now that task's acceptance criteria, so progress is recorded in exactly one place. Run `backlog task list
+--ready --plain` to see what is unblocked, and `backlog task view TASK-003 --plain` to read a phase in full.
+
+### Phase 1: Repair the foundation — `TASK-001`
 
 **Purpose:** make the existing suite honest, deterministic, and measurable.
 
-1. [x] Delete or restore the assertion-free storage merge test.
-2. [x] Move pure tests from `app/src/androidTest` to `common/src/test`:
-   - `MediaIDHelperTest`
-   - `RadioStationJsonSerializerTest`
-   - `EqualizerSerializationTest`
-3. [x] Convert the legacy JUnit3 media-ID test to JUnit4.
-4. [x] Strengthen serializer tests into complete round trips.
-5. [x] Ensure every test owns and clears its SharedPreferences, files, and database state.
-6. [x] Introduce shared station factories, provider fixtures, and recording fakes only where duplication appears.
-7. [x] Enable the Android Gradle Plugin's JaCoCo support without adding another coverage framework.
-8. [x] Produce separate local and instrumented coverage reports.
-9. [x] Establish canonical commands for JVM tests, instrumentation compilation, offline emulator tests, and coverage generation.
+The inherited suite contained assertion-free, misplaced, and order-dependent tests, and had no coverage
+reporting at all. Nothing could be built on it until that was fixed.
 
-**Exit check:** no assertion-free, disabled, order-dependent, or externally networked test remains. Existing behavior is covered at least as strongly as before.
+**Exit check:** no assertion-free, disabled, order-dependent, or externally networked test remains. Existing
+behavior is covered at least as strongly as before.
 
-## [x] Phase 2: Cover the pure data and domain core
+### Phase 2: Cover the pure data and domain core — `TASK-002`
 
 **Purpose:** establish the large, fast base of the test pyramid.
 
-### Provider parsing
+Provider parsing, cache and download policy, identifiers and browse state, and serialization, each as a subtask.
+All of it runs on the JVM against hand-written recording fakes.
 
-Test `ParserLayerRadioBrowserImpl` and `ParserLayerWebRadioImpl` for:
+**Exit check:** the selected pure-core package set reaches at least 80% line coverage and 70% branch coverage,
+and every listed class has normal, edge, and failure-path tests.
 
-- [x] Valid station mapping
-- [x] Missing station ID
-- [x] Missing stream URL
-- [x] Malformed and empty JSON
-- [x] Unknown fields
-- [x] Country-code mapping
-- [x] Category counts and title normalization
-- [x] Filtered stations
-- [x] WebRadioDB category, country, and case-insensitive search filtering
-
-### Cache and download policy
-
-Test `ModelLayerImpl` with recording fakes:
-
-- [x] No connectivity returns no data and touches no cache or downloader.
-- [x] A memory hit bypasses persistence and download.
-- [x] A persistent hit is promoted to memory.
-- [x] Empty and `[]` cache values are misses.
-- [x] A successful download replaces both cache levels.
-- [x] An empty download is not cached.
-- [x] The parser receives exactly the selected response.
-
-### Identifiers and browse state
-
-Test:
-
-- [x] `MediaId` construction, normalization, search IDs, country IDs, and sortable and refreshable classifications
-- [x] `BrowseTree` replacement, append, item lookup, station lookup, parent-list lookup, and invalidation
-- [x] Indexable command page reset and advancement
-- [x] Catalogue-change decisions
-
-### Serialization and local utilities
-
-Test:
-
-- [x] Complete `RadioStation` round trips
-- [x] Complete equalizer-state round trips and malformed data
-- [x] Map import and export with malformed and missing entries
-- [x] Playlist dispatch for M3U, M3U8, PLS, ASX, and XSPF using in-memory streams
-- [x] In-memory API cache operations
-- [x] URL construction, query encoding, and pagination
-- [x] Filter rules, including empty-stream behavior
-
-**Exit check:** the selected pure-core package set reaches at least 80% line coverage and 70% branch coverage, and every listed class has normal, edge, and failure-path tests.
-
-## Phase 3: Cover persistence and state mutation
+### Phase 3: Cover persistence and state mutation — `TASK-003`
 
 **Purpose:** protect user data before further roadmap work changes storage or migrations.
 
-Cover these components with instrumented tests:
+Favorites, local stations, settings, the latest station, the Room API cache, and file import and export. These
+are instrumented tests: SharedPreferences and Room are the subject, so they cannot run on the JVM. Each test
+must get fresh application state or explicitly clear every store it touches.
 
-- [ ] `FavoritesStorage`: add, remove, duplicate handling, lookup, and sort IDs
-- [ ] `DeviceLocalsStorage`: ID allocation, add, edit, remove, and propagation to favorites and latest station
-- [ ] `LatestRadioStationStorage`: empty default, save, reload, and clear
-- [ ] Settings storage: defaults, writes, reloads, and invalid values
-- [ ] Abstract station deserialization: invalid records, ordering, and sort-ID normalization
-- [ ] Storage merge: duplicates, conflicts, and empty inputs
-- [ ] `PersistentApiCache`: put, get, remove, clear, replacement, and expiry boundary
-- [ ] File import and export through app-private temporary files, including malformed and partial input
+**Exit check:** favorites, locals, settings, latest station, Room cache, and file round trips are deterministic
+and covered for success and corrupted-input behavior.
 
-Each test must get fresh application state or explicitly clear every store it touches.
-
-**Exit check:** favorites, locals, settings, latest station, Room cache, and file round trips are deterministic and covered for success and corrupted-input behavior.
-
-## Phase 4: Cover browse commands and the Media3 service contract
+### Phase 4: Cover browse commands and the Media3 service contract — `TASK-004`
 
 **Purpose:** protect the shared phone and Android Auto surface.
 
-First test `OpenRadioServicePresenterImpl` and each `MediaItemCommand` with fake collaborators:
+First `OpenRadioServicePresenterImpl` and each `MediaItemCommand` against fake collaborators, which is far
+cheaper than driving the same cases through a real service. Then an expansion of the existing real
+`MediaBrowser` to `OpenRadioService` instrumentation pattern.
 
-- [ ] Root composition
-- [ ] Favorites and Locals appearing only when populated
-- [ ] Country entry rules
-- [ ] Phone versus car root command registration
-- [ ] Categories, countries, popular, new, and search nodes
-- [ ] Playable and browsable metadata
-- [ ] Empty-state behavior
-- [ ] Pagination and refresh
-- [ ] Invalid stations being omitted
+**Exit check:** all offline browse nodes and supported custom commands are exercised through a real Media3
+connection, including cold service startup without an Activity.
 
-Then expand the existing real `MediaBrowser` to `OpenRadioService` instrumentation pattern:
-
-1. [ ] Connect before any Activity exists.
-2. [ ] Fetch the library root and root children.
-3. [ ] Seed favorites and locals, then verify their browse nodes.
-4. [ ] Subscribe to root and child nodes.
-5. [ ] Add, edit, and remove a local station and verify immediate subscription refresh.
-6. [ ] Toggle favorite state and verify storage plus browse refresh.
-7. [ ] Verify sort-update commands and invalid command arguments.
-8. [ ] Verify unknown custom commands return not supported.
-9. [ ] Search using a seeded local cache fixture.
-10. [ ] Clear app data and reconnect successfully.
-
-**Exit check:** all offline browse nodes and supported custom commands are exercised through a real Media3 connection, including cold service startup without an Activity.
-
-## Phase 5: Cover playback and resilience
+### Phase 5: Cover playback and resilience — `TASK-005`
 
 **Purpose:** test the roadmap's highest operational risk without relying on radio streams.
 
-Add only the smallest testability seams needed:
+Playback runs against a generated local WAV file. Add only the smallest testability seams needed, reusing
+existing interfaces rather than introducing a DI framework. Do not invoke the service's process-killing stop
+path inside instrumentation: extract its decision logic for a component test and retain one manual lifecycle
+check.
 
-- [ ] Inject or isolate player error classification in `OpenRadioPlayer`.
-- [ ] Inject `RadioStationValidator` into `RadioStationManagerLayerImpl` so mutation tests do not probe the internet.
-- [ ] Reuse existing interfaces instead of introducing a DI framework.
+**Exit check:** core playback and recovery behavior passes with networking disabled and no physical audio
+output required.
 
-Test:
-
-- [ ] Playback of a generated local WAV file
-- [ ] Expanding a selected item to the expected parent playlist
-- [ ] Switching stations
-- [ ] Pause, resume, stop, previous, and next
-- [ ] Current-item and metadata updates
-- [ ] Last-station persistence
-- [ ] Malformed and unsupported playlist handling
-- [ ] Network-error and HTTP 403/404 classification
-- [ ] The mobile-data-disabled gate
-- [ ] Network loss and recovery transitions
-- [ ] Becoming-noisy pause
-- [ ] Bluetooth-connect decision logic using broadcast intents
-- [ ] Sleep-timer start, replacement, cancellation, and completion
-- [ ] Playback resumption with and without an existing playlist
-
-Do not invoke the service's process-killing stop path inside instrumentation. Extract its decision logic for a component test and retain one manual lifecycle check.
-
-**Exit check:** core playback and recovery behavior passes with networking disabled and no physical audio output required.
-
-## Phase 6: Add a small phone end-to-end suite
+### Phase 6: Add a small phone end-to-end suite — `TASK-006`
 
 **Purpose:** prove that the user-visible system is assembled correctly.
 
-Keep the suite deliberately small:
+Six journeys, one subtask each: cold launch, local station lifecycle, favorite lifecycle, offline playback,
+settings persistence, and service-first startup. Keep the suite deliberately small. Parser errors, cache
+branches, and storage boundaries belong in cheaper test layers, not in UI tests.
 
-1. [ ] **Cold launch**
-   - Clear application data.
-   - Launch `MainActivity`.
-   - Verify the root list loads without network.
-2. [ ] **Local station lifecycle**
-   - Add a local station through the dialog.
-   - Verify Locals appears immediately.
-   - Edit and remove the station.
-   - Restart and verify persistence.
-3. [ ] **Favorite lifecycle**
-   - Seed or browse a local station.
-   - Add and remove the favorite.
-   - Verify the Favorites node and persisted state.
-4. [ ] **Offline playback**
-   - Select a local WAV-backed station.
-   - Verify now-playing metadata and controls.
-5. [ ] **Settings persistence**
-   - Change network, buffering, and general settings.
-   - Recreate the Activity and verify their values.
-6. [ ] **Service-first startup**
-   - Start and browse the service before opening the Activity.
-   - Open the Activity and verify consistent state.
+**Exit check:** all six journeys pass on a clean API 34 emulator with networking disabled, without retries or
+test-order assumptions.
 
-Parser errors, cache branches, and storage boundaries belong in cheaper test layers, not in UI tests.
+### Phase 7: Establish the permanent gate — `TASK-007`
 
-**Exit check:** all six journeys pass on a clean API 34 emulator with networking disabled, without retries or test-order assumptions.
+**Purpose:** define the standing condition for resuming main roadmap work.
 
-## Phase 7: Establish the permanent gate
-
-The main roadmap restarts only when:
-
-- [ ] All JVM tests pass.
-- [ ] Instrumentation tests compile and pass on the canonical emulator.
-- [ ] All offline end-to-end journeys pass.
-- [ ] Critical pure-core coverage is at least 80% line and 70% branch.
-- [ ] No critical class is considered covered solely because another class happened to execute it.
-- [ ] Every fixed bug has a regression test at the lowest appropriate layer.
-- [ ] The suite makes no external network requests.
-- [ ] No ignored, commented-out, assertion-free, or retry-masked tests exist.
-- [ ] Android Auto manual checks have a recorded result for the current build.
+The main roadmap restarts only when every criterion on that task holds — all suites passing, critical pure-core
+coverage met, no test covered only incidentally, every fixed bug carrying a regression test, no external network
+requests, no ignored or assertion-free tests, and a recorded Android Auto manual result for the current build.
 
 Run policy:
 
@@ -300,21 +165,16 @@ Run policy:
 | Before restarting main roadmap work | JVM plus offline emulator component and end-to-end suites |
 | Before a personal release | All automated tests plus DHU and real-car checklist |
 
-## Android Auto boundary
+## Android Auto boundary — `TASK-008`
 
-Automated Media3 service tests can cover the protocol shared by the phone and Android Auto, but not the complete projected UI.
+Automated Media3 service tests can cover the protocol shared by the phone and Android Auto, but not the complete
+projected UI. Controller classification, Desktop Head Unit and real head-unit rendering and navigation,
+steering-wheel and media-button behavior, voice search, real Bluetooth disconnection, audio interruption, and
+wired and wireless reconnection all stay manual, and their result has to be recorded for the current build
+before the Phase 7 gate can pass.
 
-Keep these manual:
-
-- [ ] Android Auto controller classification
-- [ ] Desktop Head Unit and real head-unit rendering and navigation
-- [ ] Steering-wheel and media-button behavior
-- [ ] Voice search integration
-- [ ] Real Bluetooth disconnection
-- [ ] Calls and navigation audio interruption
-- [ ] Wired and wireless reconnection
-
-Android's guidance specifically calls for service startup before an Activity, force-stop and clear-data scenarios, the Media Controller Test app, Desktop Head Unit testing, and real-vehicle testing.
+Android's guidance specifically calls for service startup before an Activity, force-stop and clear-data
+scenarios, the Media Controller Test app, Desktop Head Unit testing, and real-vehicle testing.
 
 ## References
 
