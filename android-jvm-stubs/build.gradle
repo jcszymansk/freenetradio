@@ -1,0 +1,18 @@
+apply plugin: "java-library"
+apply plugin: "kotlin"
+apply from: "../constants.gradle"
+
+java {
+    sourceCompatibility = project.ext.javaVersion
+    targetCompatibility = project.ext.javaVersion
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = project.ext.kotlinJvmTarget
+    }
+}
+
+dependencies {
+    testImplementation group: "junit", name: "junit", version: "$junitVersion"
+}

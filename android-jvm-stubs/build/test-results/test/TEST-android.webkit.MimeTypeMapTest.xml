@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="android.webkit.MimeTypeMapTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-17T20:47:13" hostname="enki" time="0.001">
+  <properties/>
+  <testcase name="aDottedDirectoryDoesNotLeakIntoTheExtension" classname="android.webkit.MimeTypeMapTest" time="0.001"/>
+  <testcase name="extensionComesFromTheLastPathSegment" classname="android.webkit.MimeTypeMapTest" time="0.0"/>
+  <testcase name="streamsWithoutAnExtensionYieldNothing" classname="android.webkit.MimeTypeMapTest" time="0.0"/>
+  <testcase name="queryAndFragmentAreNotPartOfTheExtension" classname="android.webkit.MimeTypeMapTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

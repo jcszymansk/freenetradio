@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="android.os.BundleTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-17T20:47:13" hostname="enki" time="0.01">
+  <properties/>
+  <testcase name="missingKeysFallBackToTheGivenDefault" classname="android.os.BundleTest" time="0.0"/>
+  <testcase name="readingAKeyAsTheWrongTypeYieldsTheDefault" classname="android.os.BundleTest" time="0.0"/>
+  <testcase name="valuesRoundTripPerType" classname="android.os.BundleTest" time="0.01"/>
+  <testcase name="nullStringsAreStoredAndReadBackAsNull" classname="android.os.BundleTest" time="0.0"/>
+  <testcase name="writingTheSameKeyTwiceKeepsTheLastValue" classname="android.os.BundleTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
