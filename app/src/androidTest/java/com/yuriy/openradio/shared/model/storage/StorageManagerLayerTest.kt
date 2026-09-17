@@ -83,6 +83,53 @@ class StorageManagerLayerTest {
     }
 
     @Test
+    fun mergingLocalStationsThatAreAlreadyStoredDoesNotDuplicateThem() {
+        mLocals.addAll(
+            setOf(
+                makeStation("local-1", sortId = 1, isLocal = true),
+                makeStation("local-2", sortId = 2, isLocal = true)
+            )
+        )
+
+        mLayer.mergeDeviceLocals(
+            marshall(
+                entry(makeStation("local-1", sortId = 1, isLocal = true)),
+                entry(makeStation("local-2", sortId = 2, isLocal = true))
+            )
+        )
+
+        assertEquals(listOf("local-1", "local-2"), mLocals.getAll().map { it.id })
+    }
+
+    @Test
+    fun theConflictingLocalVersionThatSortsLastIsTheOneThatSurvives() {
+        mLocals.addAll(setOf(makeStation("local-1", name = "Stored", sortId = 1, isLocal = true)))
+
+        mLayer.mergeDeviceLocals(
+            marshall(entry(makeStation("local-1", name = "Incoming", sortId = 9, isLocal = true)))
+        )
+
+        val all = mLocals.getAll()
+        assertEquals(1, all.size)
+        assertEquals("Incoming", all.first().name)
+        assertTrue(all.first().isLocal)
+    }
+
+    @Test
+    fun theStoredLocalVersionSurvivesWhenTheIncomingOneSortsFirst() {
+        mLocals.addAll(setOf(makeStation("local-1", name = "Stored", sortId = 1, isLocal = true)))
+
+        mLayer.mergeDeviceLocals(
+            marshall(entry(makeStation("local-1", name = "Incoming", sortId = -5, isLocal = true)))
+        )
+
+        val all = mLocals.getAll()
+        assertEquals(1, all.size)
+        assertEquals("Stored", all.first().name)
+        assertTrue(all.first().isLocal)
+    }
+
+    @Test
     fun mergingAnEmptyInputLeavesTheStoredStationsAlone() {
         mFavorites.addAll(setOf(makeStation("a", sortId = 1)))
         mLocals.addAll(setOf(makeStation("local-1", sortId = 1, isLocal = true)))
@@ -97,17 +144,22 @@ class StorageManagerLayerTest {
     @Test
     fun mergingMalformedInputLeavesTheStoredStationsAlone() {
         mFavorites.addAll(setOf(makeStation("a", sortId = 1)))
+        mLocals.addAll(setOf(makeStation("local-1", sortId = 1, isLocal = true)))
 
         mLayer.mergeFavorites(marshall("no-delimiter", entry("broken", "{not json")))
+        mLayer.mergeDeviceLocals(marshall("no-delimiter", entry("broken", "{not json")))
 
         assertEquals(listOf("a"), mFavorites.getAll().map { it.id })
+        assertEquals(listOf("local-1"), mLocals.getAll().map { it.id })
     }
 
     @Test
     fun mergingDeviceLocalsDoesNotTouchFavorites() {
         mFavorites.addAll(setOf(makeStation("a", sortId = 1)))
 
-        mLayer.mergeDeviceLocals(marshall(entry(makeStation("local-1", sortId = 1, isLocal = true))))
+        mLayer.mergeDeviceLocals(
+            marshall(entry(makeStation("local-1", sortId = 1, isLocal = true)))
+        )
 
         assertEquals(listOf("a"), mFavorites.getAll().map { it.id })
         assertEquals(listOf("local-1"), mLocals.getAll().map { it.id })

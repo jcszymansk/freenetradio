@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-17 19:48'
+updated_date: '2026-09-17 20:03'
 labels: []
 milestone: m-0
 dependencies:
@@ -55,6 +55,8 @@ Three production defects surfaced and were filed rather than fixed here: TASK-02
 Noted for later: instrumentedCoverageReport only reports :app sources, so it does not measure these storage classes, which live in :common. Phase 7 coverage accounting has to take that into account.
 
 Round 1 review follow-up: tightened the API cache expiry test to bracket the boundary the cache actually applies (about 86.4 seconds) instead of two arbitrary ages; added a positive favorites lookup by media id; and reframed the latest-station clear test as a pinned defect after confirming that OpenRadioServicePresenterImpl.clear(), reached by CMD_CLEAR_CACHE, leaves the cached station readable — filed as TASK-027.
+
+Round 3 review follow-up: mergeDeviceLocals now has its own duplicate and both conflict-order tests, and the malformed-input test covers both merge entry points. The merge algorithm is shared, but the write side is not — FavoritesStorage.add normalizes the media id and assigns a sort id where DeviceLocalsStorage uses the inherited add — so the two paths are covered separately. Suite is 93 instrumented tests.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
