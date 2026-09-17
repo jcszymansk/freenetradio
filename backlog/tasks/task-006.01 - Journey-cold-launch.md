@@ -4,9 +4,11 @@ title: 'Journey: cold launch'
 status: To Do
 assignee: []
 created_date: '2026-09-17 18:24'
+updated_date: '2026-09-17 18:27'
 labels: []
 milestone: m-0
-dependencies: []
+dependencies:
+  - TASK-005
 parent_task_id: TASK-006
 type: chore
 ordinal: 15000

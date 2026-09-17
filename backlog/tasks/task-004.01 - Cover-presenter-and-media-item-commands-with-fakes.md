@@ -4,9 +4,11 @@ title: Cover presenter and media item commands with fakes
 status: To Do
 assignee: []
 created_date: '2026-09-17 18:24'
+updated_date: '2026-09-17 18:27'
 labels: []
 milestone: m-0
-dependencies: []
+dependencies:
+  - TASK-003
 parent_task_id: TASK-004
 type: chore
 ordinal: 9000

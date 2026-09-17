@@ -4,9 +4,11 @@ title: Add the minimum testability seams for playback
 status: To Do
 assignee: []
 created_date: '2026-09-17 18:24'
+updated_date: '2026-09-17 18:27'
 labels: []
 milestone: m-0
-dependencies: []
+dependencies:
+  - TASK-004
 parent_task_id: TASK-005
 type: enhancement
 ordinal: 12000
