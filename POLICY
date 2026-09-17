@@ -1,43 +1,90 @@
-Privacy Policy for Open Radio Android Application
+Privacy Policy for the FreeNetRadio Android Application
 
-At Open Radio, we respect the privacy of our users and are committed to protecting their personal information.
-This Privacy Policy explains how we collect, use, and share information in connection with the Open Radio mobile
-application (the "App").
+FreeNetRadio ("the App") is a free, open-source internet radio player. It has no user accounts, no advertising,
+no analytics, and no crash reporting. The project runs no servers of its own, so no information about you or your
+listening reaches the project or its maintainers.
 
-Information We Collect.
-We collect certain information from you when you use the App, including:
+This policy describes what the App keeps on your device and which third parties your device contacts when you
+use it.
 
-Coarse location: We may collect your approximate region to provide you with local radio stations.
-                 This information is only collected with your permission.
-Google Analytics: We use Google Analytics to monitor the performance of the App.
-                  Google Analytics collects information such as how often users access the App, what pages they visit
-                  when they do so, and what other sites they used prior to coming to the App.
-                  We use the information we get from Google Analytics only to improve the App.
-Internal Images: We store images associated with radio stations internally, in order to provide you with a visual
-                 representation of the radio station you are listening to.
 
-Information We Do Not Collect
-We do not collect any personal information such as your name, address, or phone number.
-We do not persist any information directly.
+Information We Collect
 
-How We Use Information
-We use the information we collect from you to provide and improve the App.
-We may also use the information to communicate with you about the App or to offer you promotional offers.
-We do not share your information with any third-party vendors, except for Google Analytics.
+None. There is no backend service behind this App and nothing is transmitted to the project.
 
-Data Security
-We take reasonable measures to help protect information about you from loss, theft, misuse, and unauthorized access,
-disclosure, alteration, and destruction.
+
+Information Stored On Your Device
+
+The App stores the following locally and does not upload any of it:
+
+Your favourite stations, the stations you add yourself, the station played most recently, and your settings.
+Station artwork and recent replies from the station directories, kept as a cache and discarded after 24 hours.
+The country you selected, or the one determined by the location feature described below.
+An image you choose for one of your own stations, if you select one. It is read once, when you pick it, scaled,
+and stored inside the App.
+
+Clearing the App's data or uninstalling the App removes all of it.
+
+
+Location
+
+The App can determine your country to offer you nearby stations. This is optional, happens only when you ask for
+it, and requires the coarse location permission, which you can decline or revoke at any time.
+
+When you use it, the App asks Android for a single approximate position and passes it to Android's own geocoder
+to obtain a country code. Only that country code is kept; the App neither stores your coordinates nor sends them
+to the project or the station directories. Note that the geocoder belongs to your device, not to this App, and on
+many devices it is supplied by the device vendor and may resolve the position over the network.
+
+
+Third-Party Services Your Device Contacts
+
+Browsing and playing stations makes requests directly from your device to:
+
+Community Radio Browser (radio-browser.info), preceded by a DNS lookup used to find one of its API mirrors. These
+requests carry the category, country, station list, or search text you asked for.
+WebRadioDB (jcorporation.github.io), for its station datasets and station images.
+The stream server of the station you play, and any server that station redirects to.
+
+Like any network request, these reveal your IP address, the time of the request, and what you asked for to the
+service receiving it. Requests carry a User-Agent that by default names the App, its version, and your Android
+version; you can change it in the settings. These services are operated by others and have their own privacy
+practices, which this policy does not cover.
+
+Many internet radio streams are offered only over unencrypted HTTP, and the App allows such streams. Their
+contents, including the station you are listening to, can be observed on the network path.
+
+
+Diagnostic Reports
+
+The App never sends logs or crash data on its own, on a schedule, or in the background.
+
+If you choose "Prepare diagnostic report" in the settings, the App collects its own log output together with
+information about your device and build, such as manufacturer, model, Android version, and build fingerprint. The
+report is then handed to Android's share chooser so that you can pick an application, review the message, choose
+the recipient, and decide whether to send it. Transmission is entirely up to you and the application you choose.
+There is no "always send" option; each report requires a fresh decision.
+
+
+Other Applications On Your Device
+
+Station artwork is served through a content provider that other applications on your device can read. It holds
+station images downloaded from the public station directories, and any image you chose for a station of your own.
+
 
 Children's Privacy
-The App is not intended for use by children under the age of 13. We do not knowingly collect personal information
-from children under the age of 13.
 
-Changes to Our Privacy Policy
-We reserve the right to make changes to this Privacy Policy at any time. Any changes we make will be posted on this page.
+The App is not directed at children and collects nothing from anyone, including children.
 
-Contact Us
-If you have any questions or concerns about our Privacy Policy, please open an issue at
-https://github.com/jcszymansk/freenetradio/issues.
 
-Last Updated: March 22, 2023
+Changes To This Policy
+
+Any change to this policy will appear in this file, in the App's public source repository.
+
+
+Contact
+
+Questions or concerns can be raised at https://github.com/jcszymansk/freenetradio/issues.
+
+
+Last Updated: September 17, 2026
