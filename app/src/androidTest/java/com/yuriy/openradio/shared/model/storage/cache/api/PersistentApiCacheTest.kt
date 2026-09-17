@@ -106,11 +106,15 @@ class PersistentApiCacheTest {
     fun theFreshnessWindowCurrentlyClosesAfterEightySixSeconds() {
         // Pins the defect tracked as TASK-024: SEC_IN_DAY is 86400 and the comparison is against a
         // millisecond difference, so the window closes 86.4 seconds after the write instead of a
-        // day later. The two records bracket that boundary with enough slack for the read itself.
-        // The intended 24 hour boundary cannot be asserted as passing while the defect stands;
-        // TASK-024 requires this test to move to the day boundary as part of the fix.
-        insertAged(KEY, PAYLOAD, ageMillis = CURRENT_WINDOW_MILLIS - 1_400L)
-        insertAged(OTHER_KEY, OTHER_PAYLOAD, ageMillis = CURRENT_WINDOW_MILLIS + 1_600L)
+        // day later. The two records sit ten seconds either side of that boundary, which keeps the
+        // fresh one inside the window however long the read takes to schedule while still being
+        // four orders of magnitude away from a day. The intended 24 hour boundary cannot be
+        // asserted as passing while the defect stands; TASK-024 requires this test to move to the
+        // day boundary as part of the fix.
+        insertAged(KEY, PAYLOAD, ageMillis = CURRENT_WINDOW_MILLIS - BOUNDARY_MARGIN_MILLIS)
+        insertAged(
+            OTHER_KEY, OTHER_PAYLOAD, ageMillis = CURRENT_WINDOW_MILLIS + BOUNDARY_MARGIN_MILLIS
+        )
 
         assertEquals(PAYLOAD, mCache[KEY])
         assertEquals("", mCache[OTHER_KEY])
@@ -152,5 +156,10 @@ class PersistentApiCacheTest {
          * The freshness window the cache actually applies today. See TASK-024.
          */
         const val CURRENT_WINDOW_MILLIS = 86_400L
+
+        /**
+         * Distance either side of the boundary each record is placed at.
+         */
+        const val BOUNDARY_MARGIN_MILLIS = 10_000L
     }
 }
