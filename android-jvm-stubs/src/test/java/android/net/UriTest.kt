@@ -101,6 +101,17 @@ class UriTest {
     }
 
     @Test
+    fun theEmptyUriHasNothingInIt() {
+        assertEquals("", Uri.EMPTY.toString())
+        assertNull(Uri.EMPTY.getScheme())
+        assertNull(Uri.EMPTY.getAuthority())
+        assertEquals("", Uri.EMPTY.getPath())
+        assertNull(Uri.EMPTY.getQuery())
+        assertNull(Uri.EMPTY.getLastPathSegment())
+        assertEquals(Uri.EMPTY, Uri.parse(""))
+    }
+
+    @Test
     fun equalityAndOrderFollowTheStringForm() {
         assertEquals(Uri.parse("https://a.example/b"), Uri.parse("https://a.example/b"))
         assertEquals(

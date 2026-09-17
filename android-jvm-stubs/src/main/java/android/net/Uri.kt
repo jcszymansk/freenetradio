@@ -157,6 +157,9 @@ class Uri private constructor(
         private const val HEX_RADIX = 16
         private const val HEX_LENGTH = 2
 
+        @JvmField
+        val EMPTY = Uri(null, null, "", null, null)
+
         @JvmStatic
         fun parse(uriString: String): Uri {
             var rest = uriString
