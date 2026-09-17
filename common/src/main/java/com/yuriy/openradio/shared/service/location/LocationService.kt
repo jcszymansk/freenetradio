@@ -126,7 +126,7 @@ class LocationService : JobIntentService() {
             }
         }
 
-        private fun isDefaultLocationEnabled(context: Context, defaultCountry: String): Boolean {
+        fun isDefaultLocationEnabled(context: Context, defaultCountry: String): Boolean {
             return defaultCountry == context.getString(R.string.default_country_use_location)
         }
 
