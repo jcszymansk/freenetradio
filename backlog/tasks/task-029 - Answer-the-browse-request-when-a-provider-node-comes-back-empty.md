@@ -1,11 +1,11 @@
 ---
 id: TASK-029
 title: Answer the browse request when a provider node comes back empty
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-18 04:27'
-updated_date: '2026-09-18 07:24'
+updated_date: '2026-09-18 07:32'
 labels: []
 dependencies: []
 type: bug
@@ -26,10 +26,10 @@ The same shape exists where callWhenSourceReady and callWhenSearchReady return a
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Browsing __ALL_CATEGORIES__ with no categories available completes with an empty list rather than hanging
-- [ ] #2 Browsing __COUNTRIES_LIST__ with no countries available completes with an empty list rather than hanging
-- [ ] #3 A parent id that matches no MediaItemCommand completes with an error rather than leaving the future unset
-- [ ] #4 OpenRadioServiceBrowseTest asserts the completed empty results instead of pinning the hang
+- [x] #1 Browsing __ALL_CATEGORIES__ with no categories available completes with an empty list rather than hanging
+- [x] #2 Browsing __COUNTRIES_LIST__ with no countries available completes with an empty list rather than hanging
+- [x] #3 A parent id that matches no MediaItemCommand completes with an error rather than leaving the future unset
+- [x] #4 OpenRadioServiceBrowseTest asserts the completed empty results instead of pinning the hang
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -41,3 +41,31 @@ The same shape exists where callWhenSourceReady and callWhenSearchReady return a
 4. JVM tests: MediaItemAllCategoriesTest and MediaItemCountriesListTest assert the empty case now delivers an empty result *and* the no-data message.
 5. OpenRadioServiceBrowseTest: replace providerNodesNeverAnswerWhenNothingIsCached with a test asserting both provider nodes complete with an empty success list while offline, and add one for a parent id no command matches.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Fixed in MediaItemAllCategories.loadAllCategories and MediaItemCountriesList.loadAllCountries: the empty branch now goes through MediaItemCommandDependencies.reportNoData, which delivers the (empty) result before pushing the no-data message. MediaItemCommandImpl.handleDataLoaded already did both and now shares that helper, so the rule has one copy.
+
+OpenRadioService.callWhenSourceReady and callWhenSearchReady are generic over the action's return type, which is why an error result could not be built there. Narrowed both from T to LibraryResult<V>; the unmatched-command branch now sets RESULT_ERROR_BAD_VALUE instead of returning an unset future. The unused pageSize parameter went with it.
+
+Verification, all on emulator-5554 (API 34) with wifi and data disabled:
+- ./gradlew test — BUILD SUCCESSFUL, whole JVM suite.
+- ./gradlew :app:connectedDebugAndroidTest — 117 tests, 0 failures, 0 errors.
+- The two rewritten JVM cases were confirmed to fail against the pre-fix commands (2 of 6 failed) before the fix was restored.
+- OpenRadioServiceBrowseTest.providerNodesAnswerWithAnEmptyListWhenNothingIsCached completes in 0.19s where it previously had to wait out an 8s bounded timeout.
+
+Not addressed, and outside the acceptance criteria: a MediaItemCommand whose body throws still leaves the same future unset, though on Dispatchers.IO with a plain Job that surfaces as an uncaught exception rather than a hang.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Browsing a provider node that comes back empty now completes with an empty list instead of hanging the request.
+
+The two commands that hand-rolled the empty branch, MediaItemAllCategories and MediaItemCountriesList, only pushed a playback-state message and returned; OpenRadioService completes the browse future from the result listener alone, so onGetChildren stayed pending. Both now call the new MediaItemCommandDependencies.reportNoData, which delivers the empty result and then reports the message, the same order MediaItemCommandImpl.handleDataLoaded already used and now shares.
+
+A parent id matching no command left the same future unset in callWhenSourceReady and callWhenSearchReady. Both are pinned to LibraryResult<V> so an error can be constructed, and that branch now answers RESULT_ERROR_BAD_VALUE.
+
+Verified with the whole JVM suite (./gradlew test) and 117 instrumented tests on an emulator with networking disabled, 0 failures. The rewritten JVM cases were checked to fail against the pre-fix commands. OpenRadioServiceBrowseTest now asserts an empty success for both nodes and rejection for an unknown parent id.
+<!-- SECTION:FINAL_SUMMARY:END -->
