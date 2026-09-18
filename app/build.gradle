@@ -73,4 +73,8 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$junitAndroidXVersion"
     // The Room API cache is exercised through its DAO, which :common keeps off the app classpath.
     androidTestImplementation "androidx.room:room-runtime:$roomVersion"
+    // The service contract tests drive a real MediaBrowser and read the root hints the service
+    // publishes. :common keeps both artifacts off the app classpath.
+    androidTestImplementation "androidx.media3:media3-session:$media3Version"
+    androidTestImplementation "androidx.media:media:$androidxMediaVersion"
 }
