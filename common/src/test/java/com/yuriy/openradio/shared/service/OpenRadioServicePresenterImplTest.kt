@@ -38,7 +38,6 @@ import com.yuriy.openradio.shared.model.media.item.MediaItemNewStations
 import com.yuriy.openradio.shared.model.media.item.MediaItemPopularStations
 import com.yuriy.openradio.shared.model.media.item.MediaItemRoot
 import com.yuriy.openradio.shared.model.media.item.MediaItemRootCar
-import com.yuriy.openradio.shared.model.media.item.MediaItemSearchFromApp
 import com.yuriy.openradio.shared.model.media.item.MediaItemSearchFromService
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
@@ -55,6 +54,7 @@ import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
+import com.yuriy.openradio.shared.utils.AppUtils
 import java.lang.ref.WeakReference
 import java.net.URL
 import java.util.Date
@@ -95,13 +95,28 @@ class OpenRadioServicePresenterImplTest {
             assertTrue(
                 presenter.getMediaItemCommand(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST) is MediaItemLocalsList
             )
-            assertTrue(presenter.getMediaItemCommand(MediaId.MEDIA_ID_SEARCH_FROM_APP) is MediaItemSearchFromApp)
             assertTrue(
                 presenter.getMediaItemCommand(MediaId.MEDIA_ID_SEARCH_FROM_SERVICE) is MediaItemSearchFromService
             )
             assertTrue(presenter.getMediaItemCommand(MediaId.MEDIA_ID_POPULAR_STATIONS) is MediaItemPopularStations)
             assertTrue(presenter.getMediaItemCommand(MediaId.MEDIA_ID_NEW_STATIONS) is MediaItemNewStations)
             assertNull(presenter.getMediaItemCommand("__NOT_A_NODE__"))
+        }
+    }
+
+    /**
+     * The phone's search marker stays on the client: it is answered with `getSearchResult`, which
+     * the service serves under [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE]. Binding a command to it
+     * would put a second, differently built copy of the search results one lookup away.
+     */
+    @Test
+    fun theSearchMarkerThePhoneKeepsOnItsStackReachesNoBrowseCommand() {
+        for (presenter in listOf(presenter(isCar = false), presenter(isCar = true))) {
+            assertNull(presenter.getMediaItemCommand(MediaId.MEDIA_ID_SEARCH_FROM_APP))
+            assertEquals(
+                AppUtils.EMPTY_STRING,
+                MediaId.getId(MediaId.MEDIA_ID_SEARCH_FROM_APP, Country.COUNTRY_CODE_DEFAULT)
+            )
         }
     }
 

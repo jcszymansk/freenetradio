@@ -24,6 +24,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Covers [MediaItemSearchFromService], the only browse command a search can reach. A phone client
+ * never browses a search node: it asks for `getSearchResult`, which the service answers under
+ * [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE], and a head unit takes the same route through `search`.
+ */
 class MediaItemSearchTest {
 
     @Test
@@ -31,17 +36,12 @@ class MediaItemSearchTest {
         val presenter = RecordingPresenter(mSearchStations = stations("first", "second"))
         val listener = RecordingCommandListener()
 
-        MediaItemSearchFromApp().execute(
-            listener.playbackStateListener,
-            dependencies(
-                presenter,
-                listener,
-                parentId = MediaId.MEDIA_ID_SEARCH_FROM_APP,
-                options = AppUtils.makeSearchQueryBundle("jazz")
-            )
-        )
+        execute(presenter, listener, AppUtils.makeSearchQueryBundle("jazz"))
 
-        listener.awaitResult().assertMediaIds("first", "second")
+        listener.awaitResult().assertMediaIds(
+            MediaId.makeSearchId("first"),
+            MediaId.makeSearchId("second")
+        )
         assertEquals(listOf("jazz"), presenter.searchRequests)
         assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber)
         listener.assertNoError()
@@ -52,15 +52,7 @@ class MediaItemSearchTest {
         val presenter = RecordingPresenter(mSearchStations = stations("first"))
         val listener = RecordingCommandListener()
 
-        MediaItemSearchFromApp().execute(
-            listener.playbackStateListener,
-            dependencies(
-                presenter,
-                listener,
-                parentId = MediaId.MEDIA_ID_SEARCH_FROM_APP,
-                options = Bundle()
-            )
-        )
+        execute(presenter, listener, Bundle())
 
         listener.awaitResult()
         assertEquals(listOf(AppUtils.USE_CUR_SEARCH_QUERY), presenter.searchRequests)
@@ -71,44 +63,29 @@ class MediaItemSearchTest {
         val presenter = RecordingPresenter()
         val listener = RecordingCommandListener()
 
-        MediaItemSearchFromApp().execute(
-            listener.playbackStateListener,
-            dependencies(
-                presenter,
-                listener,
-                parentId = MediaId.MEDIA_ID_SEARCH_FROM_APP,
-                options = AppUtils.makeSearchQueryBundle("nothing")
-            )
-        )
+        execute(presenter, listener, AppUtils.makeSearchQueryBundle("nothing"))
 
         listener.awaitResult()
         assertTrue(listener.items.isEmpty())
         listener.assertNoError()
     }
 
+    /**
+     * The tag is what keeps a searched station apart from a browsed one once it is on the phone:
+     * the client strips the prefix back off before it asks the service to play the station.
+     */
     @Test
-    fun aSearchComingFromTheServiceTagsItsResults() {
+    fun everyResultIsTaggedAsComingFromASearch() {
         val presenter = RecordingPresenter(mSearchStations = stations("first", "second"))
         val listener = RecordingCommandListener()
 
-        MediaItemSearchFromService().execute(
-            listener.playbackStateListener,
-            dependencies(
-                presenter,
-                listener,
-                parentId = MediaId.MEDIA_ID_SEARCH_FROM_SERVICE,
-                options = AppUtils.makeSearchQueryBundle("jazz")
-            )
-        )
+        execute(presenter, listener, AppUtils.makeSearchQueryBundle("jazz"))
 
-        listener.awaitResult().assertMediaIds(
-            MediaId.makeSearchId("first"),
-            MediaId.makeSearchId("second")
-        )
-        assertEquals(listOf("jazz"), presenter.searchRequests)
+        listener.awaitResult()
         for (mediaId in listener.mediaIds) {
-            assertTrue(MediaId.isFromSearch(mediaId))
+            assertTrue("'$mediaId' is not recognizable as a search result", MediaId.isFromSearch(mediaId))
         }
+        assertEquals(listOf("first", "second"), listener.mediaIds.map { MediaId.normalizeFromSearchId(it) })
     }
 
     @Test
@@ -116,20 +93,29 @@ class MediaItemSearchTest {
         val presenter = RecordingPresenter(mSearchStations = stations("first"))
         val listener = RecordingCommandListener()
 
-        MediaItemSearchFromApp().execute(
-            listener.playbackStateListener,
-            dependencies(
-                presenter,
-                listener,
-                parentId = MediaId.MEDIA_ID_SEARCH_FROM_APP,
-                isSavedInstance = true,
-                options = AppUtils.makeSearchQueryBundle("jazz")
-            )
-        )
+        execute(presenter, listener, AppUtils.makeSearchQueryBundle("jazz"), isSavedInstance = true)
 
         listener.awaitResult()
         assertTrue(listener.items.isEmpty())
         assertTrue(presenter.searchRequests.isEmpty())
         listener.assertNoError()
+    }
+
+    private fun execute(
+        presenter: RecordingPresenter,
+        listener: RecordingCommandListener,
+        options: Bundle,
+        isSavedInstance: Boolean = false
+    ) {
+        MediaItemSearchFromService().execute(
+            listener.playbackStateListener,
+            dependencies(
+                presenter,
+                listener,
+                parentId = MediaId.MEDIA_ID_SEARCH_FROM_SERVICE,
+                isSavedInstance = isSavedInstance,
+                options = options
+            )
+        )
     }
 }
