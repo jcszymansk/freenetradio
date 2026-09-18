@@ -18,7 +18,6 @@ import com.yuriy.openradio.shared.model.media.item.MediaItemNewStations
 import com.yuriy.openradio.shared.model.media.item.MediaItemPopularStations
 import com.yuriy.openradio.shared.model.media.item.MediaItemRoot
 import com.yuriy.openradio.shared.model.media.item.MediaItemRootCar
-import com.yuriy.openradio.shared.model.media.item.MediaItemSearchFromApp
 import com.yuriy.openradio.shared.model.media.item.MediaItemSearchFromService
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
@@ -75,7 +74,6 @@ class OpenRadioServicePresenterImpl(
         mMediaItemCommands[MediaId.MEDIA_ID_CHILD_CATEGORIES] = MediaItemChildCategories()
         mMediaItemCommands[MediaId.MEDIA_ID_FAVORITES_LIST] = MediaItemFavoritesList()
         mMediaItemCommands[MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST] = MediaItemLocalsList()
-        mMediaItemCommands[MediaId.MEDIA_ID_SEARCH_FROM_APP] = MediaItemSearchFromApp()
         mMediaItemCommands[MediaId.MEDIA_ID_SEARCH_FROM_SERVICE] = MediaItemSearchFromService()
         mMediaItemCommands[MediaId.MEDIA_ID_POPULAR_STATIONS] = MediaItemPopularStations()
         mMediaItemCommands[MediaId.MEDIA_ID_NEW_STATIONS] = MediaItemNewStations()

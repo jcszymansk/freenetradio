@@ -40,6 +40,13 @@ object MediaId {
     const val MEDIA_ID_FAVORITES_LIST = "__FAVORITES_LIST__"
     const val MEDIA_ID_LOCAL_RADIO_STATIONS_LIST = "__MEDIA_ID_LOCAL_RADIO_STATIONS_LIST__"
     const val MEDIA_ID_CHILD_CATEGORIES = "__CHILD_CATEGORIES__"
+
+    /**
+     * Marks the search results on the browse stack `MediaPresenter` keeps. It never travels to the
+     * service: [MediaResourcesManager] answers it with `getSearchResult`, which the service serves
+     * under [MEDIA_ID_SEARCH_FROM_SERVICE]. It is therefore deliberately left out of [IDS], so no
+     * browse command can ever be resolved for it.
+     */
     const val MEDIA_ID_SEARCH_FROM_APP = "__SEARCH_FROM_APP__"
     const val MEDIA_ID_SEARCH_FROM_SERVICE = "__SEARCH_FROM_SERVICE__"
     const val MEDIA_ID_POPULAR_STATIONS = "__POPULAR_STATIONS__"
@@ -48,6 +55,10 @@ object MediaId {
 
     const val MEDIA_ID_SEARCH_PREFIX = "search:"
 
+    /**
+     * The parent ids [getId] resolves, which is how `OpenRadioService` finds the browse command for
+     * a node. An id a client only keeps for itself does not belong here.
+     */
     private val IDS = arrayOf(
         MEDIA_ID_BROWSE_CAR,
         MEDIA_ID_ALL_CATEGORIES,
@@ -57,7 +68,6 @@ object MediaId {
         MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
         MEDIA_ID_CHILD_CATEGORIES,
         MEDIA_ID_ROOT,
-        MEDIA_ID_SEARCH_FROM_APP,
         MEDIA_ID_SEARCH_FROM_SERVICE,
         MEDIA_ID_POPULAR_STATIONS,
         MEDIA_ID_NEW_STATIONS,

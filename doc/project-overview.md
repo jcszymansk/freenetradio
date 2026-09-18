@@ -96,7 +96,7 @@ A typical browse request follows this path:
 - Search results
 - Automotive-specific browse nodes
 
-Content generation uses a command pattern. Separate `MediaItemCommand` implementations produce major nodes such as `MediaItemFavoritesList`, `MediaItemCountriesList`, `MediaItemCountryStations`, `MediaItemSearchFromApp`, and `MediaItemBrowseCar`.
+Content generation uses a command pattern. Separate `MediaItemCommand` implementations produce major nodes such as `MediaItemFavoritesList`, `MediaItemCountriesList`, `MediaItemCountryStations`, `MediaItemSearchFromService`, and `MediaItemBrowseCar`.
 
 `BrowseTree.kt` is an in-memory cache mapping parent IDs to child `MediaItem` lists, corresponding `RadioStation` sets, and individual item lookups. Nodes are invalidated when favorites, sorting, source selection, or local stations change.
 
