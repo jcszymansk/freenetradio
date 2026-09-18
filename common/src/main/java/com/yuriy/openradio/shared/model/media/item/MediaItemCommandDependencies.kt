@@ -19,6 +19,8 @@ package com.yuriy.openradio.shared.model.media.item
 import android.content.Context
 import android.os.Bundle
 import androidx.media3.common.MediaItem
+import com.yuriy.openradio.R
+import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.service.OpenRadioService.ResultListener
 import com.yuriy.openradio.shared.service.OpenRadioServicePresenter
 import kotlinx.coroutines.CoroutineScope
@@ -57,4 +59,18 @@ class MediaItemCommandDependencies(
     fun getMediaItems(): List<MediaItem> {
         return ArrayList(mMediaItems)
     }
+}
+
+/**
+ * Answers the browse request with the items collected so far, then reports that the node has
+ * nothing to show.
+ *
+ * The result has to be delivered even when it is empty. `OpenRadioService.callWhenSourceReady`
+ * completes the browse future from the result listener and from nowhere else, so a node that only
+ * pushes the playback state leaves every client, the phone list and an Android Auto head unit
+ * alike, waiting on a request that is never answered.
+ */
+internal fun MediaItemCommandDependencies.reportNoData(playbackStateListener: IUpdatePlaybackState) {
+    resultListener.onResult(getMediaItems())
+    playbackStateListener.updatePlaybackState(context.getString(R.string.no_data_message))
 }

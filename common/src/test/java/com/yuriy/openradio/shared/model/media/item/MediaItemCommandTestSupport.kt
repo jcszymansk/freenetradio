@@ -202,13 +202,6 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
         return this
     }
 
-    fun assertNoResult() {
-        assertFalse(
-            "Command delivered a result it was not expected to",
-            mResultLatch.await(SETTLE_MILLIS, TimeUnit.MILLISECONDS)
-        )
-    }
-
     fun assertNoError() {
         assertFalse(
             "Command reported an error it was not expected to",

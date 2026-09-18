@@ -73,8 +73,13 @@ class MediaItemCountriesListTest {
         listener.awaitResult().assertMediaIds(MediaId.MEDIA_ID_COUNTRIES_LIST + "PL")
     }
 
+    /**
+     * The empty result is the half that matters to a browsing client: the service completes the
+     * browse request from it and from nothing else, so a node that only reported the error would
+     * leave the caller waiting (TASK-029).
+     */
     @Test
-    fun anEmptyCountryListIsReportedAsAnErrorAndNothingIsDelivered() {
+    fun anEmptyCountryListIsDeliveredAndReportedAsAnError() {
         val presenter = RecordingPresenter()
         val listener = RecordingCommandListener()
 
@@ -83,9 +88,10 @@ class MediaItemCountriesListTest {
             dependencies(presenter, listener, parentId = MediaId.MEDIA_ID_COUNTRIES_LIST)
         )
 
-        listener.awaitError()
+        listener.awaitResult().awaitError()
+        assertTrue(listener.items.isEmpty())
+        assertEquals(1, listener.results)
         assertEquals(1, listener.errors)
         assertEquals(STRING_RESOURCE, listener.error)
-        listener.assertNoResult()
     }
 }

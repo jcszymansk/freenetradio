@@ -15,7 +15,6 @@
  */
 package com.yuriy.openradio.shared.model.media.item
 
-import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import kotlinx.coroutines.Dispatchers
@@ -63,9 +62,7 @@ class MediaItemAllCategories : MediaItemCommand {
     ) {
         val set = dependencies.presenter.getAllCategories()
         if (set.isEmpty()) {
-            playbackStateListener.updatePlaybackState(
-                dependencies.context.getString(R.string.no_data_message)
-            )
+            dependencies.reportNoData(playbackStateListener)
             return
         }
 

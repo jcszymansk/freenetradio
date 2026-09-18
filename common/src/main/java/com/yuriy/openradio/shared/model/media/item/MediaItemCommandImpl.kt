@@ -16,7 +16,6 @@
 
 package com.yuriy.openradio.shared.model.media.item
 
-import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
@@ -44,8 +43,7 @@ abstract class MediaItemCommandImpl internal constructor() : MediaItemCommand {
     ) {
         if (set.isEmpty()) {
             if (doLoadNoDataReceived()) {
-                dependencies.resultListener.onResult(dependencies.getMediaItems())
-                playbackStateListener.updatePlaybackState(dependencies.context.getString(R.string.no_data_message))
+                dependencies.reportNoData(playbackStateListener)
             } else {
                 dependencies.resultListener.onResult(dependencies.getMediaItems(), pageNumber = pageNumber)
             }

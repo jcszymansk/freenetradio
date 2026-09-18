@@ -55,8 +55,13 @@ class MediaItemAllCategoriesTest {
         listener.assertNoError()
     }
 
+    /**
+     * The empty result is the half that matters to a browsing client: the service completes the
+     * browse request from it and from nothing else, so a node that only reported the error would
+     * leave the caller waiting (TASK-029).
+     */
     @Test
-    fun anEmptyCatalogueIsReportedAsAnErrorAndNothingIsDelivered() {
+    fun anEmptyCatalogueIsDeliveredAndReportedAsAnError() {
         val presenter = RecordingPresenter()
         val listener = RecordingCommandListener()
 
@@ -65,10 +70,11 @@ class MediaItemAllCategoriesTest {
             dependencies(presenter, listener, parentId = MediaId.MEDIA_ID_ALL_CATEGORIES)
         )
 
-        listener.awaitError()
+        listener.awaitResult().awaitError()
+        assertTrue(listener.items.isEmpty())
+        assertEquals(1, listener.results)
         assertEquals(1, listener.errors)
         assertEquals(STRING_RESOURCE, listener.error)
-        listener.assertNoResult()
     }
 
     @Test
