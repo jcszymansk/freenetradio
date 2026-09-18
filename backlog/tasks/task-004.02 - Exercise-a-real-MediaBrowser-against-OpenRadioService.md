@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-18 06:06'
+updated_date: '2026-09-18 06:17'
 labels: []
 milestone: m-0
 dependencies:
@@ -137,6 +137,14 @@ The images database was the second. Round 5 inferred it was cleared from the ord
 The stale node name in TASK-030 was corrected: the browse coverage is the popular stations node, not the categories one, and the reason for that choice is now recorded there too.
 
 Verified: reverting the LatestRadioStationStorage override fails LatestRadioStationStorageTest.clearDropsTheCachedStationOnTheSameInstance, so the fix is covered rather than assumed. 116 instrumented tests pass twice, ./gradlew test --rerun-tasks and both coverage reports pass.
+
+Round 7 review follow-up, the last round the loop allows.
+
+Two test isolation holes closed. aCachedProviderNodeIsBrowsableWhileOffline seeded only the Room cache while the in-memory one is a static map that outlives a test, so a stale entry for the same URL could have answered the browse without the fixture ever being read; it now empties that key first and afterwards asserts the response was promoted into memory, which is what shows the stations came from Room. The clear-data case asserted the image table held exactly one row after seeding its probe, which made pre-existing app data a setup failure rather than something to clear; it now asserts the probe row is present and keeps the count-is-zero assertion for after the command.
+
+Two tracker corrections. TASK-027 was closed with only its first criterion checked; all three hold and the other two are now checked with their evidence named. TASK-030's verification note still said the categories browse node, which was true when written and stopped being true when the test moved to popular stations in round 4; a correction is appended rather than the note rewritten, since it is the record of a verification that was actually run.
+
+Criteria 8 and 10 were raised for the fifth and sixth time and stand. The reasoning is in summary-2 through summary-7 and in the tests themselves, and TASK-031 carries the one part of criterion 10 that is a real open question.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

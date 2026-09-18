@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-18 04:27'
-updated_date: '2026-09-18 06:01'
+updated_date: '2026-09-18 06:14'
 labels: []
 dependencies: []
 type: bug
@@ -42,6 +42,8 @@ Fixed inside TASK-004.02 rather than on its own branch: it blocks that task's ni
 ModelLayerImplTest changed with it. noConnectivityReturnsNoDataWithoutTouchingCachesOrDownloader pinned the old ordering and is now noConnectivityAndNoCacheReturnsNoDataWithoutDownloading, which asserts both caches are consulted and nothing is downloaded. Two cases were added for a persistent and a memory hit while offline, and the two online hit cases now assert zero connectivity checks, which is what proves no spurious toast fires on a cache hit.
 
 Verified: ./gradlew test --rerun-tasks passes; OpenRadioServiceSearchTest asserts the seeded Radio Browser station comes back through a real MediaBrowser with emulator networking disabled, and OpenRadioServiceBrowseTest.aCachedProviderNodeIsBrowsableWhileOffline does the same for the categories browse node.
+
+Correction to the verification note above: the browse node covered by OpenRadioServiceBrowseTest.aCachedProviderNodeIsBrowsableWhileOffline is the popular stations node, not the categories one. The note was accurate when written; the test moved to popular stations later, while covering TASK-004.02, so that it shares no cache key with the case pinning TASK-029. The description carries the current state.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

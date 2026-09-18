@@ -273,7 +273,9 @@ class OpenRadioServiceBrowseTest {
         mStorages.freshLatest().add(makeStation(CLEAR_PROBE_STATION_ID))
         assertEquals(CACHE_VALUE, persistentCache[CACHE_KEY])
         assertEquals(CACHE_VALUE, memoryCache[CACHE_KEY])
-        assertEquals(1, images.getCount())
+        // The probe row, not the row count: whatever else the database already holds is the app
+        // data this scenario is about clearing, so its presence must not fail the setup.
+        assertNotNull(images.getImage(CLEAR_PROBE_STATION_ID))
         assertEquals(CLEAR_PROBE_STATION_ID, mStorages.freshLatest().get().id)
 
         assertEquals(
@@ -320,8 +322,15 @@ class OpenRadioServiceBrowseTest {
      */
     @Test
     fun aCachedProviderNodeIsBrowsableWhileOffline() {
+        val url = UrlLayerRadioBrowserImpl().getPopularStations().toString()
+        // The in-memory cache is a static map that outlives any one test, so empty it first:
+        // otherwise a response left there for this URL could answer the browse and the Room
+        // fixture below would never be read.
+        val memoryCache = InMemoryApiCache()
+        memoryCache.remove(url)
+        assertTrue(memoryCache[url].isEmpty())
         PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
-            .put(UrlLayerRadioBrowserImpl().getPopularStations().toString(), POPULAR_RESPONSE)
+            .put(url, POPULAR_RESPONSE)
         invalidate(MediaId.MEDIA_ID_POPULAR_STATIONS)
 
         val children = mBrowser.children(MediaId.MEDIA_ID_POPULAR_STATIONS)
@@ -331,6 +340,9 @@ class OpenRadioServiceBrowseTest {
             assertEquals("${child.mediaId} is not playable", true, child.mediaMetadata.isPlayable)
             assertEquals("${child.mediaId} is browsable", false, child.mediaMetadata.isBrowsable)
         }
+        // A persistent hit is promoted into memory, so finding it there afterwards is what shows
+        // the stations came from the Room fixture rather than from something already in memory.
+        assertEquals(POPULAR_RESPONSE, memoryCache[url])
     }
 
     /**
