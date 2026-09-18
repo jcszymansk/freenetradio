@@ -59,6 +59,17 @@ class LatestRadioStationStorage(contextRef: WeakReference<Context>) :
         return mRadioStation
     }
 
+    /**
+     * Drops the cached station along with the stored one. The registry hands out a single instance
+     * per process, so leaving the cache behind means a clear that the service goes on ignoring: it
+     * keeps reporting a latest station, and the next start adopts it as the active one.
+     */
+    @Synchronized
+    override fun clear() {
+        mRadioStation = RadioStation.INVALID_INSTANCE
+        super.clear()
+    }
+
     companion object {
         /**
          * Name of the file for the Favorite Preferences.

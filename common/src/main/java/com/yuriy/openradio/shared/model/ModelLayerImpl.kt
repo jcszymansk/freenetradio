@@ -68,16 +68,11 @@ class ModelLayerImpl(
      * @return [String]
      */
     private fun downloadData(uri: Uri): String {
-        var response = AppUtils.EMPTY_STRING
-        if (!mNetworkLayer.checkConnectivityAndNotify(mContext)) {
-            return response
-        }
-
         // Create key to associate response with.
         val responsesMapKey = uri.toString()
 
         // Fetch RAM memory first.
-        response = mApiCacheInMemory[responsesMapKey]
+        var response = mApiCacheInMemory[responsesMapKey]
         if (response != AppUtils.EMPTY_STRING && response != "[]") {
             return response
         }
@@ -88,6 +83,13 @@ class ModelLayerImpl(
             mApiCacheInMemory.remove(responsesMapKey)
             mApiCacheInMemory.put(responsesMapKey, response)
             return response
+        }
+
+        // Both caches are local reads that cannot fail for lack of a network, so connectivity is
+        // only asked about here, where a request would really go out. Asking any earlier threw
+        // away a cached response in the one situation the cache exists for.
+        if (!mNetworkLayer.checkConnectivityAndNotify(mContext)) {
+            return AppUtils.EMPTY_STRING
         }
         // Finally, go to internet.
 

@@ -76,16 +76,15 @@ class LatestRadioStationStorageTest {
     }
 
     @Test
-    fun clearCurrentlyLeavesTheCachedStationReadableOnTheSameInstance() {
-        // Pins the defect tracked as TASK-027: clear() wipes the preference file but not the
-        // cached station, and the registry hands out one instance per process, so clearing the
-        // cache through the service still leaves a station to autoplay. Update this test together
-        // with the fix.
+    fun clearDropsTheCachedStationOnTheSameInstance() {
+        // The registry hands out one instance per process, so a clear that left the cache behind
+        // would keep reporting a station the file no longer holds, and the next service start
+        // would adopt it as the active one. Was TASK-027.
         mStorage.add(makeStation("1"))
 
         mStorage.clear()
 
-        assertEquals("1", mStorage.get().id)
+        assertTrue(mStorage.get().isInvalid())
     }
 
     private fun newStorage(): LatestRadioStationStorage {
