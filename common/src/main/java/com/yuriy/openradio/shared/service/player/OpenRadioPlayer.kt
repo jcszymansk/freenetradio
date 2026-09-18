@@ -22,6 +22,7 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
+import androidx.annotation.StringRes
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.DeviceInfo
@@ -38,11 +39,9 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.UnrecognizedInputFormatException
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
@@ -57,7 +56,6 @@ import com.yuriy.openradio.shared.utils.PlayerUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.net.HttpURLConnection
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.min
 
@@ -108,6 +106,11 @@ class OpenRadioPlayer(
      * Listener of the ExoPlayer components events.
      */
     private val mComponentListener = ComponentListener()
+
+    /**
+     * Decides what every playback error means for the stream being played.
+     */
+    private val mErrorClassifier = PlaybackErrorClassifier()
 
     @Volatile
     private var mStoppedByNetwork = false
@@ -771,11 +774,6 @@ class OpenRadioPlayer(
 
         private val mLiveStreamLabel = mContext.getString(R.string.media_description_default)
 
-        /**
-         * Number of currently detected playback exceptions.
-         */
-        private val mNumOfExceptions = AtomicInteger(0)
-
         private val mTrackNumber = AtomicInteger(0)
 
         override fun onMetadata(metadata: Metadata) {
@@ -827,7 +825,7 @@ class OpenRadioPlayer(
             }
             when (playerState) {
                 Player.STATE_READY -> {
-                    mNumOfExceptions.set(0)
+                    mErrorClassifier.reset()
                 }
 
                 Player.STATE_BUFFERING -> {
@@ -859,27 +857,29 @@ class OpenRadioPlayer(
         }
 
         override fun onPlayerError(exception: PlaybackException) {
-            AppLogger.e("$TAG onPlayerError [${mNumOfExceptions.get()}]", exception)
-            if (exception.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) {
-                mStoppedByNetwork = true
-                updateStreamMetadata(toDisplayString(mContext, exception))
-                return
-            }
-            val cause = exception.cause
-            if (cause is HttpDataSource.InvalidResponseCodeException) {
-                updateStreamMetadata(toDisplayString(mContext, exception))
-                return
-            }
-            if (mNumOfExceptions.getAndIncrement() <= MAX_EXCEPTIONS_COUNT) {
-                if (cause is UnrecognizedInputFormatException) {
-                    mListener.onHandledError(exception)
-                } else {
-                    // TODO:
-                    //prepareWithList(mIndex)
+            AppLogger.e("$TAG onPlayerError", exception)
+            when (val decision = mErrorClassifier.classify(exception)) {
+                PlaybackErrorDecision.NetworkLost -> {
+                    mStoppedByNetwork = true
+                    updateStreamMetadata(mContext.getString(R.string.media_stream_network_failed))
                 }
-                return
+
+                is PlaybackErrorDecision.StreamRejected -> {
+                    updateStreamMetadata(mContext.getString(toMessageRes(decision.reason)))
+                }
+
+                PlaybackErrorDecision.UnsupportedFormat -> {
+                    mListener.onHandledError(exception)
+                }
+
+                PlaybackErrorDecision.WithinErrorBudget -> {
+                    // ExoPlayer recovers from these on its own.
+                }
+
+                PlaybackErrorDecision.Unrecoverable -> {
+                    updateStreamMetadata(mContext.getString(R.string.media_stream_error))
+                }
             }
-            updateStreamMetadata(toDisplayString(mContext, exception))
         }
 
         fun invalidateMetaData() {
@@ -921,24 +921,13 @@ class OpenRadioPlayer(
             }
         }
 
-        private fun toDisplayString(context: Context, exception: PlaybackException): String {
-            if (exception.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) {
-                return context.getString(R.string.media_stream_network_failed)
+        @StringRes
+        private fun toMessageRes(reason: StreamRejectionReason): Int {
+            return when (reason) {
+                StreamRejectionReason.FORBIDDEN -> R.string.media_stream_http_403
+                StreamRejectionReason.NOT_FOUND -> R.string.media_stream_http_404
+                StreamRejectionReason.OTHER -> R.string.media_stream_error
             }
-            var msg = context.getString(R.string.media_stream_error)
-            val cause = exception.cause
-            if (cause is HttpDataSource.InvalidResponseCodeException) {
-                when (cause.responseCode) {
-                    HttpURLConnection.HTTP_FORBIDDEN -> {
-                        msg = context.getString(R.string.media_stream_http_403)
-                    }
-
-                    HttpURLConnection.HTTP_NOT_FOUND -> {
-                        msg = context.getString(R.string.media_stream_http_404)
-                    }
-                }
-            }
-            return msg
         }
     }
 
@@ -947,10 +936,5 @@ class OpenRadioPlayer(
          * String tag to use in logs.
          */
         private const val TAG = "ORP"
-
-        /**
-         *
-         */
-        private const val MAX_EXCEPTIONS_COUNT = 5
     }
 }
