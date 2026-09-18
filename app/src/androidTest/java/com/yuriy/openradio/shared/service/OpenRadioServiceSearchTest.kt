@@ -23,8 +23,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
-import com.yuriy.openradio.shared.model.source.Source
-import com.yuriy.openradio.shared.model.source.SourcesLayerImpl
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import org.junit.After
@@ -60,17 +58,35 @@ class OpenRadioServiceSearchTest {
         mContext = InstrumentationRegistry.getInstrumentation().targetContext
         mStorages = ServiceStorages(mContext)
         mStorages.clear()
-        assertEquals(
-            "The fixture below is a Radio Browser payload, so it only keys that provider's URL",
-            Source.RADIO_BROWSER,
-            SourcesLayerImpl(mContext).getActiveSource()
-        )
         mCache = PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         mCache.clear()
         mBrowser = ServiceBrowser()
         mBrowser.connect()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.forgetNotifications()
+        assertRadioBrowserIsBound()
+    }
+
+    /**
+     * The fixtures here are Radio Browser payloads keyed to Radio Browser URLs, so the test is only
+     * meaningful if that is the provider the service is using.
+     *
+     * Reading `SourcePreferences` would not tell us: `DependencyRegistryCommon.init` reads the
+     * selection once, at process start, and binds both the URL layer and the root command from it,
+     * so the preference only decides what a *future* process will use. What was actually bound
+     * does show, in the root menu: the two Radio Browser only nodes are added by the same `Source`
+     * value that chose the URL layer. Asserting those is therefore a real check, where asserting
+     * the preference would pass no matter what the service bound.
+     */
+    private fun assertRadioBrowserIsBound() {
+        val rootIds = mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT)
+        assertTrue(
+            "The service did not bind the Radio Browser provider, so these fixtures key the " +
+                "wrong URLs and would silently answer nothing. Root offered $rootIds",
+            rootIds.containsAll(
+                listOf(MediaId.MEDIA_ID_NEW_STATIONS, MediaId.MEDIA_ID_POPULAR_STATIONS)
+            )
+        )
     }
 
     @After
@@ -139,11 +155,6 @@ class OpenRadioServiceSearchTest {
     /**
      * The cache key is the provider URL, which [UrlLayerRadioBrowserImpl] builds before any DNS
      * mirror is resolved, so it can be reproduced here without touching the network.
-     *
-     * Which provider the service asks is decided once, when the registry builds the presenter at
-     * process start, from the same preference [ServiceStorages.clear] resets. The fixture below is
-     * a Radio Browser payload, so a different active source would key it wrongly; `setUp` asserts
-     * the selection rather than letting the test pass on an empty result.
      */
     private fun searchUrl(query: String): String {
         return UrlLayerRadioBrowserImpl().getSearchUrl(query).toString()

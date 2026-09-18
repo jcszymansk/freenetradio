@@ -88,12 +88,16 @@ class OpenRadioServiceCommandTest {
     }
 
     /**
-     * Acceptance criterion 8 asks for "not supported". That exact code is what
-     * `OpenRadioService.onCustomCommand` returns from its fallthrough, but no browser can reach
-     * it: media3 refuses an action the session never advertised before the call leaves the
-     * controller, and [advertisesExactlyTheCommandsItHandles] shows every advertised action is
-     * handled. What a client observes is asserted here instead: the command is denied and the
-     * service is not invoked.
+     * An unknown action is refused before it leaves the controller: media3 checks it against the
+     * session's advertised commands, and [advertisesExactlyTheCommandsItHandles] shows that set is
+     * exactly the handled ones. `onCustomCommand`'s own fallthrough is therefore dead code that no
+     * client can reach, which is why this asserts the denial a client actually sees rather than
+     * the code that branch would return.
+     *
+     * The service's `RESULT_ERROR_NOT_SUPPORTED` is not left unverified by that. It is the answer
+     * to a command that is advertised but cannot be carried out, and three cases observe it coming
+     * back over a real connection: [favoriteCommandRejectsAStationOutsideTheBrowseTree] and both
+     * halves of [sortUpdateRejectsAMissingOrEmptyStationId].
      */
     @Test
     fun rejectsAnUnknownCustomCommand() {

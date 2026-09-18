@@ -17,6 +17,10 @@
 package com.yuriy.openradio.shared.service
 
 import android.content.Context
+import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
+import com.yuriy.openradio.shared.dependencies.DeviceLocalsStorageDependency
+import com.yuriy.openradio.shared.dependencies.FavoritesStorageDependency
+import com.yuriy.openradio.shared.dependencies.LatestRadioStationStorageDependency
 import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
 import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
@@ -25,22 +29,24 @@ import com.yuriy.openradio.shared.model.storage.SourceStorage
 import java.lang.ref.WeakReference
 
 /**
- * The user owned stores the browse tree is built from.
+ * The user owned stores the browse tree is built from, as the service itself sees them.
  *
- * Preference files are process wide, so writing through these instances is visible to the service,
- * which holds its own. Two of the service's instances memoize, though: [FavoritesStorage.isFavorite]
- * caches its answer per station and [LatestRadioStationStorage.get] caches the station itself. Read
- * back through a freshly built storage, never through the one that seeded the value.
+ * These are the registry's own instances, obtained through the single-method `*Dependency` hooks
+ * that are the supported way to reach them. A test-built parallel instance would share the
+ * preference file but not the memory in front of it, and two of these storages keep some:
+ * [FavoritesStorage] caches every answer it has given about a station, and
+ * [LatestRadioStationStorage] caches the station itself. Seeding through a parallel instance
+ * therefore leaves the service answering from a cache the test never touched.
  */
 internal class ServiceStorages(context: Context) {
 
     private val mContextRef = WeakReference(context)
 
-    val favorites = FavoritesStorage(mContextRef)
+    val favorites = registryFavorites()
 
-    val latest = LatestRadioStationStorage(mContextRef)
+    val latest = registryLatest()
 
-    val locals = DeviceLocalsStorage(mContextRef, favorites, latest)
+    val locals = registryLocals()
 
     val sleepTimer = SleepTimerStorage(mContextRef)
 
@@ -49,19 +55,28 @@ internal class ServiceStorages(context: Context) {
     /**
      * Wipes every store this suite touches, leaving the profile the way a fresh install finds it.
      *
+     * Favorites are removed one by one before the file is wiped, because the inherited `clear()`
+     * empties the file and leaves [FavoritesStorage]'s answer cache saying those stations are
+     * still favorites, while `remove` drops both.
+     *
      * Clearing the latest station matters beyond its own tests. The service reads it in `onCreate`
      * and keeps it as the active station; once it has one, a root browse posts
-     * `maybeCreateInitialPlaylist`, which asks the provider for new stations. That is a network
-     * call reached from an otherwise offline node, and this suite runs with networking disabled.
-     * With no stored station `setActiveRS` rejects the invalid instance and that path stays shut.
+     * `maybeCreateInitialPlaylist`, which asks the provider for new stations. With no stored
+     * station `setActiveRS` rejects the invalid instance and that path stays shut. Its cached copy
+     * survives the wipe, which is TASK-027; nothing here ever stores one, so it stays invalid.
      */
     fun clear() {
+        for (station in favorites.getAll()) {
+            favorites.remove(station)
+        }
         favorites.clear()
         locals.clear()
         latest.clear()
         sleepTimer.clear()
         // The provider selection decides which URL a fixture has to be keyed to and which nodes
-        // the root offers, so a selection left behind by another test would change both.
+        // the root offers. Note that only a future process binds it: the registry reads it once,
+        // at start up, so a test that depends on the provider has to assert what was bound rather
+        // than what is stored. See OpenRadioServiceSearchTest.
         mSource.clear()
     }
 
@@ -74,5 +89,44 @@ internal class ServiceStorages(context: Context) {
 
     fun freshLocals(): DeviceLocalsStorage {
         return DeviceLocalsStorage(mContextRef, freshFavorites(), LatestRadioStationStorage(mContextRef))
+    }
+
+    private fun registryFavorites(): FavoritesStorage {
+        lateinit var result: FavoritesStorage
+        DependencyRegistryCommon.injectFavoritesStorage(
+            object : FavoritesStorageDependency {
+
+                override fun configureWith(favoritesStorage: FavoritesStorage) {
+                    result = favoritesStorage
+                }
+            }
+        )
+        return result
+    }
+
+    private fun registryLatest(): LatestRadioStationStorage {
+        lateinit var result: LatestRadioStationStorage
+        DependencyRegistryCommon.injectLatestRadioStationStorage(
+            object : LatestRadioStationStorageDependency {
+
+                override fun configureWith(latestRadioStationStorage: LatestRadioStationStorage) {
+                    result = latestRadioStationStorage
+                }
+            }
+        )
+        return result
+    }
+
+    private fun registryLocals(): DeviceLocalsStorage {
+        lateinit var result: DeviceLocalsStorage
+        DependencyRegistryCommon.injectDeviceLocalsStorage(
+            object : DeviceLocalsStorageDependency {
+
+                override fun configureWith(deviceLocalsStorage: DeviceLocalsStorage) {
+                    result = deviceLocalsStorage
+                }
+            }
+        )
+        return result
     }
 }

@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-18 05:07'
+updated_date: '2026-09-18 05:21'
 labels: []
 milestone: m-0
 dependencies:
@@ -95,6 +95,16 @@ Three more changes from this round:
 New coverage the cache fix made possible: aCachedProviderNodeIsBrowsableWhileOffline browses the categories node from a seeded response, so a provider backed node is now exercised offline through a real Media3 connection, not only the preference backed ones.
 
 Verification: 116 instrumented tests green twice, plus the 23 service tests alone; ./gradlew test --rerun-tasks, localCoverageReport and instrumentedCoverageReport all pass. Networking confirmed off before every run.
+
+Round 3 review follow-up. Two real test-isolation defects fixed, both in the helper rather than the cases.
+
+ServiceStorages now takes the registry's own storage instances through the single-method injection hooks instead of building parallel ones. The parallel instances shared the preference file but not the memory in front of it, and FavoritesStorage caches every answer it has given about a station while LatestRadioStationStorage caches the station itself, so the service could answer from a cache no test had touched. clear() also removes each favorite through remove() before wiping the file, because the inherited clear() empties the file and leaves the answer cache still saying those stations are favorites.
+
+The provider assertion added in round 2 was vacuous and has been replaced. DependencyRegistryCommon.init reads the source once, at process start, and binds both the URL layer and the root command from that one value, so asserting the preference proved nothing about what the service was using; after clear() it could not fail. The bound value is observable in the root menu, because MediaItemRoot adds the two Radio Browser only nodes from the same Source, so OpenRadioServiceSearchTest now asserts those. Confirmed live by inverting it, which failed with the real root listing.
+
+Criterion 8 stands as reworded, and the reasoning is now in the test rather than only in these notes: the service's RESULT_ERROR_NOT_SUPPORTED is not unverified, it is the answer to an advertised command that cannot be carried out, and three cases observe it over a real connection. What cannot be reached from any client is the fallthrough for an unadvertised action, because media3 refuses those in the controller.
+
+The request for a real pm clear is TASK-031, which weighs running the suite under Test Orchestrator. It is a suite-wide change, and it would not make clear-data something a single test can perform and then assert, so this task's in-process reset stays either way.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
