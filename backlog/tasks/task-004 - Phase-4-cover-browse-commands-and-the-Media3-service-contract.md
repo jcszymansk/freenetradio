@@ -4,10 +4,12 @@ title: 'Phase 4: cover browse commands and the Media3 service contract'
 status: To Do
 assignee: []
 created_date: '2026-09-17 18:24'
+updated_date: '2026-09-18 13:37'
 labels: []
 milestone: m-0
 dependencies:
   - TASK-003
+  - TASK-032
 type: chore
 ordinal: 8000
 ---
