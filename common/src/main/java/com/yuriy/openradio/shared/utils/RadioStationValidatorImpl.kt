@@ -1,0 +1,64 @@
+/*
+ * Copyright 2017-2023 The "Open Radio" Project. Author: Chernyshov Yuriy
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.yuriy.openradio.shared.utils
+
+import android.content.Context
+import com.yuriy.openradio.shared.model.media.RadioStationToAdd
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+/**
+ * Validator that reaches the stream and the home page over the network to decide whether a
+ * candidate Radio Station is usable.
+ *
+ * @param mUiScope Scope the answers are delivered on.
+ * @param mScope   Scope the network probes run on.
+ */
+class RadioStationValidatorImpl(
+    private val mUiScope: CoroutineScope,
+    private val mScope: CoroutineScope
+) : RadioStationValidator {
+
+    override fun validate(
+        context: Context, rsToAdd: RadioStationToAdd,
+        onSuccess: (msg: String) -> Unit,
+        onWarning: (msg: String) -> Unit,
+        onFailure: (msg: String) -> Unit
+    ) {
+        if (rsToAdd.name.isEmpty()) {
+            onFailure("Radio Station's name is invalid")
+            return
+        }
+        val url = rsToAdd.url
+        if (url.isEmpty()) {
+            onFailure("Radio Station's url is invalid")
+            return
+        }
+
+        mScope.launch {
+            if (!NetUtils.checkResource(context, url)) {
+                mUiScope.launch { onFailure("Radio Station's stream is invalid") }
+                return@launch
+            }
+            val homePage = rsToAdd.homePage
+            if (homePage.isNotEmpty() && !NetUtils.checkResource(context, homePage)) {
+                mUiScope.launch { onWarning("Radio Station's home page is invalid") }
+            }
+            mUiScope.launch { onSuccess("Radio Station validated successfully") }
+        }
+    }
+}

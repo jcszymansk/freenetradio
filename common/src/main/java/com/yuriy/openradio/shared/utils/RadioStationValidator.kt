@@ -17,48 +17,22 @@
 package com.yuriy.openradio.shared.utils
 
 import android.content.Context
-import com.yuriy.openradio.shared.model.ModelLayer
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
-import com.yuriy.openradio.shared.model.net.UrlLayer
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 /**
- * Validator object to validate candidate of Radio Station to add to the system.
+ * Validator of a candidate Radio Station before it is added to the system.
  */
-class RadioStationValidator(
-    private val mProvider: ModelLayer,
-    private val mUrlLayer: UrlLayer,
-    private var mUiScope: CoroutineScope,
-    private var mScope: CoroutineScope
-) {
+interface RadioStationValidator {
 
+    /**
+     * Validates [rsToAdd] and answers through exactly one of [onSuccess] or [onFailure], plus
+     * [onWarning] for a defect that does not stop the station from being added. Validation may
+     * reach the network, so the answer can arrive after this call returns.
+     */
     fun validate(
         context: Context, rsToAdd: RadioStationToAdd,
         onSuccess: (msg: String) -> Unit,
         onWarning: (msg: String) -> Unit,
         onFailure: (msg: String) -> Unit
-    ) {
-        if (rsToAdd.name.isEmpty()) {
-            onFailure("Radio Station's name is invalid")
-            return
-        }
-        val url = rsToAdd.url
-        if (url.isEmpty()) {
-            onFailure("Radio Station's url is invalid")
-            return
-        }
-
-        mScope.launch {
-            if (!NetUtils.checkResource(context, url)) {
-                mUiScope.launch { onFailure("Radio Station's stream is invalid") }
-                return@launch
-            }
-            val homePage = rsToAdd.homePage
-            if (homePage.isNotEmpty() && !NetUtils.checkResource(context, homePage)) {
-                mUiScope.launch { onWarning("Radio Station's home page is invalid") }
-            }
-            mUiScope.launch { onSuccess("Radio Station validated successfully") }
-        }
-    }
+    )
 }
