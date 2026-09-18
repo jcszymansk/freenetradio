@@ -1,11 +1,11 @@
 ---
 id: TASK-004.02
 title: Exercise a real MediaBrowser against OpenRadioService
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-18 04:20'
+updated_date: '2026-09-18 04:35'
 labels: []
 milestone: m-0
 dependencies:
@@ -23,16 +23,16 @@ Expands the existing MediaResourcesManagerTest pattern. Android's guidance speci
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Connect before any Activity exists
-- [ ] #2 Fetch the library root and root children
-- [ ] #3 Seed favorites and locals, then verify their browse nodes
-- [ ] #4 Subscribe to root and child nodes
-- [ ] #5 Add, edit and remove a local station and verify immediate subscription refresh
-- [ ] #6 Toggle favorite state and verify storage plus browse refresh
-- [ ] #7 Verify sort-update commands and invalid command arguments
-- [ ] #8 Verify unknown custom commands return not supported
-- [ ] #9 Search using a seeded local cache fixture
-- [ ] #10 Clear app data and reconnect successfully
+- [x] #1 Connect before any Activity exists
+- [x] #2 Fetch the library root and root children
+- [x] #3 Seed favorites and locals, then verify their browse nodes
+- [x] #4 Subscribe to root and child nodes
+- [x] #5 Add, edit and remove a local station and verify immediate subscription refresh
+- [x] #6 Toggle favorite state and verify storage plus browse refresh
+- [x] #7 Verify sort-update commands and invalid command arguments
+- [x] #8 Verify unknown custom commands return not supported
+- [x] #9 Search using a seeded local cache fixture
+- [x] #10 Clear app data and reconnect successfully
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -46,3 +46,34 @@ Expands the existing MediaResourcesManagerTest pattern. Android's guidance speci
 6. Every test clears the favorites, locals, latest station and sleep timer storages and re-invalidates the browse tree in setUp and tearDown, so no case depends on another.
 7. Verify with ./gradlew :app:connectedDebugAndroidTest on a headless API 34 emulator with wifi and mobile data disabled, repeated to rule out order dependence, plus ./gradlew test.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Three instrumented classes under app/src/androidTest/.../shared/service drive a real androidx.media3 MediaBrowser against the running OpenRadioService: OpenRadioServiceBrowseTest (root, root children, seeded favorites and locals, subscribe and unsubscribe, single item lookup, clear-and-reconnect), OpenRadioServiceCommandTest (the advertised command set, the local station add/edit/remove refresh loop, the favorite toggle, sort ids for both sortable categories, and the invalid argument paths) and OpenRadioServiceSearchTest. ServiceBrowser.kt wraps the main-thread-and-future dance with an explicit deadline; ServiceStorages.kt owns the stores each test seeds and wipes. No mocking or DI framework, no network.
+
+:app gained two androidTest-only dependencies, media3-session and androidx.media, because :common keeps both off the app classpath; this mirrors the room-runtime line added in TASK-003.
+
+Two acceptance criteria are met in an adapted form, and both adaptations are forced by production behavior rather than by the test:
+
+- AC 9. The search fixture is seeded into the Room API cache under the exact provider URL, but it is never consumed: ModelLayerImpl.downloadData checks connectivity before it reads either cache, so an offline search returns nothing. The test drives the real search and getSearchResult protocol, asserts the zero-result push, and asserts the cached row is left untouched. Filed as TASK-030, which carries the criterion to rewrite this test against the seeded station.
+- AC 10. A real 'pm clear' would kill the process the instrumentation runs in, so the test wipes every store the app owns plus the caches CMD_CLEAR_CACHE reaches, releases the browser and reconnects on the resulting empty profile.
+
+AC 8 deviates from its wording for the same reason: media3 refuses an action the session never advertised, so the service's own not-supported branch is unreachable from a browser. The test asserts the actual rejection (RESULT_ERROR_PERMISSION_DENIED) and separately asserts that the advertised set is exactly the nine handled commands, which is what makes that branch unreachable.
+
+CMD_STOP_SERVICE is never sent: closeService ends in Process.killProcess(myPid()), which would kill the test run. The testing roadmap already keeps that path as a manual lifecycle check.
+
+A second production defect surfaced: MediaItemAllCategories and MediaItemCountriesList return without calling their result listener on an empty provider result, so the SettableFuture behind onGetChildren is never set and an offline browse of either node hangs forever. Filed as TASK-029; OpenRadioServiceBrowseTest.providerNodesNeverAnswerWhileOffline pins it with a bounded wait.
+
+Verification: 114 instrumented tests green on a headless API 34 emulator with wifi and mobile data disabled, run four times with no order dependence; the 21 new tests also pass on their own from a force-stopped app, which is the service-first, no-Activity path AC 1 asks for. ./gradlew test --rerun-tasks, localCoverageReport and instrumentedCoverageReport all pass. One assertion was deliberately inverted and confirmed to fail, so the suite is not passing vacuously.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+A real MediaBrowser now exercises OpenRadioService end to end from instrumentation: the library root and its extras, the root children for an empty and a seeded profile, the favorites and locals nodes, subscriptions on root and child nodes with the pushes they produce, single item lookup, every custom session command the session advertises including their invalid argument paths, search, and a clear-every-store-then-reconnect pass. Three test classes plus two small helpers under app/src/androidTest/.../shared/service, no mocking or DI framework, no network.
+
+Verified on a headless API 34 emulator with wifi and mobile data disabled: 114 instrumented tests pass, four consecutive runs with no order dependence, and the 21 new tests also pass alone from a force-stopped app, which is the cold service-first start. ./gradlew test --rerun-tasks, localCoverageReport and instrumentedCoverageReport pass. One assertion was inverted on purpose and failed as expected, confirming the suite is not vacuous.
+
+Two production defects surfaced and are tracked rather than fixed here, following TASK-003: TASK-029 (an offline browse of the categories or countries node never completes, because the command returns without calling its result listener on an empty result) and TASK-030 (the API response cache is skipped whenever the device is offline, which is what keeps the seeded search fixture from being used). Both are pinned by tests that name the task and will fail once the defect is fixed. CMD_STOP_SERVICE stays uncovered on purpose: closeService kills the process the instrumentation runs in.
+<!-- SECTION:FINAL_SUMMARY:END -->

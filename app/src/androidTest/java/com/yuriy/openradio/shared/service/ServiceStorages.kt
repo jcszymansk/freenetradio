@@ -17,7 +17,6 @@
 package com.yuriy.openradio.shared.service
 
 import android.content.Context
-import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
 import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
@@ -34,8 +33,6 @@ import java.lang.ref.WeakReference
  */
 internal class ServiceStorages(context: Context) {
 
-    private val mContext = context
-
     private val mContextRef = WeakReference(context)
 
     val favorites = FavoritesStorage(mContextRef)
@@ -47,19 +44,19 @@ internal class ServiceStorages(context: Context) {
     val sleepTimer = SleepTimerStorage(mContextRef)
 
     /**
-     * Wipes every store this suite touches.
+     * Wipes every store this suite touches, leaving the profile the way a fresh install finds it.
      *
-     * Clearing the latest station matters beyond its own tests: the service reads it in `onCreate`
-     * and, once it has an active station, a root browse posts `maybeCreateInitialPlaylist`, which
-     * asks the provider for new stations. That is a network call reached from an otherwise offline
-     * node, and the instrumented suite runs with networking disabled.
+     * Clearing the latest station matters beyond its own tests. The service reads it in `onCreate`
+     * and keeps it as the active station; once it has one, a root browse posts
+     * `maybeCreateInitialPlaylist`, which asks the provider for new stations. That is a network
+     * call reached from an otherwise offline node, and this suite runs with networking disabled.
+     * With no stored station `setActiveRS` rejects the invalid instance and that path stays shut.
      */
     fun clear() {
         favorites.clear()
         locals.clear()
         latest.clear()
         sleepTimer.clear()
-        AppPreferencesManager.lastKnownRadioStationEnabled(mContext, false)
     }
 
     /**

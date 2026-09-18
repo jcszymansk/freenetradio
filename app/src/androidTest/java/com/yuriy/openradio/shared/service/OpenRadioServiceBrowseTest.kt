@@ -271,13 +271,19 @@ class OpenRadioServiceBrowseTest {
     }
 
     /**
-     * The lifecycle monitor is main thread state, so it has to be read there.
+     * [Stage.DESTROYED] is excluded on purpose: an Activity an earlier test already tore down is
+     * gone as far as this service is concerned, and counting it would make the check depend on
+     * which classes ran before. The lifecycle monitor is main thread state, so it is read there.
      */
     private fun noActivityExists(): Boolean {
         val monitor = ActivityLifecycleMonitorRegistry.getInstance()
         val result = AtomicBoolean()
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            result.set(Stage.values().all { monitor.getActivitiesInStage(it).isEmpty() })
+            result.set(
+                Stage.values()
+                    .filter { it != Stage.DESTROYED }
+                    .all { monitor.getActivitiesInStage(it).isEmpty() }
+            )
         }
         return result.get()
     }
