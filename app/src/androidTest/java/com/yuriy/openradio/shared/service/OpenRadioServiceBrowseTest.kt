@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.service
 
 import android.content.Context
 import androidx.media.utils.MediaConstants
+import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.SessionResult
@@ -27,6 +28,7 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.isInvalid
+import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
 import com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
@@ -54,9 +56,10 @@ import org.junit.runner.RunWith
  * Phone and Android Auto are both MediaBrowser clients of this one service and this one tree, so
  * everything asserted here is shared by both surfaces.
  *
- * The suite runs with networking disabled. That covers the nodes that read preferences directly,
- * and a provider backed node too, by seeding the response into the Room API cache. What it cannot
- * reach is a node whose data has to be fetched; the JVM command tests cover those against fakes.
+ * The suite runs with networking disabled. Nodes that read a store are served from preferences,
+ * and a node that has to fetch is served from a response seeded into the Room API cache under the
+ * exact URL its command builds, so the parse, the browse tree and the answer all run without a
+ * request leaving the device.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
@@ -67,6 +70,12 @@ class OpenRadioServiceBrowseTest {
     private lateinit var mStorages: ServiceStorages
 
     private lateinit var mBrowser: ServiceBrowser
+
+    /**
+     * Builds the URLs a fixture has to be keyed to. Only the builders are used, and they run
+     * before any DNS mirror is resolved, so nothing here touches the network.
+     */
+    private val mUrls = UrlLayerRadioBrowserImpl()
 
     /**
      * Whether an Activity was alive at the moment the browser connected. Sampled here rather than
@@ -85,7 +94,36 @@ class OpenRadioServiceBrowseTest {
         mBrowser.connect()
         // The service caches every node but favorites and locals, and it outlives a single test.
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        assertRadioBrowserIsBound()
         mBrowser.forgetNotifications()
+    }
+
+    /**
+     * The fixtures are Radio Browser payloads keyed to Radio Browser URLs, so they are only
+     * meaningful if that is the provider the service bound.
+     *
+     * Reading the source preference would not tell us: `DependencyRegistryCommon.init` reads the
+     * selection once, at process start, and binds both the URL layer and the root command from it,
+     * so the preference only decides what a future process will use. What was actually bound does
+     * show in the root menu, where the two Radio Browser only nodes are added by the same `Source`
+     * value that chose the URL layer.
+     *
+     * Browsing the root here has a second effect the seeded cases rely on. An
+     * [com.yuriy.openradio.shared.model.media.item.IndexableMediaItemCommand] keeps its page index
+     * on a command instance that lives as long as the process, and only resets it when the node
+     * being browsed differs from the one browsed before. Every case therefore starts with the root
+     * as the previous node, and asks its own node for page one rather than for wherever an earlier
+     * case left the counter.
+     */
+    private fun assertRadioBrowserIsBound() {
+        val rootIds = mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT)
+        assertTrue(
+            "The service did not bind the Radio Browser provider, so these fixtures key the " +
+                "wrong URLs and would silently answer nothing. Root offered $rootIds",
+            rootIds.containsAll(
+                listOf(MediaId.MEDIA_ID_NEW_STATIONS, MediaId.MEDIA_ID_POPULAR_STATIONS)
+            )
+        )
     }
 
     @After
@@ -310,64 +348,185 @@ class OpenRadioServiceBrowseTest {
     }
 
     /**
-     * Uses the popular stations node rather than one of the two
-     * [providerNodesAnswerWithAnEmptyListWhenNothingIsCached] browses, and that is deliberate. A
-     * persistent cache hit is promoted into
-     * [com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache],
-     * whose map is static and process wide, so seeding a URL here would leave it answering for the
-     * rest of the run. It happens to be cleared today because releasing the last browser destroys
-     * the service and `onDestroy` closes the presenter, but that is Android's timing rather than
-     * this suite's, so the two cases are kept off each other's URLs instead.
+     * The first of the seeded cases, and the one that also shows the fixture was really the source
+     * of the children rather than something already in memory.
      */
     @Test
     fun aCachedProviderNodeIsBrowsableWhileOffline() {
-        val url = UrlLayerRadioBrowserImpl().getPopularStations().toString()
-        // The in-memory cache is a static map that outlives any one test, so empty it first:
-        // otherwise a response left there for this URL could answer the browse and the Room
-        // fixture below would never be read.
-        val memoryCache = InMemoryApiCache()
-        memoryCache.remove(url)
-        assertTrue(memoryCache[url].isEmpty())
-        PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
-            .put(url, POPULAR_RESPONSE)
-        invalidate(MediaId.MEDIA_ID_POPULAR_STATIONS)
+        val url = mUrls.getPopularStations().toString()
+        seedResponse(url, POPULAR_RESPONSE, MediaId.MEDIA_ID_POPULAR_STATIONS)
 
         val children = mBrowser.children(MediaId.MEDIA_ID_POPULAR_STATIONS)
 
-        assertEquals(listOf("popular-one", "popular-two"), children.map { it.mediaId }.sorted())
-        for (child in children) {
-            assertEquals("${child.mediaId} is not playable", true, child.mediaMetadata.isPlayable)
-            assertEquals("${child.mediaId} is browsable", false, child.mediaMetadata.isBrowsable)
-        }
+        assertEquals(listOf("popular-one", "popular-two"), children.map { it.mediaId })
+        assertPlayable(children)
         // A persistent hit is promoted into memory, so finding it there afterwards is what shows
         // the stations came from the Room fixture rather than from something already in memory.
-        assertEquals(POPULAR_RESPONSE, memoryCache[url])
+        assertEquals(POPULAR_RESPONSE, InMemoryApiCache()[url])
     }
 
     /**
-     * A provider node with nothing to offer still has to answer. Both of these fetch their children
-     * rather than read a store, so with networking off and nothing cached they come back empty,
+     * Categories are a menu rather than a station list, so the node has to produce browsable
+     * children that carry the id its own command will be asked for next.
+     *
+     * The fixture lists blues before jazz and the browse returns jazz first, which is what shows
+     * the station counts were parsed: [com.yuriy.openradio.shared.model.media.Category] orders on
+     * the count alone, descending. That also makes two equal counts collapse into one entry inside
+     * the parser's `TreeSet`, so the seeded counts differ.
+     */
+    @Test
+    fun seededCategoriesBecomeBrowsableChildren() {
+        seedResponse(
+            mUrls.getAllCategoriesUrl().toString(),
+            CATEGORIES_RESPONSE,
+            MediaId.MEDIA_ID_ALL_CATEGORIES
+        )
+
+        val children = mBrowser.children(MediaId.MEDIA_ID_ALL_CATEGORIES)
+
+        assertEquals(
+            listOf(
+                MediaId.MEDIA_ID_CHILD_CATEGORIES + SEEDED_CATEGORY_ID,
+                MediaId.MEDIA_ID_CHILD_CATEGORIES + "blues"
+            ),
+            children.map { it.mediaId }
+        )
+        assertEquals(listOf("Jazz", "Blues"), children.map { it.mediaMetadata.title.toString() })
+        assertBrowsable(children)
+    }
+
+    /**
+     * A country entry carries its code in the media id, which is the whole reason
+     * [aCountryParentIdBrowsesTheStationsOfThatCountry] has anything to browse: the code the
+     * service extracts for the next request comes from this id and from nothing stored.
+     *
+     * The name is the app's own, taken from
+     * [com.yuriy.openradio.shared.service.location.LocationService.COUNTRY_CODE_TO_NAME] rather
+     * than from the response, so the fixture carries codes only.
+     */
+    @Test
+    fun seededCountriesBecomeBrowsableChildren() {
+        seedResponse(
+            mUrls.getAllCountries().toString(),
+            COUNTRIES_RESPONSE,
+            MediaId.MEDIA_ID_COUNTRIES_LIST
+        )
+
+        val children = mBrowser.children(MediaId.MEDIA_ID_COUNTRIES_LIST)
+
+        assertEquals(
+            listOf(
+                MediaId.MEDIA_ID_COUNTRIES_LIST + "DE",
+                MediaId.MEDIA_ID_COUNTRIES_LIST + SEEDED_COUNTRY_CODE
+            ),
+            children.map { it.mediaId }
+        )
+        assertEquals(listOf("Germany", "Poland"), children.map { it.mediaMetadata.title.toString() })
+        assertEquals(
+            listOf("DE", SEEDED_COUNTRY_CODE),
+            children.map { it.mediaMetadata.subtitle.toString() }
+        )
+        assertBrowsable(children)
+    }
+
+    @Test
+    fun seededNewStationsBecomePlayableChildren() {
+        seedResponse(
+            mUrls.getNewStations().toString(),
+            NEW_STATIONS_RESPONSE,
+            MediaId.MEDIA_ID_NEW_STATIONS
+        )
+
+        val children = mBrowser.children(MediaId.MEDIA_ID_NEW_STATIONS)
+
+        assertEquals(listOf("new-one", "new-two"), children.map { it.mediaId })
+        assertPlayable(children)
+    }
+
+    /**
+     * The category id travels in the parent id rather than in a setting: the command strips the
+     * node prefix off the id the client sends and puts what is left into the request path. The
+     * fixture is keyed to the URL that one id produces, so only a browse that carried the id all
+     * the way through finds it.
+     */
+    @Test
+    fun aCategoryParentIdBrowsesTheStationsOfThatCategory() {
+        val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + SEEDED_CATEGORY_ID
+        seedResponse(
+            mUrls.getStationsInCategory(SEEDED_CATEGORY_ID, UrlLayer.FIRST_PAGE_INDEX).toString(),
+            CATEGORY_STATIONS_RESPONSE,
+            parentId
+        )
+
+        val children = mBrowser.children(parentId)
+
+        assertEquals(listOf("category-one", "category-two"), children.map { it.mediaId })
+        assertPlayable(children)
+    }
+
+    /**
+     * Same shape as [aCategoryParentIdBrowsesTheStationsOfThatCategory], with the country code
+     * taken from the tail of the parent id, so a head unit browsing into a country reaches the
+     * right request without the app having stored that country anywhere.
+     *
+     * The countries URL is deliberately left unseeded. The command warms the country list before
+     * its own fetch and throws the answer away, and the presenter memoizes that list in a set
+     * nothing ever empties (TASK-035), so seeding it here would leave
+     * [seededCountriesBecomeBrowsableChildren] asserting this fixture instead of its own whenever
+     * this case ran first.
+     */
+    @Test
+    fun aCountryParentIdBrowsesTheStationsOfThatCountry() {
+        val parentId = MediaId.MEDIA_ID_COUNTRIES_LIST + SEEDED_COUNTRY_CODE
+        seedResponse(
+            mUrls.getStationsByCountry(SEEDED_COUNTRY_CODE, UrlLayer.FIRST_PAGE_INDEX).toString(),
+            COUNTRY_STATIONS_RESPONSE,
+            parentId
+        )
+
+        val children = mBrowser.children(parentId)
+
+        assertEquals(listOf("country-one", "country-two"), children.map { it.mediaId })
+        assertPlayable(children)
+    }
+
+    /**
+     * A provider node with nothing to offer still has to answer. This one fetches its children
+     * rather than reading a store, so with networking off and nothing cached it comes back empty,
      * which is the ordinary offline case and not an exotic one.
      *
      * The service completes `onGetChildren` from the command's result listener and from nowhere
      * else, so a command that reported the empty case only as a playback-state message used to
      * leave the browser waiting for as long as it cared to (TASK-029).
+     *
+     * This shares its URL with [seededCategoriesBecomeBrowsableChildren], which is why both empty
+     * the in-memory entry before they browse: that map is static and a case that found the other's
+     * response there would assert nothing.
+     *
+     * `__COUNTRIES_LIST__` used to be browsed here as well and cannot be any more. The presenter
+     * memoizes the country list in a set that nothing empties, so once any case in the run has
+     * browsed that node the miss is unreachable whatever the order (TASK-035). Its empty answer is
+     * covered by `MediaItemCountriesListTest` against a fake presenter.
      */
     @Test
-    fun providerNodesAnswerWithAnEmptyListWhenNothingIsCached() {
-        for (node in listOf(MediaId.MEDIA_ID_ALL_CATEGORIES, MediaId.MEDIA_ID_COUNTRIES_LIST)) {
-            // Another case may have left a cached result behind; this one is about the miss.
-            invalidate(node)
+    fun aProviderNodeAnswersWithAnEmptyListWhenNothingIsCached() {
+        forgetCachedResponse(mUrls.getAllCategoriesUrl().toString())
+        invalidate(MediaId.MEDIA_ID_ALL_CATEGORIES)
 
-            val result = mBrowser.childrenResult(node, timeoutSeconds = EMPTY_NODE_TIMEOUT_SECONDS)
+        val result = mBrowser.childrenResult(
+            MediaId.MEDIA_ID_ALL_CATEGORIES,
+            timeoutSeconds = EMPTY_NODE_TIMEOUT_SECONDS
+        )
 
-            assertEquals(
-                "$node did not answer with a success",
-                LibraryResult.RESULT_SUCCESS,
-                result.resultCode
-            )
-            assertTrue("$node offered children with nothing cached", result.value!!.isEmpty())
-        }
+        assertEquals(
+            "The categories node did not answer with a success",
+            LibraryResult.RESULT_SUCCESS,
+            result.resultCode
+        )
+        assertTrue(
+            "The categories node offered children with nothing cached",
+            result.value!!.isEmpty()
+        )
     }
 
     /**
@@ -380,6 +539,52 @@ class OpenRadioServiceBrowseTest {
         val result = mBrowser.childrenResult(UNKNOWN_PARENT_ID)
 
         assertEquals(LibraryResult.RESULT_ERROR_BAD_VALUE, result.resultCode)
+    }
+
+    /**
+     * Makes [response] the answer the provider would have given for [url], and drops the service's
+     * cached children for [node] so the browse that follows has to read it.
+     *
+     * Seeding is the last thing a case does before browsing, on purpose. [PersistentApiCache]
+     * measures a row's age in milliseconds against a constant meant to be seconds, so a seeded row
+     * is served for 86 seconds rather than the intended day (TASK-024).
+     */
+    private fun seedResponse(url: String, response: String, node: String) {
+        forgetCachedResponse(url)
+        PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME).put(url, response)
+        invalidate(node)
+    }
+
+    /**
+     * Drops whatever either API cache holds for [url], so a case reads its own fixture or nothing.
+     *
+     * The in-memory cache matters most: its map is static and outlives every test in the run, and
+     * a persistent hit is promoted into it, so a response one case seeded would go on answering
+     * for every case that shares the URL. It is emptied today whenever releasing the last browser
+     * destroys the service, because `onDestroy` closes the presenter, but that is Android's timing
+     * rather than this suite's.
+     */
+    private fun forgetCachedResponse(url: String) {
+        val memoryCache = InMemoryApiCache()
+        memoryCache.remove(url)
+        assertTrue("The in-memory cache still answers for $url", memoryCache[url].isEmpty())
+        PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME).remove(url)
+    }
+
+    private fun assertPlayable(children: List<MediaItem>) {
+        assertTrue("The node offered no children at all", children.isNotEmpty())
+        for (child in children) {
+            assertEquals("${child.mediaId} is not playable", true, child.mediaMetadata.isPlayable)
+            assertEquals("${child.mediaId} is browsable", false, child.mediaMetadata.isBrowsable)
+        }
+    }
+
+    private fun assertBrowsable(children: List<MediaItem>) {
+        assertTrue("The node offered no children at all", children.isNotEmpty())
+        for (child in children) {
+            assertEquals("${child.mediaId} is not browsable", true, child.mediaMetadata.isBrowsable)
+            assertEquals("${child.mediaId} is playable", false, child.mediaMetadata.isPlayable)
+        }
     }
 
     /**
@@ -399,11 +604,6 @@ class OpenRadioServiceBrowseTest {
         )
     }
 
-    /**
-     * [Stage.DESTROYED] is excluded on purpose: an Activity an earlier test already tore down is
-     * gone as far as this service is concerned, and counting it would make the check depend on
-     * which classes ran before. The lifecycle monitor is main thread state, so it is read there.
-     */
     /**
      * `CMD_CLEAR_CACHE` hands the work to a coroutine and answers immediately, so its success code
      * says nothing about whether anything has been emptied yet.
@@ -464,6 +664,11 @@ class OpenRadioServiceBrowseTest {
         return names
     }
 
+    /**
+     * [Stage.DESTROYED] is excluded on purpose: an Activity an earlier test already tore down is
+     * gone as far as this service is concerned, and counting it would make the check depend on
+     * which classes ran before. The lifecycle monitor is main thread state, so it is read there.
+     */
     private fun anyActivityExists(): Boolean {
         val monitor = ActivityLifecycleMonitorRegistry.getInstance()
         val result = AtomicBoolean()
@@ -502,13 +707,48 @@ class OpenRadioServiceBrowseTest {
 
         const val CLEAR_PROBE_STATION_ID = "clear-data-probe"
 
-        val POPULAR_RESPONSE = """
+        /**
+         * The category browsed by [aCategoryParentIdBrowsesTheStationsOfThatCategory], and the
+         * leading entry of [CATEGORIES_RESPONSE]. It goes into a URL path segment, so it is kept
+         * to characters that survive that unescaped and the seeded key stays readable.
+         */
+        const val SEEDED_CATEGORY_ID = "jazz"
+
+        const val SEEDED_COUNTRY_CODE = "PL"
+
+        val CATEGORIES_RESPONSE = """
             [
-              {"stationuuid":"popular-one","name":"Popular One","bitrate":128,
-               "url":"https://radio.example/one","url_resolved":"https://radio.example/one"},
-              {"stationuuid":"popular-two","name":"Popular Two","bitrate":128,
-               "url":"https://radio.example/two","url_resolved":"https://radio.example/two"}
+              {"name":"blues","stationcount":2},
+              {"name":"$SEEDED_CATEGORY_ID","stationcount":3}
             ]
         """.trimIndent()
+
+        /**
+         * Codes only: the parser drops any code the app has no name for and takes the name from
+         * its own table, so a name in the payload would be ignored.
+         */
+        val COUNTRIES_RESPONSE = """
+            [{"iso_3166_1":"DE"},{"iso_3166_1":"$SEEDED_COUNTRY_CODE"}]
+        """.trimIndent()
+
+        val NEW_STATIONS_RESPONSE = stationsResponse("new-one", "new-two")
+
+        val CATEGORY_STATIONS_RESPONSE = stationsResponse("category-one", "category-two")
+
+        val COUNTRY_STATIONS_RESPONSE = stationsResponse("country-one", "country-two")
+
+        /**
+         * A station needs a uuid and a stream url to survive the parse; everything else is
+         * optional. Stations are ordered by name, because every parsed one carries the same
+         * unknown sort id, and two of the same name would collapse into one.
+         */
+        private fun stationsResponse(vararg ids: String): String {
+            return ids.joinToString(separator = ",", prefix = "[", postfix = "]") {
+                """{"stationuuid":"$it","name":"Station $it","bitrate":128,""" +
+                    """"url":"https://radio.example/$it","url_resolved":"https://radio.example/$it"}"""
+            }
+        }
+
+        val POPULAR_RESPONSE = stationsResponse("popular-one", "popular-two")
     }
 }
