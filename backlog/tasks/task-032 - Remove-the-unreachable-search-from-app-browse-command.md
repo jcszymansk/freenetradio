@@ -1,11 +1,11 @@
 ---
 id: TASK-032
 title: Remove the unreachable search-from-app browse command
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-18 08:54'
-updated_date: '2026-09-18 15:48'
+updated_date: '2026-09-18 15:56'
 labels: []
 dependencies: []
 type: chore
@@ -24,10 +24,10 @@ Found while auditing browse-node coverage for TASK-004: the node cannot be exerc
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 MediaItemSearchFromApp and its registration in OpenRadioServicePresenterImpl are gone
-- [ ] #2 MediaId.MEDIA_ID_SEARCH_FROM_APP survives only as the client-side marker used by SearchDialog and MediaResourcesManager, with no service-side command bound to it
-- [ ] #3 The MediaItemSearchTest cases that exercised the deleted class now exercise MediaItemSearchFromService, including the saved-instance and empty-result paths
-- [ ] #4 Search from the phone UI still returns results, verified over a real Media3 connection rather than from code reading
+- [x] #1 MediaItemSearchFromApp and its registration in OpenRadioServicePresenterImpl are gone
+- [x] #2 MediaId.MEDIA_ID_SEARCH_FROM_APP survives only as the client-side marker used by SearchDialog and MediaResourcesManager, with no service-side command bound to it
+- [x] #3 The MediaItemSearchTest cases that exercised the deleted class now exercise MediaItemSearchFromService, including the saved-instance and empty-result paths
+- [x] #4 Search from the phone UI still returns results, verified over a real Media3 connection rather than from code reading
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -41,3 +41,21 @@ Found while auditing browse-node coverage for TASK-004: the node cannot be exerc
 6. Cover the phone search path over a real Media3 connection: an instrumentation test that subscribes MediaResourcesManager to the marker with a query bundle, exactly as MediaPresenterImpl.addMediaItemToStack does for SearchDialog, against a seeded API cache.
 7. Run ./gradlew test and the :app instrumentation suite with emulator networking disabled.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+MediaItemSearchFromApp.kt is deleted and its registration and import are out of OpenRadioServicePresenterImpl. MEDIA_ID_SEARCH_FROM_APP also left MediaId.IDS, the table MediaId.getId resolves a parent id against, so an id that does reach the service from outside (OpenRadioService is exported) now resolves to no command and is answered with RESULT_ERROR_BAD_VALUE instead of reaching the untagged twin of the search results. The constant carries a comment saying why it is absent from IDS.
+
+An independent audit of every path a parent id can travel into OpenRadioService confirmed the id was unreachable before the deletion: SearchDialog is its only producer, MediaResourcesManager intercepts it in both subscribe and getChildren on a bare id equality test that no page, bundle or connection state can bypass, onSubscribe/onGetItem/onAddMediaItems/onCustomCommand never call getMediaItemCommand, no MediaItem in the browse tree carries the id, and MEDIA_PLAY_FROM_SEARCH is declared in the manifests but handled nowhere.
+
+Verification: ./gradlew test green; MediaItemSearchTest 5/5 and OpenRadioServicePresenterImplTest 16/16. ./gradlew :app:connectedDebugAndroidTest on emulator-5554 with wifi and data disabled: 123 tests, 0 failures. The new MediaResourcesManagerTest.searchingFromTheAppIsAnsweredWithTaggedStations was checked against a negative control: with the cache seed removed it fails with expected:<[search:app-search-station]> but was:<[]>, which also shows nothing reached the network.
+
+TASK-036 follows up on the now production-unused default MediaIdBuilder on getSearchStations.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Deleted MediaItemSearchFromApp and its registration, and took MEDIA_ID_SEARCH_FROM_APP out of MediaId.IDS so the id is the client-side stack marker it always was. MediaItemSearchTest now drives MediaItemSearchFromService through all five cases, saved-instance and empty-result included, and asserts the search: prefix the client receives; OpenRadioServicePresenterImplTest asserts no command and no id resolve for the marker on either client. A new instrumentation case subscribes MediaResourcesManager to the marker with a query bundle, the same call MediaPresenterImpl makes for SearchDialog, and gets the seeded station back over a real Media3 connection. Verified with ./gradlew test and :app:connectedDebugAndroidTest (123 tests, 0 failures, emulator offline), plus a negative control that fails without the fixture.
+<!-- SECTION:FINAL_SUMMARY:END -->
