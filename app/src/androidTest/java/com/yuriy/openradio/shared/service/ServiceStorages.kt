@@ -21,6 +21,7 @@ import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
 import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
 import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
+import com.yuriy.openradio.shared.model.storage.SourceStorage
 import java.lang.ref.WeakReference
 
 /**
@@ -43,6 +44,8 @@ internal class ServiceStorages(context: Context) {
 
     val sleepTimer = SleepTimerStorage(mContextRef)
 
+    private val mSource = SourceStorage(mContextRef)
+
     /**
      * Wipes every store this suite touches, leaving the profile the way a fresh install finds it.
      *
@@ -57,6 +60,9 @@ internal class ServiceStorages(context: Context) {
         locals.clear()
         latest.clear()
         sleepTimer.clear()
+        // The provider selection decides which URL a fixture has to be keyed to and which nodes
+        // the root offers, so a selection left behind by another test would change both.
+        mSource.clear()
     }
 
     /**

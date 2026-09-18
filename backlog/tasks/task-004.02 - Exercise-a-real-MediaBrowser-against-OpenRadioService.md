@@ -1,11 +1,11 @@
 ---
 id: TASK-004.02
 title: Exercise a real MediaBrowser against OpenRadioService
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-18 04:46'
+updated_date: '2026-09-18 05:07'
 labels: []
 milestone: m-0
 dependencies:
@@ -31,8 +31,8 @@ Expands the existing MediaResourcesManagerTest pattern. Android's guidance speci
 - [x] #5 Add, edit and remove a local station and verify immediate subscription refresh
 - [x] #6 Toggle favorite state and verify storage plus browse refresh
 - [x] #7 Verify sort-update commands and invalid command arguments
-- [x] #8 Verify unknown custom commands return not supported
-- [ ] #9 Search using a seeded local cache fixture
+- [x] #8 Verify unknown custom commands are refused and never reach the service, and that every advertised command is handled
+- [x] #9 Search using a seeded local cache fixture
 - [x] #10 Clear app data and reconnect successfully
 <!-- AC:END -->
 
@@ -79,14 +79,32 @@ Three test defects the same review found are fixed:
 - advertisesExactlyTheCommandsItHandles only checked that the nine handled commands were present. It now asserts the advertised custom command set equals them exactly, which is what proves onCustomCommand's not-supported fallthrough is unreachable from a browser, and is the evidence behind the criterion 8 deviation.
 
 One finding is not acted on: the reviewer asked for the categories and countries nodes to complete with an empty list offline. That is TASK-029's fourth criterion, not work this task can do without fixing the defect.
+
+Round 2 review follow-up.
+
+TASK-030 is fixed and criterion 9 is genuinely met. The second review returned to the same point the first one raised, and it was right that deferring it left the task incomplete: the criterion cannot be satisfied without the production change, so that change was on this task's critical path rather than incidental to it, which is what separates it from the defects TASK-003 filed and left. ModelLayerImpl.downloadData now reads both caches before asking about connectivity. OpenRadioServiceSearchTest asserts the seeded Radio Browser station comes back with the right media id, title and playable flag, and that the push reports one item.
+
+Criterion 8 is reworded rather than documented around. The old wording asked for RESULT_ERROR_NOT_SUPPORTED, which media3 makes unobservable: it refuses an unadvertised action inside the controller, and every advertised action is handled. The criterion now states the contract that exists and is verified, namely that an unknown command is refused, never reaches the service, and that the advertised set equals the handled set.
+
+Three more changes from this round:
+
+- The clear-data case seeds the cache it is meant to empty and waits for that row to disappear. CMD_CLEAR_CACHE answers before its coroutine has run, so its success code proved nothing; reaching the end of that wait is what proves the presenter's clear completed.
+- ServiceStorages.clear now resets the provider selection. It decides which URL a fixture has to be keyed to and which nodes the root offers, so a selection left behind by another test would have made the search fixture miss and the test pass on an empty result. OpenRadioServiceSearchTest also asserts the active source before relying on the fixture.
+- Each search case now owns a query no other case uses. The service files search results in the browse tree under the query string and never invalidates them, so once search started returning data the cases began answering each other. This surfaced as a real failure and was fixed rather than worked around.
+
+New coverage the cache fix made possible: aCachedProviderNodeIsBrowsableWhileOffline browses the categories node from a seeded response, so a provider backed node is now exercised offline through a real Media3 connection, not only the preference backed ones.
+
+Verification: 116 instrumented tests green twice, plus the 23 service tests alone; ./gradlew test --rerun-tasks, localCoverageReport and instrumentedCoverageReport all pass. Networking confirmed off before every run.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-A real MediaBrowser now exercises OpenRadioService end to end from instrumentation: the library root and its extras, the root children for an empty and a seeded profile, the favorites and locals nodes, subscriptions on root and child nodes with the pushes they produce, single item lookup, every custom session command the session advertises including their invalid argument paths, search, and a clear-every-store-then-reconnect pass. Three test classes plus two small helpers under app/src/androidTest/.../shared/service, no mocking or DI framework, no network.
+A real MediaBrowser exercises OpenRadioService end to end from instrumentation: the library root and its search hint, the root children for an empty and a seeded profile, the favorites and locals nodes, a provider backed node served from a seeded cache, subscriptions on root and child nodes with the pushes they produce, single item lookup, every custom session command the session advertises including the invalid argument paths, search from a seeded fixture, and a clear-every-store-then-reconnect pass. Three test classes and two helpers under app/src/androidTest/.../shared/service, no mocking or DI framework, no network.
 
-Verified on a headless API 34 emulator with wifi and mobile data disabled: 114 instrumented tests pass, four consecutive runs with no order dependence, and the 21 new tests also pass alone from a force-stopped app, which is the cold service-first start. ./gradlew test --rerun-tasks, localCoverageReport and instrumentedCoverageReport pass. One assertion was inverted on purpose and failed as expected, confirming the suite is not vacuous.
+One production change was needed rather than filed: ModelLayerImpl.downloadData asked about connectivity before reading either API cache, which made the ninth criterion unsatisfiable, so it was on this task's critical path. It now reads both caches first. That is TASK-030, closed with it, and ModelLayerImplTest changed to match.
 
-Two production defects surfaced and are tracked rather than fixed here, following TASK-003: TASK-029 (an offline browse of the categories or countries node never completes, because the command returns without calling its result listener on an empty result) and TASK-030 (the API response cache is skipped whenever the device is offline, which is what keeps the seeded search fixture from being used). Both are pinned by tests that name the task and will fail once the defect is fixed. CMD_STOP_SERVICE stays uncovered on purpose: closeService kills the process the instrumentation runs in.
+Verified on a headless API 34 emulator with wifi and mobile data disabled, networking confirmed off before every run: 116 instrumented tests pass, repeated with no order dependence, and the 23 service tests also pass alone from a force-stopped app, which is the cold service-first start. ./gradlew test --rerun-tasks, localCoverageReport and instrumentedCoverageReport pass. An assertion was inverted on purpose in an earlier round and failed as expected, confirming the suite is not vacuous.
+
+TASK-029 remains open and is pinned by providerNodesNeverAnswerWhenNothingIsCached: a provider node with nothing cached never completes its browse, because the command returns without calling its result listener. CMD_STOP_SERVICE stays uncovered on purpose, since closeService kills the process the instrumentation runs in.
 <!-- SECTION:FINAL_SUMMARY:END -->

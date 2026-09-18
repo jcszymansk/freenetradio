@@ -22,7 +22,7 @@ import org.junit.Test
 class ModelLayerImplTest {
 
     @Test
-    fun noConnectivityReturnsNoDataWithoutTouchingCachesOrDownloader() {
+    fun noConnectivityAndNoCacheReturnsNoDataWithoutDownloading() {
         val network = RecordingNetworkLayer(false)
         val downloader = RecordingDownloader()
         val persistentCache = RecordingApiCache()
@@ -40,8 +40,56 @@ class ModelLayerImplTest {
 
         assertTrue(categories.isEmpty())
         assertEquals(1, network.connectivityChecks)
+        assertEquals(1, persistentCache.gets)
+        assertEquals(1, memoryCache.gets)
+        assertEquals(0, downloader.calls)
+    }
+
+    @Test
+    fun cachedResponseIsServedWhileOffline() {
+        val data = """[{"name":"rock","stationcount":1}]"""
+        val network = RecordingNetworkLayer(false)
+        val downloader = RecordingDownloader()
+        val persistentCache = RecordingApiCache(data)
+        val memoryCache = RecordingApiCache()
+        val model = ModelLayerImpl(
+            ContextWrapper(null),
+            ParserLayerRadioBrowserImpl(FilterImpl()),
+            network,
+            downloader,
+            persistentCache,
+            memoryCache
+        )
+
+        val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
+
+        assertEquals("rock", categories.single().id)
+        // Serving from a local read must not ask about the network, so no "no connection" toast
+        // fires for a request that was never going to be made.
+        assertEquals(0, network.connectivityChecks)
+        assertEquals(0, downloader.calls)
+    }
+
+    @Test
+    fun memoryCachedResponseIsServedWhileOffline() {
+        val network = RecordingNetworkLayer(false)
+        val downloader = RecordingDownloader()
+        val persistentCache = RecordingApiCache()
+        val memoryCache = RecordingApiCache("""[{"name":"rock","stationcount":1}]""")
+        val model = ModelLayerImpl(
+            ContextWrapper(null),
+            ParserLayerRadioBrowserImpl(FilterImpl()),
+            network,
+            downloader,
+            persistentCache,
+            memoryCache
+        )
+
+        val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
+
+        assertEquals("rock", categories.single().id)
+        assertEquals(0, network.connectivityChecks)
         assertEquals(0, persistentCache.operations)
-        assertEquals(0, memoryCache.operations)
         assertEquals(0, downloader.calls)
     }
 
@@ -63,7 +111,7 @@ class ModelLayerImplTest {
         val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
 
         assertEquals("rock", categories.single().id)
-        assertEquals(1, network.connectivityChecks)
+        assertEquals("A cache hit must not ask about the network", 0, network.connectivityChecks)
         assertEquals(0, persistentCache.operations)
         assertEquals(1, memoryCache.operations)
         assertEquals(0, downloader.calls)
@@ -88,7 +136,7 @@ class ModelLayerImplTest {
 
         assertEquals("rock", categories.single().id)
         assertEquals(data, memoryCache.lastPutData)
-        assertEquals(1, network.connectivityChecks)
+        assertEquals("A cache hit must not ask about the network", 0, network.connectivityChecks)
         assertEquals(1, persistentCache.gets)
         assertEquals(1, memoryCache.gets)
         assertEquals(1, memoryCache.removes)
