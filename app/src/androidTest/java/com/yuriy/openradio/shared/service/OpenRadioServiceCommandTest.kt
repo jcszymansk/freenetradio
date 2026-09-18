@@ -71,30 +71,39 @@ class OpenRadioServiceCommandTest {
         mBrowser.release()
     }
 
+    /**
+     * The advertised set has to be *exactly* the handled commands, in both directions. A handled
+     * command that is not advertised can never be sent. An advertised command that is not handled
+     * is what would make `onCustomCommand`'s "not supported" fallthrough reachable, and the set
+     * asserted here is the evidence that it is not.
+     */
     @Test
     fun advertisesExactlyTheCommandsItHandles() {
-        val available = mBrowser.availableSessionCommands()
+        val advertised = mBrowser.availableSessionCommands().commands
+            .filter { it.commandCode == SessionCommand.COMMAND_CODE_CUSTOM }
+            .map { it.customAction }
 
-        for (action in ADVERTISED_COMMANDS) {
-            assertTrue(
-                "$action is handled but not advertised, so no controller can send it",
-                available.contains(SessionCommand(action, Bundle()))
-            )
-        }
-        assertFalse(
-            available.contains(SessionCommand(UNKNOWN_COMMAND, Bundle()))
-        )
+        assertEquals(HANDLED_COMMANDS.toSet(), advertised.toSet())
+        assertEquals("The same action is advertised twice", advertised.size, advertised.toSet().size)
     }
 
+    /**
+     * Acceptance criterion 8 asks for "not supported". That exact code is what
+     * `OpenRadioService.onCustomCommand` returns from its fallthrough, but no browser can reach
+     * it: media3 refuses an action the session never advertised before the call leaves the
+     * controller, and [advertisesExactlyTheCommandsItHandles] shows every advertised action is
+     * handled. What a client observes is asserted here instead: the command is denied and the
+     * service is not invoked.
+     */
     @Test
     fun rejectsAnUnknownCustomCommand() {
-        // Media3 refuses an action the session never advertised, so the service's own
-        // "not supported" branch is unreachable from a browser. Either way the command is denied
-        // and nothing happens.
         assertEquals(
             SessionResult.RESULT_ERROR_PERMISSION_DENIED,
             mBrowser.command(UNKNOWN_COMMAND).resultCode
         )
+        // A denied command must not have reached the handler, so nothing may have moved.
+        assertTrue(mStorages.freshFavorites().getAll().isEmpty())
+        assertTrue(mStorages.freshLocals().getAll().isEmpty())
     }
 
     @Test
@@ -389,7 +398,7 @@ class OpenRadioServiceCommandTest {
 
     private companion object {
 
-        val ADVERTISED_COMMANDS = listOf(
+        val HANDLED_COMMANDS = listOf(
             OpenRadioService.CMD_FAVORITE_ON,
             OpenRadioService.CMD_FAVORITE_OFF,
             OpenRadioService.CMD_NET_CHANGED,

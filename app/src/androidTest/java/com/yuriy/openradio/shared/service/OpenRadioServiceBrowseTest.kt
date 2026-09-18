@@ -62,12 +62,20 @@ class OpenRadioServiceBrowseTest {
 
     private lateinit var mBrowser: ServiceBrowser
 
+    /**
+     * Whether an Activity was alive at the moment the browser connected. Sampled here rather than
+     * inside the test because by then the connection has already happened, and an Activity that
+     * came and went during it would leave no trace.
+     */
+    private var mActivityAliveAtConnect = true
+
     @Before
     fun setUp() {
         mContext = InstrumentationRegistry.getInstrumentation().targetContext
         mStorages = ServiceStorages(mContext)
         mStorages.clear()
         mBrowser = ServiceBrowser()
+        mActivityAliveAtConnect = anyActivityExists()
         mBrowser.connect()
         // The service caches every node but favorites and locals, and it outlives a single test.
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
@@ -83,7 +91,11 @@ class OpenRadioServiceBrowseTest {
 
     @Test
     fun connectsAndServesTheLibraryRootWithoutAnyActivity() {
-        assertTrue("An Activity was running, so this is not a service first start", noActivityExists())
+        assertFalse(
+            "An Activity was alive when the browser connected, so this is not a service first start",
+            mActivityAliveAtConnect
+        )
+        assertFalse("An Activity started while the service was serving", anyActivityExists())
 
         val result = mBrowser.libraryRoot()
 
@@ -226,15 +238,23 @@ class OpenRadioServiceBrowseTest {
             mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT).contains(MediaId.MEDIA_ID_FAVORITES_LIST)
         )
 
-        // Android asks for a clear-data run. `pm clear` would take the instrumentation process with
-        // it, so wipe what the app owns instead: every preference store, plus the caches and the
-        // images CMD_CLEAR_CACHE reaches.
+        // Android asks for a clear-data run. `pm clear` would take the instrumentation process
+        // with it, so do what it does short of the process kill: empty every preference file the
+        // app owns, drop the Room API cache, and let CMD_CLEAR_CACHE take the in-memory cache and
+        // the stored images.
+        val preferenceFiles = clearEveryPreferenceFile()
+        assertTrue("The app owns no preference files, so nothing was cleared", preferenceFiles.isNotEmpty())
         PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME).clear()
-        mStorages.clear()
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(OpenRadioService.CMD_CLEAR_CACHE).resultCode
         )
+        for (name in preferenceFiles) {
+            assertTrue(
+                "$name survived the wipe",
+                mContext.getSharedPreferences(name, Context.MODE_PRIVATE).all.isEmpty()
+            )
+        }
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.release()
 
@@ -275,14 +295,40 @@ class OpenRadioServiceBrowseTest {
      * gone as far as this service is concerned, and counting it would make the check depend on
      * which classes ran before. The lifecycle monitor is main thread state, so it is read there.
      */
-    private fun noActivityExists(): Boolean {
+    /**
+     * Empties every preference file the app has written, found by listing `shared_prefs` rather
+     * than by naming the stores, so a store added later is covered without touching this test.
+     *
+     * The files are cleared through [android.content.SharedPreferences] instead of being deleted:
+     * Android caches one instance per file per process, and the service holds several of them, so
+     * deleting the file on disk would leave the service reading the values it already has. That is
+     * the one thing `pm clear` gets for free by killing the process.
+     *
+     * The ExoPlayer media cache under the external files directory is left alone. It is not part
+     * of the browse profile and the player holds it open.
+     *
+     * @return the names of the files that were cleared.
+     */
+    private fun clearEveryPreferenceFile(): List<String> {
+        val directory = java.io.File(mContext.applicationInfo.dataDir, "shared_prefs")
+        val names = (directory.listFiles() ?: emptyArray())
+            .map { it.name }
+            .filter { it.endsWith(PREFERENCE_FILE_SUFFIX) }
+            .map { it.removeSuffix(PREFERENCE_FILE_SUFFIX) }
+        for (name in names) {
+            mContext.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
+        }
+        return names
+    }
+
+    private fun anyActivityExists(): Boolean {
         val monitor = ActivityLifecycleMonitorRegistry.getInstance()
         val result = AtomicBoolean()
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             result.set(
                 Stage.values()
                     .filter { it != Stage.DESTROYED }
-                    .all { monitor.getActivitiesInStage(it).isEmpty() }
+                    .any { monitor.getActivitiesInStage(it).isNotEmpty() }
             )
         }
         return result.get()
@@ -295,5 +341,7 @@ class OpenRadioServiceBrowseTest {
          * enough that pinning a hang does not dominate the run.
          */
         const val HUNG_NODE_TIMEOUT_SECONDS = 8L
+
+        const val PREFERENCE_FILE_SUFFIX = ".xml"
     }
 }

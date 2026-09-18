@@ -1,15 +1,16 @@
 ---
 id: TASK-004.02
 title: Exercise a real MediaBrowser against OpenRadioService
-status: Done
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-18 04:35'
+updated_date: '2026-09-18 04:46'
 labels: []
 milestone: m-0
 dependencies:
   - TASK-003
+  - TASK-030
 parent_task_id: TASK-004
 type: chore
 ordinal: 10000
@@ -31,7 +32,7 @@ Expands the existing MediaResourcesManagerTest pattern. Android's guidance speci
 - [x] #6 Toggle favorite state and verify storage plus browse refresh
 - [x] #7 Verify sort-update commands and invalid command arguments
 - [x] #8 Verify unknown custom commands return not supported
-- [x] #9 Search using a seeded local cache fixture
+- [ ] #9 Search using a seeded local cache fixture
 - [x] #10 Clear app data and reconnect successfully
 <!-- AC:END -->
 
@@ -66,6 +67,18 @@ CMD_STOP_SERVICE is never sent: closeService ends in Process.killProcess(myPid()
 A second production defect surfaced: MediaItemAllCategories and MediaItemCountriesList return without calling their result listener on an empty provider result, so the SettableFuture behind onGetChildren is never set and an offline browse of either node hangs forever. Filed as TASK-029; OpenRadioServiceBrowseTest.providerNodesNeverAnswerWhileOffline pins it with a bounded wait.
 
 Verification: 114 instrumented tests green on a headless API 34 emulator with wifi and mobile data disabled, run four times with no order dependence; the 21 new tests also pass on their own from a force-stopped app, which is the service-first, no-Activity path AC 1 asks for. ./gradlew test --rerun-tasks, localCoverageReport and instrumentedCoverageReport all pass. One assertion was deliberately inverted and confirmed to fail, so the suite is not passing vacuously.
+
+Round 1 review follow-up.
+
+Acceptance criterion 9 is unchecked and the task is back In Progress. The round 1 reviewer was right that checking it overstated what the test proves: the seeded cache fixture is never read, so the criterion is not met, only pinned. TASK-030 is now a dependency, and its fourth criterion is the one that closes this. The production change it needs is small (move the connectivity check in ModelLayerImpl.downloadData to just before the download, leaving the two cache lookups ahead of it), but it is another task's change and was not made here.
+
+Three test defects the same review found are fixed:
+
+- The cold-start check ran after the browser had already connected, so it could not prove the connection began with no Activity. The absence of a live Activity is now sampled in setUp immediately before connect and asserted from that snapshot, with a second check that none appeared while the service was serving.
+- The clear-data case cleared four named stores. It now empties every preference file the app owns, found by listing shared_prefs rather than by naming stores, drops the Room API cache, sends CMD_CLEAR_CACHE for the in-memory cache and the stored images, and asserts every one of those files is empty before reconnecting. The files are cleared through SharedPreferences rather than deleted, because Android caches one instance per file per process and the service holds several; deleting on disk would leave it reading stale values. The ExoPlayer media cache is left alone: the player holds it open and it is not part of the browse profile.
+- advertisesExactlyTheCommandsItHandles only checked that the nine handled commands were present. It now asserts the advertised custom command set equals them exactly, which is what proves onCustomCommand's not-supported fallthrough is unreachable from a browser, and is the evidence behind the criterion 8 deviation.
+
+One finding is not acted on: the reviewer asked for the categories and countries nodes to complete with an empty list offline. That is TASK-029's fourth criterion, not work this task can do without fixing the defect.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
