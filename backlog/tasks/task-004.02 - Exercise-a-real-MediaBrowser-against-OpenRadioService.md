@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-18 05:32'
+updated_date: '2026-09-18 05:49'
 labels: []
 milestone: m-0
 dependencies:
@@ -113,6 +113,18 @@ The empty-cache browse test was coupled to the cached one and the review was rig
 Two stale test names in the follow-up task descriptions were corrected. Note that the round 0 entry above still names providerNodesNeverAnswerWhileOffline, which was renamed in round 2 to say what it actually pins; these notes are a record of what was known at each point, so it is left as written. The final summary and TASK-029 carry the current name.
 
 Criterion 8 and criterion 10 were raised for a fourth time and stand as they are. The reasoning is in summary-2, summary-3 and summary-4 under this review, in the KDoc of the tests themselves, and for criterion 10 in TASK-031.
+
+Round 5 review follow-up. Both findings were real and both are fixed; the review was right that CMD_CLEAR_CACHE was being treated as if it were synchronous.
+
+The clear-data case waited on the first of four steps. OpenRadioServicePresenterImpl.clear runs the persistent API cache, the in-memory one, the stored images and then the latest station, in that order, so watching the persistent row proved only that the first step had run. It now seeds all three observable stores and waits for the latest station, which is the last step, so reaching that point proves every earlier one finished. The images database needs no probe of its own for the same reason. The in-memory cache turned out to be observable after all: its map is a static field, so an instance built in the test is the one the service reads.
+
+The probes are also seeded after the preference wipe rather than before, so the wipe cannot be what removes them, and the latest station is deliberately written back into a preference file so the every-file-is-empty assertion cannot pass trivially either.
+
+argumentLessCommandsAreAccepted no longer sends CMD_CLEAR_CACHE. It answered immediately and left a coroutine clearing process-wide state that later cases seed, so it could have reached into whatever ran next. The command is covered in the clear-data case, where there is something to wait on.
+
+Worth recording: the first attempt seeded the probe through the service's own LatestRadioStationStorage and the suite caught the leak. That instance caches the station and no clear resets it (TASK-027), so the next service start adopted the probe as its active station and a later favorite command returned success instead of not supported. The probe is now written through a throwaway instance, which reaches the file without touching the cache. The hazard was already written in the ServiceStorages doc comment, and walking into it anyway is the reason that comment is worth keeping.
+
+Verified: the completion wait was confirmed to depend on the command by removing the send, which failed with 'CMD_CLEAR_CACHE did not finish: the seeded latest station is still stored'. 116 instrumented tests pass twice, plus the 23 service tests alone; ./gradlew test --rerun-tasks and both coverage reports pass.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

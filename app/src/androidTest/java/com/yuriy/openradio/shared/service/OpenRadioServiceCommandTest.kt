@@ -373,12 +373,18 @@ class OpenRadioServiceCommandTest {
         }
     }
 
+    /**
+     * `CMD_CLEAR_CACHE` is not in this loop. It answers immediately and finishes on a coroutine
+     * that outlives the test, and what it goes on to empty is process-wide state other cases seed,
+     * so firing it without waiting would let it reach into whatever runs next.
+     * `OpenRadioServiceBrowseTest.reconnectsOnAnEmptyProfileAfterEveryStoreIsCleared` covers it
+     * with a completion signal to wait on.
+     */
     @Test
     fun argumentLessCommandsAreAccepted() {
         for (action in listOf(
             OpenRadioService.CMD_NET_CHANGED,
             OpenRadioService.CMD_TOGGLE_LAST_PLAYED_ITEM,
-            OpenRadioService.CMD_CLEAR_CACHE,
             OpenRadioService.CMD_UPDATE_TREE
         )) {
             assertEquals(

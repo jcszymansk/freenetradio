@@ -88,7 +88,15 @@ internal class ServiceStorages(context: Context) {
     }
 
     fun freshLocals(): DeviceLocalsStorage {
-        return DeviceLocalsStorage(mContextRef, freshFavorites(), LatestRadioStationStorage(mContextRef))
+        return DeviceLocalsStorage(mContextRef, freshFavorites(), freshLatest())
+    }
+
+    /**
+     * A latest-station storage that has not cached a station yet, so `get` reads the file. The
+     * long-lived instances never re-read it once they have one, which is TASK-027.
+     */
+    fun freshLatest(): LatestRadioStationStorage {
+        return LatestRadioStationStorage(mContextRef)
     }
 
     private fun registryFavorites(): FavoritesStorage {

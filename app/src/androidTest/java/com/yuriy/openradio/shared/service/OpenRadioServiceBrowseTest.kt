@@ -26,7 +26,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import com.yuriy.openradio.shared.model.media.MediaId
+import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
+import com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.shared.model.storage.makeStation
@@ -242,23 +244,37 @@ class OpenRadioServiceBrowseTest {
             mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT).contains(MediaId.MEDIA_ID_FAVORITES_LIST)
         )
 
-        // Seed the cache the reset is supposed to empty, so the reset has something to prove.
-        val cache = PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
-        cache.put(CACHE_KEY, CACHE_VALUE)
-        assertEquals(CACHE_VALUE, cache[CACHE_KEY])
-
         // Android asks for a clear-data run. `pm clear` would take the instrumentation process
         // with it, so do what it does short of the process kill: empty every preference file the
-        // app owns, and let CMD_CLEAR_CACHE take both API caches and the stored images.
+        // app owns, and let CMD_CLEAR_CACHE take both API caches, the stored images and the
+        // latest station.
         val preferenceFiles = clearEveryPreferenceFile()
         assertTrue("The app owns no preference files, so nothing was cleared", preferenceFiles.isNotEmpty())
+
+        // Seed what the command itself is supposed to empty, after the wipe so the wipe cannot be
+        // what removes it. The in-memory cache keeps its map in a static field, so an instance
+        // built here is the one the service reads. The latest station is written back into a
+        // preference file on purpose: the command has to take it away again for the
+        // every-file-is-empty check below to hold, so that check cannot pass trivially either.
+        //
+        // It is written through a throwaway storage rather than the service's own. Adding through
+        // the service's instance would also seed its in-memory copy, which no clear resets
+        // (TASK-027), and the next service start would then adopt the probe as its active station
+        // and browse a playlist for it.
+        val persistentCache = PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
+        val memoryCache = InMemoryApiCache()
+        persistentCache.put(CACHE_KEY, CACHE_VALUE)
+        memoryCache.put(CACHE_KEY, CACHE_VALUE)
+        mStorages.freshLatest().add(makeStation(CLEAR_PROBE_STATION_ID))
+        assertEquals(CACHE_VALUE, persistentCache[CACHE_KEY])
+        assertEquals(CACHE_VALUE, memoryCache[CACHE_KEY])
+        assertEquals(CLEAR_PROBE_STATION_ID, mStorages.freshLatest().get().id)
+
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(OpenRadioService.CMD_CLEAR_CACHE).resultCode
         )
-        // That command answers before it has done the work, so wait for the seeded row to go.
-        // Reaching this point is what proves the presenter's clear actually ran to completion.
-        awaitCacheCleared(cache)
+        awaitClearCompleted(persistentCache, memoryCache)
         for (name in preferenceFiles) {
             assertTrue(
                 "$name survived the wipe",
@@ -350,18 +366,34 @@ class OpenRadioServiceBrowseTest {
      */
     /**
      * `CMD_CLEAR_CACHE` hands the work to a coroutine and answers immediately, so its success code
-     * says nothing about whether the caches are empty yet. Waiting for the seeded row to disappear
-     * is the synchronization point, and failing here means the reset never finished.
+     * says nothing about whether anything has been emptied yet.
+     *
+     * `OpenRadioServicePresenterImpl.clear` runs its four steps in order: the persistent API cache,
+     * the in-memory one, the stored images, then the latest station. The latest station going is
+     * therefore the signal that the whole operation finished, not just the step this test happens
+     * to watch, and it is why the images database needs no probe of its own: it is cleared before
+     * the step waited on here.
      */
-    private fun awaitCacheCleared(cache: PersistentApiCache) {
+    private fun awaitClearCompleted(
+        persistentCache: PersistentApiCache,
+        memoryCache: InMemoryApiCache
+    ) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(CACHE_CLEAR_TIMEOUT_SECONDS)
         while (System.nanoTime() < deadline) {
-            if (cache[CACHE_KEY].isEmpty()) {
+            if (mStorages.freshLatest().get().isInvalid()) {
+                assertTrue(
+                    "The persistent cache row outlived the clear",
+                    persistentCache[CACHE_KEY].isEmpty()
+                )
+                assertTrue(
+                    "The in-memory cache row outlived the clear",
+                    memoryCache[CACHE_KEY].isEmpty()
+                )
                 return
             }
             Thread.sleep(CACHE_POLL_MILLIS)
         }
-        throw AssertionError("The seeded cache row outlived CMD_CLEAR_CACHE")
+        throw AssertionError("CMD_CLEAR_CACHE did not finish: the seeded latest station is still stored")
     }
 
     /**
@@ -420,6 +452,8 @@ class OpenRadioServiceBrowseTest {
         const val CACHE_CLEAR_TIMEOUT_SECONDS = 10L
 
         const val CACHE_POLL_MILLIS = 50L
+
+        const val CLEAR_PROBE_STATION_ID = "clear-data-probe"
 
         val POPULAR_RESPONSE = """
             [
