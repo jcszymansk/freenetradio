@@ -281,24 +281,27 @@ class OpenRadioServiceBrowseTest {
         assertFalse(ids.contains(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST))
     }
 
+    /**
+     * Uses the popular stations node rather than one of the two
+     * [providerNodesNeverAnswerWhenNothingIsCached] browses, and that is deliberate. A persistent
+     * cache hit is promoted into [com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache],
+     * whose map is static and process wide, so seeding a URL here would leave it answering for the
+     * rest of the run. It happens to be cleared today because releasing the last browser destroys
+     * the service and `onDestroy` closes the presenter, but that is Android's timing rather than
+     * this suite's, so the two cases are kept off each other's URLs instead.
+     */
     @Test
     fun aCachedProviderNodeIsBrowsableWhileOffline() {
         PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
-            .put(UrlLayerRadioBrowserImpl().getAllCategoriesUrl().toString(), CATEGORIES_RESPONSE)
-        invalidate(MediaId.MEDIA_ID_ALL_CATEGORIES)
+            .put(UrlLayerRadioBrowserImpl().getPopularStations().toString(), POPULAR_RESPONSE)
+        invalidate(MediaId.MEDIA_ID_POPULAR_STATIONS)
 
-        val children = mBrowser.children(MediaId.MEDIA_ID_ALL_CATEGORIES)
+        val children = mBrowser.children(MediaId.MEDIA_ID_POPULAR_STATIONS)
 
-        assertEquals(
-            listOf(
-                MediaId.MEDIA_ID_CHILD_CATEGORIES + "jazz",
-                MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
-            ),
-            children.map { it.mediaId }.sorted()
-        )
+        assertEquals(listOf("popular-one", "popular-two"), children.map { it.mediaId }.sorted())
         for (child in children) {
-            assertEquals(true, child.mediaMetadata.isBrowsable)
-            assertEquals(false, child.mediaMetadata.isPlayable)
+            assertEquals("${child.mediaId} is not playable", true, child.mediaMetadata.isPlayable)
+            assertEquals("${child.mediaId} is browsable", false, child.mediaMetadata.isBrowsable)
         }
     }
 
@@ -418,8 +421,13 @@ class OpenRadioServiceBrowseTest {
 
         const val CACHE_POLL_MILLIS = 50L
 
-        val CATEGORIES_RESPONSE = """
-            [{"name":"rock","stationcount":12},{"name":"jazz","stationcount":7}]
+        val POPULAR_RESPONSE = """
+            [
+              {"stationuuid":"popular-one","name":"Popular One","bitrate":128,
+               "url":"https://radio.example/one","url_resolved":"https://radio.example/one"},
+              {"stationuuid":"popular-two","name":"Popular Two","bitrate":128,
+               "url":"https://radio.example/two","url_resolved":"https://radio.example/two"}
+            ]
         """.trimIndent()
     }
 }

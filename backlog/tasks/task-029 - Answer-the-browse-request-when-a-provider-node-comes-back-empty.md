@@ -4,6 +4,7 @@ title: Answer the browse request when a provider node comes back empty
 status: To Do
 assignee: []
 created_date: '2026-09-18 04:27'
+updated_date: '2026-09-18 05:32'
 labels: []
 dependencies: []
 type: bug
@@ -17,7 +18,7 @@ MediaItemAllCategories.loadAllCategories and MediaItemCountriesList both return 
 
 OpenRadioService.callWhenSourceReady answers onGetChildren through a SettableFuture that only the result listener sets, so the browse request is never completed. A MediaBrowser, the phone list and an Android Auto head unit all wait forever with a spinner instead of seeing an empty or error state.
 
-An empty set is the normal offline case, which makes this reachable any time the device has no connectivity. Found while covering the Media3 service contract in TASK-004.02; OpenRadioServiceBrowseTest.providerNodesNeverAnswerWhileOffline pins the current behavior with a bounded wait and has to be rewritten to assert an empty list once this is fixed.
+An empty set is the normal case whenever the device is offline and nothing is cached, which makes this reachable in ordinary use. Found while covering the Media3 service contract in TASK-004.02; OpenRadioServiceBrowseTest.providerNodesNeverAnswerWhenNothingIsCached pins the current behavior with a bounded wait and has to be rewritten to assert an empty list once this is fixed. The adjacent case, the same kind of node browsing correctly from a seeded cache, is covered by OpenRadioServiceBrowseTest.aCachedProviderNodeIsBrowsableWhileOffline.
 
 The same shape exists where callWhenSourceReady and callWhenSearchReady return an unset future because no command matched the parent id.
 <!-- SECTION:DESCRIPTION:END -->

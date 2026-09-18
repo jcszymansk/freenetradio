@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-18 05:21'
+updated_date: '2026-09-18 05:32'
 labels: []
 milestone: m-0
 dependencies:
@@ -105,6 +105,14 @@ The provider assertion added in round 2 was vacuous and has been replaced. Depen
 Criterion 8 stands as reworded, and the reasoning is now in the test rather than only in these notes: the service's RESULT_ERROR_NOT_SUPPORTED is not unverified, it is the answer to an advertised command that cannot be carried out, and three cases observe it over a real connection. What cannot be reached from any client is the fallthrough for an unadvertised action, because media3 refuses those in the controller.
 
 The request for a real pm clear is TASK-031, which weighs running the suite under Test Orchestrator. It is a suite-wide change, and it would not make clear-data something a single test can perform and then assert, so this task's in-process reset stays either way.
+
+Round 4 review follow-up.
+
+The empty-cache browse test was coupled to the cached one and the review was right to call it order dependent, even though it did not reproduce. A persistent cache hit is promoted into InMemoryApiCache, whose map is a static field, so seeding the categories URL left it answering for the rest of the process. Forcing the alphabetical order with FixMethodOrder still passed, because releasing the last browser destroys the service and onDestroy closes the presenter, which clears that map. That is Android's timing rather than this suite's, so the coupling was removed instead of relied on: aCachedProviderNodeIsBrowsableWhileOffline now seeds and browses the popular stations node, which providerNodesNeverAnswerWhenNothingIsCached never touches. Verified under both the default and the alphabetical order.
+
+Two stale test names in the follow-up task descriptions were corrected. Note that the round 0 entry above still names providerNodesNeverAnswerWhileOffline, which was renamed in round 2 to say what it actually pins; these notes are a record of what was known at each point, so it is left as written. The final summary and TASK-029 carry the current name.
+
+Criterion 8 and criterion 10 were raised for a fourth time and stand as they are. The reasoning is in summary-2, summary-3 and summary-4 under this review, in the KDoc of the tests themselves, and for criterion 10 in TASK-031.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

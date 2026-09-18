@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-18 04:27'
-updated_date: '2026-09-18 05:06'
+updated_date: '2026-09-18 05:32'
 labels: []
 dependencies: []
 type: bug
@@ -19,9 +19,9 @@ ModelLayerImpl.downloadData asks NetworkLayer.checkConnectivityAndNotify before 
 
 The connectivity check belongs immediately before the download, not before the lookups: the caches are local reads that cannot fail for lack of a network. The no-network toast should follow the same move, so it only fires when a request would really have been made.
 
-Found while covering the Media3 service contract in TASK-004.02. OpenRadioServiceSearchTest.searchAnswersFromTheProviderPathWithoutLeavingTheDevice seeds the Room cache with a Radio Browser search response and pins the current behavior: the search completes, reports zero results and leaves the cached row untouched. Fixing this also lets that test assert the seeded station, which is what the acceptance criterion for search in TASK-004.02 originally intended.
+Found while covering the Media3 service contract in TASK-004.02, where it blocked that task's ninth acceptance criterion, so it was fixed there rather than left for a separate branch. OpenRadioServiceSearchTest.searchAnswersFromTheSeededCacheWithoutLeavingTheDevice seeds the Room cache with a Radio Browser search response and asserts the station comes back through a real MediaBrowser, and OpenRadioServiceBrowseTest.aCachedProviderNodeIsBrowsableWhileOffline does the same for a browse node.
 
-Note that the instrumented suite runs with networking disabled by design, so this defect is the only reason offline browse tests cannot assert real data.
+Note that the instrumented suite runs with networking disabled by design, so before this fix no offline browse test could assert real data.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
