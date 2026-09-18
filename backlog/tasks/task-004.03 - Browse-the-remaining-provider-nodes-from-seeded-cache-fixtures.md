@@ -1,7 +1,7 @@
 ---
 id: TASK-004.03
 title: Browse the remaining provider nodes from seeded cache fixtures
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-18 13:36'
@@ -29,14 +29,14 @@ The country stations node is the awkward one: its command calls getAllCountries 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Browsing __ALL_CATEGORIES__ over a real connection returns the seeded categories as browsable children
-- [ ] #2 Browsing __COUNTRIES_LIST__ over a real connection returns the seeded countries as browsable children
-- [ ] #3 Browsing __NEW_STATIONS__ over a real connection returns the seeded stations as playable children
-- [ ] #4 Browsing a __CHILD_CATEGORIES__ parent id carrying a category id returns that category stations
-- [ ] #5 Browsing a __COUNTRY_STATIONS__ parent id carrying a country code returns that country stations
-- [ ] #6 Each case owns its provider URLs and clears the static in-memory cache entry first, so no case can pass on a response another case left behind
-- [ ] #7 The stale class comment claiming fetch backed nodes are unreachable is gone
-- [ ] #8 The instrumented suite passes with wifi and mobile data disabled, repeated without order dependence
+- [x] #1 Browsing __ALL_CATEGORIES__ over a real connection returns the seeded categories as browsable children
+- [x] #2 Browsing __COUNTRIES_LIST__ over a real connection returns the seeded countries as browsable children
+- [x] #3 Browsing __NEW_STATIONS__ over a real connection returns the seeded stations as playable children
+- [x] #4 Browsing a __CHILD_CATEGORIES__ parent id carrying a category id returns that category stations
+- [x] #5 Browsing a __COUNTRY_STATIONS__ parent id carrying a country code returns that country stations
+- [x] #6 Each case owns its provider URLs and clears the static in-memory cache entry first, so no case can pass on a response another case left behind
+- [x] #7 The stale class comment claiming fetch backed nodes are unreachable is gone
+- [x] #8 The instrumented suite passes with wifi and mobile data disabled, repeated without order dependence
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -62,4 +62,16 @@ OpenRadioServicePresenterImpl memoizes the country list in a TreeSet that Depend
 MediaItemCountryStations warms the same memo before its own fetch and discards the answer, so the country stations case deliberately does not seed the countries URL. Seeding it there would let that case fill the memo that seededCountriesBecomeBrowsableChildren needs empty to read its own fixture.
 
 setUp now browses the root, which asserts the Radio Browser provider was bound (the fixtures key its URLs) and leaves the root as the previously browsed node, so an IndexableMediaItemCommand resets its process-wide page index and every case asks for page one.
+
+Verification. ./gradlew :app:connectedDebugAndroidTest with 'adb shell svc wifi disable && adb shell svc data disable': 122 tests, all passing, run four times. The browse class alone: 14 tests passing.
+
+Order independence was forced rather than assumed. JUnit4's default method order happened to run the empty-result case before the seeded categories case and the country stations case before the countries case, so the opposite orders were produced by temporarily renaming methods under @FixMethodOrder(MethodSorters.NAME_ASCENDING) and running twice more: once with the empty case last, once with the seeded cases ahead of both parent-id cases and the empty case. Both were green; the scaffolding was then removed and the suite re-run.
+
+On criterion 6: every case owns its URL except the categories one, which the seeded case and the empty-result case necessarily share, because production builds one URL for that node. Both drop the in-memory entry and the Room row for it before browsing, which is the ordering the two forced runs above exercised.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added five seeded browse cases to OpenRadioServiceBrowseTest, covering __ALL_CATEGORIES__, __COUNTRIES_LIST__, __NEW_STATIONS__, a __CHILD_CATEGORIES__ parent id and a __COUNTRIES_LIST__<code> parent id, each keyed to the Radio Browser URL its command builds and each dropping both API cache entries for that URL first through the new seedResponse/forgetCachedResponse helpers. setUp now browses the root, which asserts the bound provider and resets the process-wide page index of the indexable commands. The class comment claiming a fetch backed node is unreachable offline is gone, and __COUNTRIES_LIST__ left the empty-result case because the presenter memoizes the country list in a set nothing empties (TASK-035); __ALL_CATEGORIES__ still covers the empty answer through a real connection and MediaItemCountriesListTest covers the countries one. Verified by running the instrumented suite offline, 122 tests green, plus two forced method orders that put each seeded case ahead of the case it could have poisoned.
+<!-- SECTION:FINAL_SUMMARY:END -->
