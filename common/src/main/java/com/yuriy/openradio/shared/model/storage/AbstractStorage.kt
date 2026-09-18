@@ -89,7 +89,7 @@ abstract class AbstractStorage(private val mContextRef: WeakReference<Context>, 
     }
 
     @Synchronized
-    fun clear() {
+    open fun clear() {
         clearStorage()
     }
 

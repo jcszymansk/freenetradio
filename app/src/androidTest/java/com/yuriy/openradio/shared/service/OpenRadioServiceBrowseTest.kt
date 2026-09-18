@@ -31,6 +31,9 @@ import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
 import com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
+import com.yuriy.openradio.shared.model.storage.images.Image
+import com.yuriy.openradio.shared.model.storage.images.ImageDao
+import com.yuriy.openradio.shared.model.storage.images.ImagesDatabase
 import com.yuriy.openradio.shared.model.storage.makeStation
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -263,18 +266,27 @@ class OpenRadioServiceBrowseTest {
         // and browse a playlist for it.
         val persistentCache = PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         val memoryCache = InMemoryApiCache()
+        val images = ImagesDatabase.getInstance(mContext).rsImageDao()
         persistentCache.put(CACHE_KEY, CACHE_VALUE)
         memoryCache.put(CACHE_KEY, CACHE_VALUE)
+        images.insertImage(Image(CLEAR_PROBE_STATION_ID, byteArrayOf(1, 2, 3)))
         mStorages.freshLatest().add(makeStation(CLEAR_PROBE_STATION_ID))
         assertEquals(CACHE_VALUE, persistentCache[CACHE_KEY])
         assertEquals(CACHE_VALUE, memoryCache[CACHE_KEY])
+        assertEquals(1, images.getCount())
         assertEquals(CLEAR_PROBE_STATION_ID, mStorages.freshLatest().get().id)
 
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(OpenRadioService.CMD_CLEAR_CACHE).resultCode
         )
-        awaitClearCompleted(persistentCache, memoryCache)
+        awaitClearCompleted(persistentCache, memoryCache, images)
+        // The service's own storage has to agree, not just the file: it holds the station the next
+        // start would adopt as the active one.
+        assertTrue(
+            "The service still reports a latest station after the clear",
+            mStorages.latest.get().isInvalid()
+        )
         for (name in preferenceFiles) {
             assertTrue(
                 "$name survived the wipe",
@@ -369,14 +381,15 @@ class OpenRadioServiceBrowseTest {
      * says nothing about whether anything has been emptied yet.
      *
      * `OpenRadioServicePresenterImpl.clear` runs its four steps in order: the persistent API cache,
-     * the in-memory one, the stored images, then the latest station. The latest station going is
-     * therefore the signal that the whole operation finished, not just the step this test happens
-     * to watch, and it is why the images database needs no probe of its own: it is cleared before
-     * the step waited on here.
+     * the in-memory one, the stored images, then the latest station. Waiting for the latest station
+     * is therefore a signal that the whole operation finished rather than only the step being
+     * watched, and each of the other three is then asserted on its own rather than inferred from
+     * that ordering.
      */
     private fun awaitClearCompleted(
         persistentCache: PersistentApiCache,
-        memoryCache: InMemoryApiCache
+        memoryCache: InMemoryApiCache,
+        images: ImageDao
     ) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(CACHE_CLEAR_TIMEOUT_SECONDS)
         while (System.nanoTime() < deadline) {
@@ -389,6 +402,7 @@ class OpenRadioServiceBrowseTest {
                     "The in-memory cache row outlived the clear",
                     memoryCache[CACHE_KEY].isEmpty()
                 )
+                assertEquals("The stored image outlived the clear", 0, images.getCount())
                 return
             }
             Thread.sleep(CACHE_POLL_MILLIS)

@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-18 05:49'
+updated_date: '2026-09-18 06:06'
 labels: []
 milestone: m-0
 dependencies:
@@ -125,6 +125,18 @@ argumentLessCommandsAreAccepted no longer sends CMD_CLEAR_CACHE. It answered imm
 Worth recording: the first attempt seeded the probe through the service's own LatestRadioStationStorage and the suite caught the leak. That instance caches the station and no clear resets it (TASK-027), so the next service start adopted the probe as its active station and a later favorite command returned success instead of not supported. The probe is now written through a throwaway instance, which reaches the file without touching the cache. The hazard was already written in the ServiceStorages doc comment, and walking into it anyway is the reason that comment is worth keeping.
 
 Verified: the completion wait was confirmed to depend on the command by removing the send, which failed with 'CMD_CLEAR_CACHE did not finish: the seeded latest station is still stored'. 116 instrumented tests pass twice, plus the 23 service tests alone; ./gradlew test --rerun-tasks and both coverage reports pass.
+
+Round 6 review follow-up.
+
+The review named two pieces of app-owned state the clear-data case did not reset or verify, and both are now closed rather than argued.
+
+The service's cached latest station was the first. That is TASK-027, and it had already cost this branch a test failure in round 5, so it is fixed here for the same reason TASK-030 was fixed in round 2: it blocks what this task's tenth criterion claims, rather than being incidental to it. AbstractStorage.clear is now open and LatestRadioStationStorage overrides it to drop the cached station before wiping the file. A clear that leaves the cache it owns behind is wrong on its own terms, so this is a correctness fix rather than a test accommodation. Two tests pinned the old behavior and now assert the new one: LatestRadioStationStorageTest.clearDropsTheCachedStationOnTheSameInstance and OpenRadioServicePresenterImplTest.clearingDropsEveryCacheAndTheLatestStation. The second was found by the JVM suite after the first was already green, which is the argument for running both.
+
+The images database was the second. Round 5 inferred it was cleared from the ordering of the four steps, which proves the call happened but not that it emptied anything. The clear-data case now seeds a row through ImageDao and asserts the count is zero afterwards, alongside the two API caches, so all three stores the command touches are verified directly and only the completion signal relies on ordering.
+
+The stale node name in TASK-030 was corrected: the browse coverage is the popular stations node, not the categories one, and the reason for that choice is now recorded there too.
+
+Verified: reverting the LatestRadioStationStorage override fails LatestRadioStationStorageTest.clearDropsTheCachedStationOnTheSameInstance, so the fix is covered rather than assumed. 116 instrumented tests pass twice, ./gradlew test --rerun-tasks and both coverage reports pass.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

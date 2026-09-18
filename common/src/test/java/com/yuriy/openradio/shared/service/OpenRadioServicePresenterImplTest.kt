@@ -26,6 +26,7 @@ import com.yuriy.openradio.shared.model.eq.EqualizerState
 import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.media.item.MediaItemAllCategories
 import com.yuriy.openradio.shared.model.media.item.MediaItemBrowseCar
 import com.yuriy.openradio.shared.model.media.item.MediaItemChildCategories
@@ -209,7 +210,7 @@ class OpenRadioServicePresenterImplTest {
     }
 
     @Test
-    fun clearingDropsEveryCacheButStillHandsBackTheLatestStation() {
+    fun clearingDropsEveryCacheAndTheLatestStation() {
         val images = RecordingImagesPersistenceLayer()
         val persistentCache = RecordingApiCache()
         val memoryCache = RecordingApiCache()
@@ -228,10 +229,10 @@ class OpenRadioServicePresenterImplTest {
         assertEquals(1, persistentCache.clears)
         assertEquals(1, memoryCache.clears)
         assertEquals(1, images.deleteAllCalls)
-        // Pins the defect tracked as TASK-027: clearing wipes the preference file but not the
-        // station cached in the storage instance, so the presenter still reports one afterwards.
-        // Update this test together with the fix.
-        assertEquals("station", presenter.getLastRadioStation().id)
+        // The storage caches the station it was given, and the registry hands out one instance per
+        // process, so a clear that left the cache behind would go unnoticed by the presenter and
+        // the next service start would adopt the station anyway. Was TASK-027.
+        assertTrue(presenter.getLastRadioStation().isInvalid())
     }
 
     @Test
