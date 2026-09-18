@@ -10,15 +10,19 @@ The `app` module is a UI shell over shared networking, persistence, media-sessio
 common
   └── common-ui
        └── app          phone/tablet and Android Auto
+
+android-jvm-stubs       test runtime only, never shipped
 ```
 
-All three modules are declared in `settings.gradle`.
+`settings.gradle` declares those three shipped modules and `android-jvm-stubs`, which reaches no
+production artifact.
 
 | Module | Responsibility |
 | --- | --- |
 | `common/` | Domain models, provider APIs, parsing, caching, persistence, playback, Media3 service, equalizer, location, timers, and broadcast receivers |
 | `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, file import/export, logging, and service-command glue |
 | `app/` | Phone/tablet UI and Android Auto metadata |
+| `android-jvm-stubs/` | Working JVM implementations of the Android value types unit tests need — `Uri`, `Bundle`, `MimeTypeMap`, and the resource lookups of `Context`. `:common` takes it as `testRuntimeOnly`, so tests compile against the real Android API and only the implementation is swapped at run time |
 
 The application uses `applicationId` `com.github.jcszymansk.freenetradio`. Kotlin namespaces retain the recovered source package names; they do not define the installed application identity.
 

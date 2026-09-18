@@ -2,7 +2,6 @@ package com.yuriy.openradio.shared.model
 
 import android.content.Context
 import android.content.ContextWrapper
-import android.net.TestUri
 import android.net.Uri
 import androidx.core.util.Pair
 import com.yuriy.openradio.shared.model.filter.FilterImpl
@@ -37,7 +36,7 @@ class ModelLayerImplTest {
             memoryCache
         )
 
-        val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+        val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
 
         assertTrue(categories.isEmpty())
         assertEquals(1, network.connectivityChecks)
@@ -61,7 +60,7 @@ class ModelLayerImplTest {
             memoryCache
         )
 
-        val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+        val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
 
         assertEquals("rock", categories.single().id)
         assertEquals(1, network.connectivityChecks)
@@ -85,7 +84,7 @@ class ModelLayerImplTest {
             memoryCache
         )
 
-        val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+        val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
 
         assertEquals("rock", categories.single().id)
         assertEquals(data, memoryCache.lastPutData)
@@ -113,7 +112,7 @@ class ModelLayerImplTest {
                 memoryCache
             )
 
-            val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+            val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
 
             assertEquals("rock", categories.single().id)
             assertEquals(1, persistentCache.gets)
@@ -139,7 +138,7 @@ class ModelLayerImplTest {
             memoryCache
         )
 
-        val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+        val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
 
         assertEquals("rock", categories.single().id)
         assertEquals(1, downloader.calls)
@@ -166,7 +165,7 @@ class ModelLayerImplTest {
                 memoryCache
             )
 
-            val categories = model.getAllCategories(TestUri("https://radio.example/categories"))
+            val categories = model.getAllCategories(Uri.parse("https://radio.example/categories"))
 
             assertTrue(categories.isEmpty())
             assertEquals(1, downloader.calls)
@@ -191,7 +190,7 @@ class ModelLayerImplTest {
             RecordingApiCache()
         )
 
-        model.getAllCategories(TestUri("https://radio.example/categories"))
+        model.getAllCategories(Uri.parse("https://radio.example/categories"))
 
         assertEquals(data, parser.receivedData)
         assertEquals(1, downloader.calls)

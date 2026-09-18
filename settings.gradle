@@ -1,3 +1,4 @@
+include ':android-jvm-stubs'
 include ':common-ui'
 include ':common'
 include ':app'

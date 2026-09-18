@@ -16,9 +16,9 @@
 
 package com.yuriy.openradio.shared.model.media.item
 
-import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.model.source.Source
+import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 
 /**
@@ -43,9 +43,8 @@ class MediaItemBrowseCar(private val mSource: Source) : MediaItemCommand {
         // All countries list
         dependencies.addMediaItem(MediaItemBuilder.buildCountriesMenuItem(context))
         // If the Country code is known:
-        val locationStr = context.getString(R.string.default_country_use_location)
         val countryCode = dependencies.countryCode
-        if (countryCode.isNotEmpty() && countryCode != locationStr) {
+        if (countryCode.isNotEmpty() && !LocationService.isDefaultLocationEnabled(context, countryCode)) {
             dependencies.addMediaItem(MediaItemBuilder.buildCountryMenuItem(context, countryCode))
         }
         // Show Local Radio Stations if they are exists

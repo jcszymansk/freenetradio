@@ -1,6 +1,6 @@
 package com.yuriy.openradio.shared.model.parser
 
-import android.net.TestUri
+import android.net.Uri
 import com.yuriy.openradio.shared.model.filter.FilterImpl
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamBitrate
@@ -36,7 +36,7 @@ class ParserLayerMappingTest {
         """.trimIndent()
 
         val station = ParserLayerRadioBrowserImpl(FilterImpl())
-            .getRadioStation(data, MediaIdBuilderDefault(), TestUri(""))
+            .getRadioStation(data, MediaIdBuilderDefault(), Uri.parse(""))
 
         assertEquals("radio-browser-id", station.id)
         assertEquals("Radio Browser", station.name)
@@ -73,7 +73,7 @@ class ParserLayerMappingTest {
         val stations = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
             data,
             MediaIdBuilderDefault(),
-            TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+            Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
         )
         val station = stations.single()
 
@@ -94,14 +94,14 @@ class ParserLayerMappingTest {
         val radioBrowserStations = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
             """[{"name":"No ID","url":"https://radio.example/stream"}]""",
             MediaIdBuilderDefault(),
-            TestUri("")
+            Uri.parse("")
         )
         assertTrue(radioBrowserStations.isEmpty())
 
         val webRadioStations = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
             """{"":{"Genre":["Rock"],"Name":"No ID","StreamUri":"https://webradio.example/stream"}}""",
             MediaIdBuilderDefault(),
-            TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+            Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
         )
         assertTrue(webRadioStations.isEmpty())
     }
@@ -111,14 +111,14 @@ class ParserLayerMappingTest {
         val radioBrowserStations = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
             """[{"stationuuid":"radio-browser-id","name":"No stream"},{"stationuuid":"empty-stream-id","name":"Empty stream","url":""}]""",
             MediaIdBuilderDefault(),
-            TestUri("")
+            Uri.parse("")
         )
         assertTrue(radioBrowserStations.isEmpty())
 
         val webRadioStations = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
             """{"web-radio-id":{"Genre":["Rock"],"Name":"No stream"},"empty-stream-id":{"Genre":["Rock"],"Name":"Empty stream","StreamUri":""}}""",
             MediaIdBuilderDefault(),
-            TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+            Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
         )
         assertTrue(webRadioStations.isEmpty())
     }
@@ -126,11 +126,11 @@ class ParserLayerMappingTest {
     @Test
     fun malformedAndEmptyJsonReturnNoStations() {
         val radioBrowser = ParserLayerRadioBrowserImpl(FilterImpl())
-        assertTrue(radioBrowser.getRadioStations("", MediaIdBuilderDefault(), TestUri("")).isEmpty())
-        assertTrue(radioBrowser.getRadioStations("{", MediaIdBuilderDefault(), TestUri("")).isEmpty())
+        assertTrue(radioBrowser.getRadioStations("", MediaIdBuilderDefault(), Uri.parse("")).isEmpty())
+        assertTrue(radioBrowser.getRadioStations("{", MediaIdBuilderDefault(), Uri.parse("")).isEmpty())
 
         val webRadio = ParserLayerWebRadioImpl(emptySet())
-        val categoryUri = TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        val categoryUri = Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
         assertTrue(webRadio.getRadioStations("", MediaIdBuilderDefault(), categoryUri).isEmpty())
         assertTrue(webRadio.getRadioStations("[", MediaIdBuilderDefault(), categoryUri).isEmpty())
     }
@@ -140,7 +140,7 @@ class ParserLayerMappingTest {
         val radioBrowserStation = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
             """[{"stationuuid":"radio-browser-id","name":"Known Radio","url":"https://radio.example/stream","unknown":"ignored","nested":{"ignored":true}}]""",
             MediaIdBuilderDefault(),
-            TestUri("")
+            Uri.parse("")
         ).single()
         assertEquals("Known Radio", radioBrowserStation.name)
         assertEquals("https://radio.example/stream", radioBrowserStation.getStreamUrlFixed())
@@ -148,7 +148,7 @@ class ParserLayerMappingTest {
         val webRadioStation = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
             """{"web-radio-id":{"Genre":["Rock"],"Name":"Known Web Radio","StreamUri":"https://webradio.example/stream","Unknown":"ignored","Nested":{"ignored":true}}}""",
             MediaIdBuilderDefault(),
-            TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+            Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
         ).single()
         assertEquals("Known Web Radio", webRadioStation.name)
         assertEquals("https://webradio.example/stream", webRadioStation.getStreamUrlFixed())
@@ -178,7 +178,7 @@ class ParserLayerMappingTest {
                 ]
             """.trimIndent(),
             MediaIdBuilderDefault(),
-            TestUri("")
+            Uri.parse("")
         )
 
         assertEquals("allowed", stations.single().id)
@@ -243,9 +243,9 @@ class ParserLayerMappingTest {
               }
             }
         """.trimIndent()
-        val categoryUri = TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
-        val countryUri = TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_COUNTRY_ID}PL")
-        val searchUri = TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_SEARCH_ID}ROCK")
+        val categoryUri = Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        val countryUri = Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_COUNTRY_ID}PL")
+        val searchUri = Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_SEARCH_ID}ROCK")
 
         assertEquals(
             setOf("rock-station", "mixed-station"),
@@ -293,14 +293,14 @@ class ParserLayerMappingTest {
             parser.getRadioStations(
                 data,
                 MediaIdBuilderDefault(),
-                TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+                Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
             ).isEmpty()
         )
         assertTrue(
             parser.getRadioStations(
                 data,
                 MediaIdBuilderDefault(),
-                TestUri("https://example.com")
+                Uri.parse("https://example.com")
             ).isEmpty()
         )
     }
@@ -328,7 +328,7 @@ class ParserLayerMappingTest {
                 .getRadioStations(
                     data,
                     MediaIdBuilderDefault(),
-                    TestUri("https://example.com?${UrlLayerWebRadioImpl.KEY_SEARCH_ID}rock")
+                    Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_SEARCH_ID}rock")
                 )
                 .map { it.id }
                 .toSet()
@@ -341,7 +341,7 @@ class ParserLayerMappingTest {
         val stations = parser.getRadioStations(
             """[42,{"stationuuid":"valid","name":"Valid","url":"https://radio.example/stream"}]""",
             MediaIdBuilderDefault(),
-            TestUri("")
+            Uri.parse("")
         )
         val categories = parser.getAllCategories(
             """[false,{"name":"rock","stationcount":1}]"""
@@ -357,7 +357,7 @@ class ParserLayerMappingTest {
         assertTrue(parser.getAllCountries("{").isEmpty())
         assertSame(
             RadioStation.INVALID_INSTANCE,
-            parser.getRadioStation("[]", MediaIdBuilderDefault(), TestUri(""))
+            parser.getRadioStation("[]", MediaIdBuilderDefault(), Uri.parse(""))
         )
     }
 }
