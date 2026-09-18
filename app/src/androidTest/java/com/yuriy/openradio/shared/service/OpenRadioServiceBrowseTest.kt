@@ -36,13 +36,11 @@ import com.yuriy.openradio.shared.model.storage.images.ImageDao
 import com.yuriy.openradio.shared.model.storage.images.ImagesDatabase
 import com.yuriy.openradio.shared.model.storage.makeStation
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -313,8 +311,9 @@ class OpenRadioServiceBrowseTest {
 
     /**
      * Uses the popular stations node rather than one of the two
-     * [providerNodesNeverAnswerWhenNothingIsCached] browses, and that is deliberate. A persistent
-     * cache hit is promoted into [com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache],
+     * [providerNodesAnswerWithAnEmptyListWhenNothingIsCached] browses, and that is deliberate. A
+     * persistent cache hit is promoted into
+     * [com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache],
      * whose map is static and process wide, so seeding a URL here would leave it answering for the
      * rest of the run. It happens to be cleared today because releasing the last browser destroys
      * the service and `onDestroy` closes the presenter, but that is Android's timing rather than
@@ -346,24 +345,41 @@ class OpenRadioServiceBrowseTest {
     }
 
     /**
-     * Pins TASK-029. [com.yuriy.openradio.shared.model.media.item.MediaItemAllCategories] and
-     * [com.yuriy.openradio.shared.model.media.item.MediaItemCountriesList] return without calling
-     * their result listener when there is nothing to show, which is what an offline miss produces.
-     * The future behind `onGetChildren` is then never set and the browser waits forever.
-     * Delete this test and assert an empty list once the two commands report the empty case.
+     * A provider node with nothing to offer still has to answer. Both of these fetch their children
+     * rather than read a store, so with networking off and nothing cached they come back empty,
+     * which is the ordinary offline case and not an exotic one.
+     *
+     * The service completes `onGetChildren` from the command's result listener and from nowhere
+     * else, so a command that reported the empty case only as a playback-state message used to
+     * leave the browser waiting for as long as it cared to (TASK-029).
      */
     @Test
-    fun providerNodesNeverAnswerWhenNothingIsCached() {
+    fun providerNodesAnswerWithAnEmptyListWhenNothingIsCached() {
         for (node in listOf(MediaId.MEDIA_ID_ALL_CATEGORIES, MediaId.MEDIA_ID_COUNTRIES_LIST)) {
             // Another case may have left a cached result behind; this one is about the miss.
             invalidate(node)
-            assertThrows(
-                "$node answered with nothing cached, so TASK-029 is fixed and this test is stale",
-                TimeoutException::class.java
-            ) {
-                mBrowser.childrenResult(node, timeoutSeconds = HUNG_NODE_TIMEOUT_SECONDS)
-            }
+
+            val result = mBrowser.childrenResult(node, timeoutSeconds = EMPTY_NODE_TIMEOUT_SECONDS)
+
+            assertEquals(
+                "$node did not answer with a success",
+                LibraryResult.RESULT_SUCCESS,
+                result.resultCode
+            )
+            assertTrue("$node offered children with nothing cached", result.value!!.isEmpty())
         }
+    }
+
+    /**
+     * The browse tree is a fixed set of nodes, so an id outside it can only come from a client that
+     * invented one. It has to be turned away rather than left pending: the service would otherwise
+     * hold a request open that no command is ever going to answer.
+     */
+    @Test
+    fun aParentIdNoCommandAnswersIsRejected() {
+        val result = mBrowser.childrenResult(UNKNOWN_PARENT_ID)
+
+        assertEquals(LibraryResult.RESULT_ERROR_BAD_VALUE, result.resultCode)
     }
 
     /**
@@ -464,10 +480,15 @@ class OpenRadioServiceBrowseTest {
     private companion object {
 
         /**
-         * Long enough to outlast the 5 second command timeout the browse commands apply, short
-         * enough that pinning a hang does not dominate the run.
+         * Long enough to outlast the 5 second timeout a browse command applies to its own work,
+         * so a node that answers only once that expires still counts as answering.
          */
-        const val HUNG_NODE_TIMEOUT_SECONDS = 8L
+        const val EMPTY_NODE_TIMEOUT_SECONDS = 8L
+
+        /**
+         * Matches no [MediaId] prefix, so the service finds no command for it.
+         */
+        const val UNKNOWN_PARENT_ID = "__NOT_A_NODE__"
 
         const val PREFERENCE_FILE_SUFFIX = ".xml"
 

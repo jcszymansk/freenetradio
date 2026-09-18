@@ -653,7 +653,7 @@ class OpenRadioService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             AppLogger.d("$TAG [$browser] GetChildren for $parentId page $page pageSize $pageSize")
-            return callWhenSourceReady(parentId, page, pageSize) {
+            return callWhenSourceReady(parentId, page) {
                 val list = mBrowseTree[parentId] ?: ImmutableList.of()
                 val sublist = list.subList(it, list.size)
                 AppLogger.d("$TAG GetChildren for $parentId page $page return ${sublist.size}|${list.size} from pos:$it")
@@ -927,12 +927,19 @@ class OpenRadioService : MediaLibraryService() {
             }
         }
 
-        private fun <T> callWhenSourceReady(
+        /**
+         * Runs [action] once the children of [parentId] are available, through a future that the
+         * result listener completes.
+         *
+         * The return type is pinned to [LibraryResult] rather than left open so that a parent id
+         * no command answers can be completed with an error. Leaving that future unset would hang
+         * the browse request for as long as the client keeps waiting.
+         */
+        private fun <V : Any> callWhenSourceReady(
             parentId: String,
             page: Int,
-            pageSize: Int,
-            action: (position: Int) -> T
-        ): ListenableFuture<T> {
+            action: (position: Int) -> LibraryResult<V>
+        ): ListenableFuture<LibraryResult<V>> {
             val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
             mCurrentParentId = parentId
             var position = 0
@@ -951,7 +958,7 @@ class OpenRadioService : MediaLibraryService() {
             // If Parent Id contains Country Code - use it in the API.
             val countryCode = MediaId.getCountryCode(parentId, defaultCountryCode)
             // Use this feature object to return response of the async nature in order it issued via this method.
-            val future = SettableFuture.create<T>()
+            val future = SettableFuture.create<LibraryResult<V>>()
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, countryCode, parentId,
                 isSameCatalogue, mIsRestoreState, Bundle(), mCommandScope,
@@ -992,18 +999,19 @@ class OpenRadioService : MediaLibraryService() {
                     dependencies
                 )
             } else {
-                AppLogger.w("$TAG skipping unmatched parentId: $parentId")
+                AppLogger.w("$TAG no command for parentId: $parentId")
+                future.set(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
             }
             return future
         }
 
-        private fun <T> callWhenSearchReady(
+        private fun <V : Any> callWhenSearchReady(
             query: String,
-            action: (size: Int) -> T
-        ): ListenableFuture<T> {
+            action: (size: Int) -> LibraryResult<V>
+        ): ListenableFuture<LibraryResult<V>> {
             val id = MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
             val command = mPresenter.getMediaItemCommand(id)
-            val future = SettableFuture.create<T>()
+            val future = SettableFuture.create<LibraryResult<V>>()
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, Country.COUNTRY_CODE_DEFAULT, id,
                 false, mIsRestoreState, AppUtils.makeSearchQueryBundle(query), mCommandScope,
@@ -1030,7 +1038,8 @@ class OpenRadioService : MediaLibraryService() {
                     dependencies
                 )
             } else {
-                AppLogger.w("$TAG skipping unmatched parentId: $id")
+                AppLogger.w("$TAG no command for parentId: $id")
+                future.set(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
             }
             return future
         }

@@ -16,7 +16,6 @@
 
 package com.yuriy.openradio.shared.model.media.item
 
-import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppLogger
@@ -62,9 +61,7 @@ class MediaItemCountriesList : MediaItemCommand {
     ) {
         val set = dependencies.presenter.getAllCountries()
         if (set.isEmpty()) {
-            playbackStateListener.updatePlaybackState(
-                dependencies.context.getString(R.string.no_data_message)
-            )
+            dependencies.reportNoData(playbackStateListener)
             return
         }
         for (country in set) {

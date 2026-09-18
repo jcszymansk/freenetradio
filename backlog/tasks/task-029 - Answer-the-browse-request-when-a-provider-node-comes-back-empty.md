@@ -1,10 +1,11 @@
 ---
 id: TASK-029
 title: Answer the browse request when a provider node comes back empty
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-18 04:27'
-updated_date: '2026-09-18 05:32'
+updated_date: '2026-09-18 07:24'
 labels: []
 dependencies: []
 type: bug
@@ -30,3 +31,13 @@ The same shape exists where callWhenSourceReady and callWhenSearchReady return a
 - [ ] #3 A parent id that matches no MediaItemCommand completes with an error rather than leaving the future unset
 - [ ] #4 OpenRadioServiceBrowseTest asserts the completed empty results instead of pinning the hang
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Pull the empty-node answer into one place: an internal extension on MediaItemCommandDependencies that delivers the collected (empty) media items through the result listener and then reports the no-data message. MediaItemCommandImpl.handleDataLoaded already does exactly this by hand, so it adopts the helper too.
+2. MediaItemAllCategories.loadAllCategories and MediaItemCountriesList.loadAllCountries call that helper instead of only pushing the playback-state message, so the browse future is always set.
+3. OpenRadioService.callWhenSourceReady and callWhenSearchReady: narrow the generic from T to LibraryResult<V> so an error result can be built, and set RESULT_ERROR_BAD_VALUE on the future when no MediaItemCommand matched instead of returning it unset.
+4. JVM tests: MediaItemAllCategoriesTest and MediaItemCountriesListTest assert the empty case now delivers an empty result *and* the no-data message.
+5. OpenRadioServiceBrowseTest: replace providerNodesNeverAnswerWhenNothingIsCached with a test asserting both provider nodes complete with an empty success list while offline, and add one for a parent id no command matches.
+<!-- SECTION:PLAN:END -->
