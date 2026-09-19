@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-19 18:32'
-updated_date: '2026-09-19 19:14'
+updated_date: '2026-09-19 20:17'
 labels: []
 dependencies: []
 type: bug
@@ -30,4 +30,5 @@ The same gate is what keeps a cached provider node from opening offline after TA
 - [ ] #4 The decision covers nodes the API response cache can serve offline, either by opening them or by recording why not
 - [ ] #5 Covered by a test that reaches no network
 - [ ] #6 TASK-006.02's journey opens the locals node by tapping its row rather than by calling addMediaItemToStack, and theLocalsRowDoesNotOpenWithoutANetwork is replaced by the opposite assertion
+- [ ] #7 TASK-006.03's journey opens the favorites node by tapping its row rather than by calling addMediaItemToStack, and theFavoritesRowDoesNotOpenWithoutANetwork is replaced by the opposite assertion
 <!-- AC:END -->

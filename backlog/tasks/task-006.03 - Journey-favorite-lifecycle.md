@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-19 19:59'
+updated_date: '2026-09-19 20:17'
 labels: []
 milestone: m-0
 dependencies:
@@ -40,3 +40,19 @@ Favorites are stored in SharedPreferences and invalidate a browse node, so the U
 7. Assert the offline gate for the favorites row as well, the way TASK-006.02 does for locals: tapping it leaves the list where it was. TASK-049 criterion 2 holds the fix.
 8. Run ./gradlew test and the full :app:connectedDebugAndroidTest with networking disabled, from cleared app data.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Seeded the station rather than adding it through the dialog. AC1 allows either, and creating a station is TASK-006.02's subject; seeding keeps the loopback stream server, the validator probe and the image permission grant out of a journey whose subject is a check box.
+
+The favorite gesture is a CheckBox in the layer a left swipe reveals. MobileMediaItemsAdapter enables the drag in exactly the favorites and locals nodes, which are the two this journey visits, so unlike TASK-006.02's settings button the control is genuinely reachable by a finger here; only the drag itself is skipped.
+
+Confirmed by experiment that the journey is not vacuous: with the tapRowFavorite call removed all five cases fail.
+
+Found a second bug from where TASK-049 sits: OpenRadioService.maybeNotifyRootChanged names the favorites node only while the store is still non-empty, so unmarking the last favorite from inside that list notifies the root and leaves the emptied list on screen. TASK-050 holds it, created in this commit.
+
+Confirmed it is a real fix rather than a guess: with maybeNotifyRootChanged changed to notify both nodes, unmarkingAStationFromTheFavoritesNodeTakesItOffTheRoot fails with the row gone and the adapter holding nothing, and the other four still pass. Reverted.
+
+That experiment also exposed a hole in the assertion. BrowseListView.assertRowsStay skips empty reads because an empty read is also how a list reads mid-layout, so a list that emptied passes it. The case now also asserts the row is still there in its own right, which is the assertion the experiment failed on.
+<!-- SECTION:NOTES:END -->
