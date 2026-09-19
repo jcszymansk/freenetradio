@@ -91,12 +91,8 @@ class OpenRadioServicePresenterImpl(
         mNetworkLayer.stopMonitor(context)
     }
 
-    override fun isMobileNetwork(): Boolean {
-        return mNetworkLayer.isMobileNetwork()
-    }
-
-    override fun getUseMobile(): Boolean {
-        return mNetworkSettingsStorage.getUseMobile()
+    override fun isPlaybackBlockedByMobileNetwork(): Boolean {
+        return mNetworkLayer.isMobileNetwork() && mNetworkSettingsStorage.getUseMobile().not()
     }
 
     override fun getStationsInCategory(categoryId: String, pageNumber: Int): Set<RadioStation> {

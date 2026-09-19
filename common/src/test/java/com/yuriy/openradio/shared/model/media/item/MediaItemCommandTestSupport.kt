@@ -337,9 +337,7 @@ internal class RecordingPresenter(
 
     override fun stopNetworkMonitor(context: Context) = unexpected()
 
-    override fun isMobileNetwork() = unexpected()
-
-    override fun getUseMobile() = unexpected()
+    override fun isPlaybackBlockedByMobileNetwork() = unexpected()
 
     override fun getLastRadioStation() = unexpected()
 

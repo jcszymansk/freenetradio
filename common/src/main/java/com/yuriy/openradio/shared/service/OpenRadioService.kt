@@ -356,9 +356,7 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     private fun handlePlayRequestUiThread() {
-        if (mPresenter.isMobileNetwork() &&
-            mPresenter.getUseMobile().not()
-        ) {
+        if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
             SafeToast.showAnyThread(
                 applicationContext,
                 getString(R.string.mobile_network_disabled)
@@ -548,9 +546,7 @@ class OpenRadioService : MediaLibraryService() {
             if (isConnected.not()) {
                 return
             }
-            if (mPresenter.isMobileNetwork() &&
-                mPresenter.getUseMobile().not()
-            ) {
+            if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
                 SafeToast.showAnyThread(
                     applicationContext,
                     getString(R.string.mobile_network_disabled)
@@ -847,9 +843,7 @@ class OpenRadioService : MediaLibraryService() {
             AppLogger.d("$TAG CustomCommand ${customCommand.customAction}")
             return when (customCommand.customAction) {
                 CMD_NET_CHANGED -> {
-                    if (mPresenter.isMobileNetwork() &&
-                        mPresenter.getUseMobile().not()
-                    ) {
+                    if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
                         SafeToast.showAnyThread(
                             applicationContext,
                             getString(R.string.mobile_network_disabled)
