@@ -22,7 +22,6 @@ import android.media.AudioManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -34,15 +33,21 @@ import org.junit.runner.RunWith
  *
  * The broadcast is handed to [BecomingNoisyReceiver.onReceive] directly instead of being sent:
  * [AudioManager.ACTION_AUDIO_BECOMING_NOISY] is a protected broadcast, so only the system may send
- * it and an application that tries gets a [SecurityException]. Registering the receiver for real
- * would therefore only prove that the filter compiles, so the filter is asserted on its own and
- * the dispatch is simulated.
+ * it and an application that tries gets a [SecurityException]. The filter is therefore asserted on
+ * its own and the dispatch is simulated.
+ *
+ * The test is instrumented even though it needs no device state, because [android.content.Intent]
+ * and [android.content.IntentFilter] are not among the types implemented in `:android-jvm-stubs`.
+ * On the JVM they would answer with the defaults of `unitTests.returnDefaultValues`, and a filter
+ * that matches nothing and an action that reads back as null prove nothing.
  */
 @RunWith(AndroidJUnit4::class)
 class BecomingNoisyReceiverTest {
 
     private lateinit var mContext: Context
+
     private lateinit var mListener: RecordingListener
+
     private lateinit var mReceiver: BecomingNoisyReceiver
 
     @Before
@@ -87,7 +92,6 @@ class BecomingNoisyReceiverTest {
 
         assertEquals(1, filter.countActions())
         assertTrue(filter.hasAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
-        assertFalse(filter.hasAction(AudioManager.ACTION_HEADSET_PLUG))
     }
 
     private class RecordingListener : BecomingNoisyReceiver.Listener {

@@ -21,11 +21,10 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
-import android.os.Parcel
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -48,7 +47,9 @@ import org.junit.runner.RunWith
 class BTConnectionReceiverTest {
 
     private lateinit var mContext: Context
+
     private lateinit var mListener: RecordingListener
+
     private lateinit var mReceiver: BTConnectionReceiver
 
     @Before
@@ -131,6 +132,46 @@ class BTConnectionReceiverTest {
         assertEquals(0, mListener.sameDeviceConnections)
     }
 
+    /**
+     * The disconnection branch asks only whether some device has ever connected, never whether the
+     * one that just went away is the remembered one. A headset dropping off while the car stereo
+     * still plays is therefore reported the same way, and the service pauses. This pins what the
+     * receiver does today, which is TASK-044, not what it should do.
+     */
+    @Test
+    fun aDisconnectionIsReportedWhicheverDeviceItCameFrom() {
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+
+        mReceiver.onReceive(mContext, disconnected(SECOND_ADDRESS))
+
+        assertEquals(1, mListener.disconnections)
+    }
+
+    @Test
+    fun everyDisconnectionAfterAConnectionIsReported() {
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+
+        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
+        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
+
+        assertEquals(2, mListener.disconnections)
+    }
+
+    /**
+     * The whole point of the remembered address: it outlives the disconnection, so the device the
+     * user has already listened through is recognised when it comes back, which is the reconnection
+     * the auto resume exists for.
+     */
+    @Test
+    fun aDeviceIsStillRememberedAfterItDisconnects() {
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
+
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+
+        assertEquals(1, mListener.sameDeviceConnections)
+    }
+
     @Test
     fun anIntermediateConnectionStateIsIgnored() {
         mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
@@ -162,7 +203,6 @@ class BTConnectionReceiverTest {
 
         assertEquals(1, filter.countActions())
         assertTrue(filter.hasAction(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED))
-        assertFalse(filter.hasAction(BluetoothAdapter.ACTION_STATE_CHANGED))
     }
 
     private fun connected(address: String): Intent {
@@ -180,28 +220,21 @@ class BTConnectionReceiverTest {
     }
 
     /**
-     * Emulator images come without a Bluetooth adapter, and then there is no factory for a
-     * [BluetoothDevice]. Its parcel is a single address string, so one is built by hand in that
-     * case; the receiver only ever reads the address back.
+     * A device is asked of the platform rather than built here, because the receiver reads it back
+     * through the same parcelling the system broadcast uses. An image without a Bluetooth adapter
+     * cannot answer, and these tests say so rather than substituting something of their own: a
+     * device assembled by hand would only be testing the shape this test chose for it.
      */
     private fun remoteDevice(address: String): BluetoothDevice {
         val adapter = mContext.getSystemService(BluetoothManager::class.java)?.adapter
-        if (adapter != null) {
-            return adapter.getRemoteDevice(address)
-        }
-        val parcel = Parcel.obtain()
-        try {
-            parcel.writeString(address)
-            parcel.setDataPosition(0)
-            return BluetoothDevice.CREATOR.createFromParcel(parcel)
-        } finally {
-            parcel.recycle()
-        }
+        assertNotNull("This device has no Bluetooth adapter to take a remote device from", adapter)
+        return adapter!!.getRemoteDevice(address)
     }
 
     private class RecordingListener : BTConnectionReceiver.Listener {
 
         private var mSameDeviceConnections = 0
+
         private var mDisconnections = 0
 
         val sameDeviceConnections: Int

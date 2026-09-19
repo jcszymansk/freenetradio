@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-19 10:11'
+updated_date: '2026-09-19 10:39'
 labels: []
 milestone: m-0
 dependencies:
@@ -54,3 +54,19 @@ Playback is exercised against a generated local WAV file with emulator networkin
 10. Record every defect the coverage exposes as its own task.
 11. Verify: ./gradlew test, ./gradlew :app:assembleDebugAndroidTest, ./gradlew :app:connectedDebugAndroidTest with emulator networking disabled.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+The mobile-network gate became one presenter question, isPlaybackBlockedByMobileNetwork(). OpenRadioService asked isMobileNetwork() and getUseMobile() in three places and combined them identically each time, and nothing else called either half, so the two were replaced rather than added to. That is the only production change the coverage needed, and it is what makes the gate assertable: isMobileNetwork() is false for the whole run on a device with networking disabled, so the decision could not otherwise be reached.
+
+Two paths cannot be driven end to end and are covered at the level that can express them, which is recorded here rather than left as a gap. ACTION_AUDIO_BECOMING_NOISY and BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED are both protected broadcasts: an application cannot send either, and neither can the instrumentation shell (verified: am broadcast answers Permission Denial from uid 2000). Their receivers are therefore driven directly with the intents the system would deliver. Sleep-timer completion ends in OpenRadioService.closeService, which kills the process the tests run in, so the timer is covered through its own model and never through the service's listener.
+
+Playback is exercised against generated WAV files over file://, per the testing roadmap. A loopback HTTP server was added for the two paths HTTP defines and that cannot exist without one: a playlist url is resolved by opening it as an HttpURLConnection, and a refused stream is classified from the status code it was refused with. Both stay on 127.0.0.1, spelled out as IPv4 because InetAddress.getLoopbackAddress() answers ::1 here and an unbracketed ::1 reaches the player as a malformed port.
+
+The tests have to hand the service back a player that holds a queue. Once a station has played, the service has an active station, and from then on every page-0 browse with an empty queue calls maybeCreateInitialPlaylist, which asks the provider for stations and replaces the queue with the answer. That would reach into unrelated test classes.
+
+Four defects surfaced and are tracked rather than fixed: task-040 (playback resumption can never restore anything), task-041 (the initial playlist shadows a station's real parent list), task-042 (moveMediaItems is not forwarded to the wrapped player) and task-043 (an unresolvable playlist is treated as a resolved one). Two instrumented tests, aPlayRequestWithNothingLoadedRestoresNothing and aPlaylistThatCannotBeOpenedResolvesToOneEmptyUrl, pin the current behavior and have to be rewritten when 040 and 043 are fixed.
+
+The resume half of network recovery is deliberately not covered here: it turns on OpenRadioPlayer.mStoppedByNetwork, and task-037 already owns both the decision about where that state belongs and the test for it.
+<!-- SECTION:NOTES:END -->

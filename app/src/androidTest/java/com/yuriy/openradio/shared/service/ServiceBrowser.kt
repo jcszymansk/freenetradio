@@ -225,26 +225,26 @@ internal class ServiceBrowser {
      * service answers by expanding it into the playlist the item belongs to.
      */
     fun setMediaItem(mediaItem: MediaItem) {
-        onMain { setMediaItem(mediaItem) }
+        onMain { this.setMediaItem(mediaItem) }
     }
 
     fun prepareAndPlay() {
         onMain {
-            prepare()
-            play()
+            this.prepare()
+            this.play()
         }
     }
 
     fun play() {
-        onMain { play() }
+        onMain { this.play() }
     }
 
     fun pause() {
-        onMain { pause() }
+        onMain { this.pause() }
     }
 
     fun stop() {
-        onMain { stop() }
+        onMain { this.stop() }
     }
 
     fun seekToNext() {
@@ -256,7 +256,7 @@ internal class ServiceBrowser {
     }
 
     fun clearMediaItems() {
-        onMain { clearMediaItems() }
+        onMain { this.clearMediaItems() }
     }
 
     fun playbackState(): Int {

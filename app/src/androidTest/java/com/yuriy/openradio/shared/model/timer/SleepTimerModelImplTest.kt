@@ -32,6 +32,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 /**
  * Covers the half of the sleep timer that [SleepTimerImpl] does not own: what reaches Shared
@@ -48,7 +49,9 @@ import java.util.concurrent.TimeUnit
 class SleepTimerModelImplTest {
 
     private lateinit var mContext: Context
+
     private lateinit var mStorage: SleepTimerStorage
+
     private lateinit var mModel: SleepTimerModelImpl
 
     @Before
@@ -87,10 +90,41 @@ class SleepTimerModelImplTest {
         assertEquals(ALARM_TIMESTAMP, mStorage.loadDate().time)
 
         val restarted = newModel()
-        restarted.init()
         restarted.updateTime(true)
 
         assertEquals(ALARM_TIMESTAMP, restarted.getTimestamp())
+    }
+
+    /**
+     * What a process start has to do with an alarm that was set before it: the stored pair is read
+     * back and armed without anyone touching the dialog.
+     */
+    @Test
+    fun initArmsTheStoredAlarm() {
+        mStorage.saveDate(System.currentTimeMillis() + DELAY_MS)
+        mStorage.saveEnabled(true)
+        val listener = RecordingListener()
+        val restarted = newModel()
+        restarted.addSleepTimerListener(listener)
+
+        restarted.init()
+
+        assertTrue("The stored alarm was not armed", listener.awaitCompletion())
+    }
+
+    @Test
+    fun initArmsNothingWhenTheStoredAlarmIsOff() {
+        mStorage.saveDate(System.currentTimeMillis() + DELAY_MS)
+        mStorage.saveEnabled(false)
+        val listener = RecordingListener()
+        val restarted = newModel()
+        restarted.addSleepTimerListener(listener)
+
+        restarted.init()
+
+        assertFalse(
+            "A disabled stored alarm was armed", listener.awaitCompletionDuring(SILENCE_MS)
+        )
     }
 
     @Test
@@ -109,7 +143,7 @@ class SleepTimerModelImplTest {
 
         mModel.updateTime(false)
 
-        val drift = Math.abs(System.currentTimeMillis() - mModel.getTimestamp())
+        val drift = abs(System.currentTimeMillis() - mModel.getTimestamp())
         assertTrue("A disabled timer started from $drift ms away from now", drift < NOW_TOLERANCE_MS)
     }
 
@@ -129,9 +163,13 @@ class SleepTimerModelImplTest {
 
         assertEquals(expected.timeInMillis, mModel.getTimestamp())
         assertEquals(expected.time, mModel.getTime())
-        assertEquals(mModel.getTime().time, mModel.getTimestamp())
     }
 
+    /**
+     * The exact boundary, a timestamp equal to the current millisecond, cannot be pinned from a
+     * test: the model reads the system clock itself, so by the time the assertion runs the
+     * timestamp is already in the past either way.
+     */
     @Test
     fun onlyATimestampInTheFutureIsValid() {
         val now = System.currentTimeMillis()
@@ -203,13 +241,14 @@ class SleepTimerModelImplTest {
     fun aDisabledUpdateStoresTheTimestampAndArmsNothing() {
         val listener = RecordingListener()
         mModel.addSleepTimerListener(listener)
+        val alarm = System.currentTimeMillis() + DELAY_MS
 
-        mModel.updateTimer(ALARM_TIMESTAMP, false)
+        mModel.updateTimer(alarm, false)
 
         assertFalse(
             "A disabled timer notified its listeners", listener.awaitCompletionDuring(SILENCE_MS)
         )
-        assertEquals(ALARM_TIMESTAMP, mStorage.loadDate().time)
+        assertEquals(alarm, mStorage.loadDate().time)
     }
 
     private fun newModel(): SleepTimerModelImpl {
