@@ -62,22 +62,34 @@ class SleepTimerImplTest {
     }
 
     /**
-     * The user moving the alarm later must not leave the earlier one armed. The replacement is
-     * deliberately given a delay long enough to outlast the window this test watches, so a
-     * completion inside it can only have come from the first call.
+     * The user moving the alarm later must leave exactly one timer armed: not the earlier one, and
+     * not neither.
+     *
+     * Both halves have to be asserted. Watching only the earlier deadline pass in silence would
+     * also be satisfied by a `handle` that cancels and then never starts anything, which is the
+     * failure that would lose the user their alarm outright. The replacement is given a delay long
+     * enough to outlast the silent window, so a completion inside that window can only have come
+     * from the first call and a completion after it can only have come from the second.
      */
     @Test
     fun handlingAgainReplacesTheTimerItDoesNotAddOne() {
         val listener = RecordingListener()
         val timer = SleepTimerImpl(listener)
 
-        timer.handle(System.currentTimeMillis() + DELAY_MS, true)
-        timer.handle(System.currentTimeMillis() + SILENCE_MS + DELAY_MS, true)
+        val startedAt = System.currentTimeMillis()
+        timer.handle(startedAt + DELAY_MS, true)
+        timer.handle(startedAt + SILENCE_MS + DELAY_MS, true)
 
         assertFalse(
             "The replaced timer still completed",
             listener.awaitCompletionDuring(SILENCE_MS)
         )
+        assertTrue("The replacement timer never completed", listener.awaitCompletion())
+        assertTrue(
+            "The replacement completed before its own delay had passed",
+            System.currentTimeMillis() - startedAt >= SILENCE_MS + DELAY_MS
+        )
+        assertEquals("The timer fired for both calls", 1, listener.completions)
     }
 
     @Test
