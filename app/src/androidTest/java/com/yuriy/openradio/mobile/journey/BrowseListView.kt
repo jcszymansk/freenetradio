@@ -1,0 +1,217 @@
+/*
+ * Copyright 2026 The "FreeNetRadio" Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.yuriy.openradio.mobile.journey
+
+import android.view.View
+import android.widget.TextView
+import androidx.media3.common.util.UnstableApi
+import androidx.recyclerview.widget.RecyclerView
+import androidx.test.core.app.ActivityScenario
+import com.yuriy.openradio.mobile.R
+import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.shared.view.list.MediaItemsAdapter
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+
+/**
+ * The browse list an [ActivityScenario] is showing, read the way a user reads it.
+ *
+ * Rows come back in adapter order, each pairing the media id the adapter holds at a position with
+ * the text the view at that position actually displays. An entry the service serves but the UI
+ * never renders is therefore absent here, which is the whole reason a journey reads the list
+ * instead of asking the service what it would answer.
+ *
+ * Every item has to be on screen, which is the one thing here that depends on the device. The
+ * nodes these journeys visit are short lists and the emulator they target lays all of them out
+ * without scrolling. A device that cannot is reported by [describe] rather than left as a bare
+ * timeout.
+ */
+@UnstableApi
+internal class BrowseListView(private val mScenario: ActivityScenario<MainActivity>) {
+
+    /**
+     * Waits for the list to be both filled and laid out, then returns what it shows.
+     *
+     * The subscription that fills it crosses a process boundary and a layout pass, so there is no
+     * event to wait on from here. A read that catches the list part way through either of those
+     * yields nothing and is retried.
+     */
+    fun awaitRows(): List<BrowseRow> {
+        return awaitRows("any rendered row") { true }
+    }
+
+    /**
+     * Waits until the rendered list satisfies [matches].
+     *
+     * Used for the pushes a journey triggers but does not perform: adding a station makes the
+     * service notify the root, which arrives on the subscription and rewrites the adapter some
+     * time after the dialog that caused it has closed.
+     *
+     * @param expectation what the list was being waited for, so a timeout names it.
+     */
+    fun awaitRows(expectation: String, matches: (List<BrowseRow>) -> Boolean): List<BrowseRow> {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(LIST_TIMEOUT_SECONDS)
+        var last = emptyList<BrowseRow>()
+        while (System.nanoTime() < deadline) {
+            val rows = rows()
+            if (rows.isNotEmpty()) {
+                last = rows
+                if (matches(rows)) {
+                    return rows
+                }
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+        throw AssertionError(
+            "The browse list did not show $expectation within $LIST_TIMEOUT_SECONDS seconds. " +
+                "It last showed $last. " + describe()
+        )
+    }
+
+    /**
+     * Asserts the list still shows [expected] and goes on doing so.
+     *
+     * A list that is about to change has not changed yet, so a single read cannot tell "nothing
+     * happened" from "it has not happened yet". This keeps reading for as long as the pushes this
+     * suite does trigger take to arrive, and fails on the first row that differs.
+     */
+    fun assertRowsStay(expected: List<BrowseRow>, reason: String) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(SETTLE_SECONDS)
+        while (System.nanoTime() < deadline) {
+            val rows = rows()
+            if (rows.isNotEmpty()) {
+                assertEquals(reason, expected, rows)
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+    }
+
+    /**
+     * Taps the row for [mediaId], on the view that carries the click listener a finger lands on.
+     */
+    fun tapRow(mediaId: String) {
+        clickInRow(mediaId, R.id.foreground_view)
+    }
+
+    /**
+     * Clicks the settings button of the row for [mediaId].
+     *
+     * On a station row this is the button a swipe reveals. The swipe itself is a drag on a
+     * [com.xenione.libs.swipemaker.SwipeLayout] and is not performed, but the button is a child of
+     * the row either way, so its listener and everything it reaches are the real ones.
+     */
+    fun tapRowSettings(mediaId: String) {
+        clickInRow(mediaId, R.id.settings_btn_view)
+    }
+
+    private fun clickInRow(mediaId: String, viewId: Int) {
+        val clicked = AtomicBoolean(false)
+        mScenario.onActivity { activity ->
+            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
+            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            for (index in 0 until listView.childCount) {
+                val child = listView.getChildAt(index)
+                val position = listView.getChildAdapterPosition(child)
+                if (position == RecyclerView.NO_POSITION) {
+                    continue
+                }
+                if (adapter.getItem(position)?.mediaId != mediaId) {
+                    continue
+                }
+                child.findViewById<View>(viewId).performClick()
+                clicked.set(true)
+            }
+        }
+        assertTrue("No rendered row carries the media id $mediaId. " + describe(), clicked.get())
+    }
+
+    /**
+     * @return the rendered rows, or an empty list while the adapter and the laid out children
+     *   disagree, which is every moment the list is still being filled or measured.
+     */
+    fun rows(): List<BrowseRow> {
+        val result = AtomicReference(emptyList<BrowseRow>())
+        mScenario.onActivity { activity ->
+            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
+            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            val displayed = HashMap<Int, String>()
+            for (index in 0 until listView.childCount) {
+                val child = listView.getChildAt(index)
+                val position = listView.getChildAdapterPosition(child)
+                if (position == RecyclerView.NO_POSITION) {
+                    continue
+                }
+                displayed[position] = child.findViewById<TextView>(R.id.name_view).text.toString()
+            }
+            if (adapter.itemCount == 0 || displayed.size != adapter.itemCount) {
+                return@onActivity
+            }
+            result.set(
+                (0 until adapter.itemCount).map { position ->
+                    BrowseRow(
+                        adapter.getItem(position)?.mediaId.orEmpty(),
+                        displayed.getValue(position)
+                    )
+                }
+            )
+        }
+        return result.get()
+    }
+
+    /**
+     * @return what the list held when it ran out of time, so a timeout says which half was
+     *   missing: children the service never sent, or rows the screen was too short to lay out.
+     */
+    fun describe(): String {
+        val result = AtomicReference("The Activity holds no browse list at all.")
+        mScenario.onActivity { activity ->
+            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
+            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            result.set(
+                "The adapter holds ${adapter.itemCount} items and ${listView.childCount} rows " +
+                    "are laid out."
+            )
+        }
+        return result.get()
+    }
+
+    private companion object {
+
+        /**
+         * Covers launching the Activity, connecting a MediaBrowser to the service, answering the
+         * request and laying the list out.
+         */
+        const val LIST_TIMEOUT_SECONDS = 20L
+
+        /**
+         * How long a list is watched before "it did not change" is believed. Long enough to cover
+         * the pushes this suite does trigger, which arrive well inside a second.
+         */
+        const val SETTLE_SECONDS = 5L
+
+        const val POLL_MILLIS = 50L
+    }
+}
+
+/**
+ * One row of the browse list: the item the adapter holds at a position, and the text the view at
+ * that position puts on screen.
+ */
+internal data class BrowseRow(val mediaId: String, val title: String)
