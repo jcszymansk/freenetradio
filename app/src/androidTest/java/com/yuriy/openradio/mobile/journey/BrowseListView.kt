@@ -162,29 +162,28 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      */
     fun rowFavorite(mediaId: String): Boolean? {
         val result = AtomicReference<Boolean?>(null)
-        mScenario.onActivity { activity ->
-            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
-            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
-            for (index in 0 until listView.childCount) {
-                val child = listView.getChildAt(index)
-                val position = listView.getChildAdapterPosition(child)
-                if (position == RecyclerView.NO_POSITION) {
-                    continue
-                }
-                if (adapter.getItem(position)?.mediaId != mediaId) {
-                    continue
-                }
-                val box = child.findViewById<CheckBox>(R.id.favorite_btn_view)
-                if (box.visibility == View.VISIBLE) {
-                    result.set(box.isChecked)
-                }
+        inRow(mediaId) { row ->
+            val box = row.findViewById<CheckBox>(R.id.favorite_btn_view)
+            if (box.visibility == View.VISIBLE) {
+                result.set(box.isChecked)
             }
         }
         return result.get()
     }
 
     private fun clickInRow(mediaId: String, viewId: Int) {
-        val clicked = AtomicBoolean(false)
+        val clicked = inRow(mediaId) { row -> row.findViewById<View>(viewId).performClick() }
+        assertTrue("No rendered row carries the media id $mediaId. " + describe(), clicked)
+    }
+
+    /**
+     * Runs [action] on the rendered row whose adapter position holds [mediaId].
+     *
+     * @return whether such a row was on screen at all, which is the difference between a control
+     *   that did not react and a row the list never laid out.
+     */
+    private fun inRow(mediaId: String, action: (View) -> Unit): Boolean {
+        val found = AtomicBoolean(false)
         mScenario.onActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
             val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
@@ -197,11 +196,11 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
                 if (adapter.getItem(position)?.mediaId != mediaId) {
                     continue
                 }
-                child.findViewById<View>(viewId).performClick()
-                clicked.set(true)
+                action(child)
+                found.set(true)
             }
         }
-        assertTrue("No rendered row carries the media id $mediaId. " + describe(), clicked.get())
+        return found.get()
     }
 
     /**
