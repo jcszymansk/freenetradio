@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-19 18:59'
+updated_date: '2026-09-19 19:14'
 labels: []
 milestone: m-0
 dependencies:
@@ -59,6 +59,12 @@ Extracted JourneyProfile and BrowseListView out of ColdLaunchJourneyTest first, 
 Review round 1. The relaunch in theStationOutlivesTheActivityThatAddedIt was reading the service's cached root, so it asserted nothing about the store: the root is the one node callWhenSourceReady does serve from mBrowseTree. Proved it by emptying the locals store before the relaunch, which the case passed, then failed two assertions later on the storage read. Dropping the cached tree first makes the relaunch rebuild the root through MediaItemRoot, and the same experiment then fails at the relaunch as it should.
 
 The two structural gaps the review named are now acceptance criteria on the tasks that own them rather than prose in a test comment: TASK-031 carries re-running the persistence case across a real process, TASK-049 carries driving the rendered locals row and its settings action and replacing the offline-gate assertion with its opposite.
+
+Review round 2 raised the same two structural gaps again. The edit and remove one was fixable after all, so it was fixed rather than argued: the journey now opens the locals list through MediaPresenter.addMediaItemToStack, which is the step handleItemSelected performs once past the connectivity gate, then finds the station's rendered row and clicks its real settings button. handleItemSettings builds the settings dialog's arguments from the node the presenter is standing in, so nothing about that dialog is assembled by the test any more. Only the tap that opens the node is still missing, and TASK-049's criterion now says exactly that.
+
+Navigating means the cases have to walk back out, because the presenter's stack outlives the Activity. returnToRoot pops with handleBackPressed while the current category is not the root, never at the root, where handleBackPressed sends CMD_STOP_SERVICE and kills the process. It asserts nothing, because it runs from a finally and an assertion there would replace whatever failure sent the case into it.
+
+The restart gap stands and cannot be closed from here: no component declares android:process, so the service, the registry and the instrumentation are one process, and killing it ends the run. TASK-006.01 accepted the same shape for its own 'clear application data' criterion, satisfied by AppDataReset rather than a real pm clear, with the remainder on TASK-031. Treating this one differently would make the phase inconsistent with itself, so AC4 stays checked and TASK-031 carries the process restart as an acceptance criterion.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

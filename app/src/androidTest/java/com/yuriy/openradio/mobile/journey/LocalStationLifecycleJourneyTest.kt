@@ -19,12 +19,10 @@ package com.yuriy.openradio.mobile.journey
 import android.Manifest
 import android.content.Context
 import android.os.Build
-import android.os.Bundle
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
 import androidx.fragment.app.DialogFragment
-import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -34,10 +32,12 @@ import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
+import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
+import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
 import com.yuriy.openradio.shared.permission.PermissionChecker
+import com.yuriy.openradio.shared.presenter.MediaPresenter
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
-import com.yuriy.openradio.shared.view.dialog.BaseDialogFragment
 import com.yuriy.openradio.shared.view.dialog.EditStationDialog
 import com.yuriy.openradio.shared.view.dialog.RSSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
@@ -63,25 +63,25 @@ import com.yuriy.openradio.shared.R as DialogR
  * probes it over HTTP before it will accept a station, and the loopback address is the one address
  * that answers with the device's networking disabled.
  *
- * Two things a user does are not driven here, and neither can be:
+ * Two gestures are not performed, and neither can be. Everything they lead to is.
  *
- * The swipe that reveals a row's settings button is a drag on a [com.xenione.libs.swipemaker.SwipeLayout];
- * the button behind it is in the hierarchy either way, so nothing between it and the dialogs is
- * skipped by clicking it directly.
+ * The swipe that reveals a row's settings button is a drag on a
+ * [com.xenione.libs.swipemaker.SwipeLayout]. The button is a child of the row either way, so
+ * clicking it directly skips the drag and nothing else.
  *
- * Opening the locals list at all is refused while the device is offline.
+ * The tap that opens the locals list is refused while the device is offline:
  * `MediaPresenterImpl.handleItemSelected` gates every browse tap on connectivity and is the only
- * tap-driven way into a node, so there is no station row on screen to reach the settings button
- * on. `theLocalsRowDoesNotOpenWithoutANetwork` pins that down and TASK-049 holds the fix. Until
- * then this journey shows the settings dialog with the bundle `handleItemSettings` would have
- * built once the presenter was inside the locals node, and everything from that dialog onwards is
- * the application's own path: the locals-only edit and remove buttons, the media item they carry
- * as a tag, the `android:onClick` that lands in [MainActivity], and the real edit and remove
- * dialogs it opens.
+ * tap-driven way into a node. `theLocalsRowDoesNotOpenWithoutANetwork` pins that refusal down and
+ * TASK-049 lifts it. What this journey calls instead is the one step that tap performs once past
+ * the gate, so the locals list is rendered by the application, the station's row is a real row,
+ * its settings button is the real control, and `handleItemSettings` builds the settings dialog's
+ * arguments from the node the presenter is standing in. From there the path is untouched: the
+ * locals-only edit and remove buttons, the media item they carry as a tag, the `android:onClick`
+ * that lands in [MainActivity], and the real edit and remove dialogs it opens.
  *
  * What the service answers for the locals node is `OpenRadioServiceBrowseTest`'s subject. What is
- * asserted here is the root list as the Activity renders it, and the store as a reader that has
- * cached nothing sees it.
+ * asserted here is what the Activity renders, and the store as a reader that has cached nothing
+ * sees it.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
@@ -164,25 +164,29 @@ class LocalStationLifecycleJourneyTest {
             addStationThroughTheDialog(scenario, STATION_NAME, url)
             list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
 
-            val settings = openStationSettings(scenario, storedMediaItem())
-            val edit = openFromSettings(
-                scenario, settings, DialogR.id.dialog_rs_settings_edit_btn, EditStationDialog.DIALOG_TAG
-            )
+            try {
+                val settings = openStationSettings(scenario, list, storedStation())
+                val edit = openFromSettings(
+                    scenario, settings, DialogR.id.dialog_rs_settings_edit_btn, EditStationDialog.DIALOG_TAG
+                )
 
-            scenario.onActivity {
-                assertEquals(
-                    "The edit dialog did not load the station it was opened for",
-                    STATION_NAME,
-                    dialogView<EditText>(edit, DialogR.id.add_edit_station_name_edit).text.toString()
-                )
-                assertEquals(
-                    "The edit dialog did not load the station's stream url",
-                    url,
-                    dialogView<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).text.toString()
-                )
-                dialogView<EditText>(edit, DialogR.id.add_edit_station_name_edit).setText(EDITED_NAME)
-                dialogView<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).setText(editedUrl)
-                dialogView<View>(edit, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
+                scenario.onActivity {
+                    assertEquals(
+                        "The edit dialog did not load the station it was opened for",
+                        STATION_NAME,
+                        dialogView<EditText>(edit, DialogR.id.add_edit_station_name_edit).text.toString()
+                    )
+                    assertEquals(
+                        "The edit dialog did not load the station's stream url",
+                        url,
+                        dialogView<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).text.toString()
+                    )
+                    dialogView<EditText>(edit, DialogR.id.add_edit_station_name_edit).setText(EDITED_NAME)
+                    dialogView<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).setText(editedUrl)
+                    dialogView<View>(edit, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
+                }
+            } finally {
+                returnToRoot(scenario)
             }
 
             val edited = awaitStoredStation(EDITED_NAME)
@@ -200,7 +204,7 @@ class LocalStationLifecycleJourneyTest {
             assertEquals(
                 "Editing a station changed the root list, which only gains and loses the node",
                 mProfile.cleanInstallRoot() + mProfile.localsRow(),
-                list.awaitRows()
+                list.awaitRows("the root list") { it.contains(mProfile.localsRow()) }
             )
         }
     }
@@ -217,18 +221,22 @@ class LocalStationLifecycleJourneyTest {
             addStationThroughTheDialog(scenario, STATION_NAME, serveStream(STATION_PATH))
             list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
 
-            val settings = openStationSettings(scenario, storedMediaItem())
-            val remove = openFromSettings(
-                scenario, settings, DialogR.id.dialog_rs_settings_remove_btn, RemoveStationDialog.DIALOG_TAG
-            )
-
-            scenario.onActivity {
-                assertEquals(
-                    "The confirmation does not say which station is about to go",
-                    mContext.getString(DialogR.string.remove_station_dialog_main_text, STATION_NAME),
-                    dialogView<TextView>(remove, DialogR.id.remove_station_text_view).text.toString()
+            try {
+                val settings = openStationSettings(scenario, list, storedStation())
+                val remove = openFromSettings(
+                    scenario, settings, DialogR.id.dialog_rs_settings_remove_btn, RemoveStationDialog.DIALOG_TAG
                 )
-                dialogView<View>(remove, DialogR.id.remove_station_dialog_add_btn_view).performClick()
+
+                scenario.onActivity {
+                    assertEquals(
+                        "The confirmation does not say which station is about to go",
+                        mContext.getString(DialogR.string.remove_station_dialog_main_text, STATION_NAME),
+                        dialogView<TextView>(remove, DialogR.id.remove_station_text_view).text.toString()
+                    )
+                    dialogView<View>(remove, DialogR.id.remove_station_dialog_add_btn_view).performClick()
+                }
+            } finally {
+                returnToRoot(scenario)
             }
 
             assertEquals(
@@ -381,21 +389,39 @@ class LocalStationLifecycleJourneyTest {
     }
 
     /**
-     * Shows the settings dialog for [item] with the arguments `MediaPresenterImpl.handleItemSettings`
-     * builds, and asserts it came up offering the two buttons it shows for the locals node alone.
+     * Opens the locals list, finds [station]'s row and clicks its settings button, which is how a
+     * user reaches editing and removing.
+     *
+     * The one step not driven is the tap that would open the node, because offline the presenter
+     * refuses it. `theLocalsRowDoesNotOpenWithoutANetwork` pins that refusal down and TASK-049
+     * lifts it. What is called instead is the step that tap performs once past the gate, so the
+     * rendered list, the station's row, the settings button on it and the arguments
+     * `handleItemSettings` builds from the node the presenter is standing in are the
+     * application's own rather than this test's.
      */
     private fun openStationSettings(
         scenario: ActivityScenario<MainActivity>,
-        item: MediaItem
+        list: BrowseListView,
+        station: RadioStation
     ): DialogFragment {
-        scenario.onActivity { activity ->
-            val arguments = Bundle()
-            RSSettingsDialog.provideMediaItem(
-                arguments, item, MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST, 1
-            )
-            BaseDialogFragment.newInstance(RSSettingsDialog::class.java.name, arguments)
-                .show(activity.supportFragmentManager.beginTransaction(), RSSettingsDialog.DIALOG_TAG)
+        val presenter = presenter()
+        scenario.onActivity {
+            presenter.addMediaItemToStack(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
         }
+        assertEquals(
+            "The locals list does not show the station that was added",
+            listOf(BrowseRow(station.id, station.name)),
+            list.awaitRows("the station's own row") { it.size == 1 }
+        )
+        scenario.onActivity { activity ->
+            assertEquals(
+                "The add-station button belongs to the root and is still up inside the locals list",
+                View.GONE,
+                activity.findViewById<View>(R.id.add_station_btn).visibility
+            )
+        }
+
+        list.tapRowSettings(station.id)
         val settings = awaitDialog(scenario, RSSettingsDialog.DIALOG_TAG)
         scenario.onActivity {
             assertEquals(
@@ -405,6 +431,45 @@ class LocalStationLifecycleJourneyTest {
             )
         }
         return settings
+    }
+
+    /**
+     * Walks the presenter back out of whatever node a case opened.
+     *
+     * The stack belongs to a registry singleton that outlives the Activity, so a case that left it
+     * pointing at the locals list would send the next case's Activity straight back there. Popping
+     * stops at the root: `handleBackPressed` treats the root as "leave the application" and sends
+     * `CMD_STOP_SERVICE`, which ends in `Process.killProcess` and would take the whole run with it.
+     *
+     * This asserts nothing, because it runs from a `finally` and an assertion there would replace
+     * whatever failure sent the case into it. Each case's own root-list assertion catches a
+     * failure to get back, and `awaitCleanInstallRoot` catches one that escaped the case entirely.
+     */
+    private fun returnToRoot(scenario: ActivityScenario<MainActivity>) {
+        val presenter = presenter()
+        scenario.onActivity {
+            var remaining = MAX_BROWSE_DEPTH
+            while (presenter.getCurrentCategory() != MediaId.MEDIA_ID_ROOT && remaining-- > 0) {
+                presenter.handleBackPressed()
+            }
+        }
+    }
+
+    /**
+     * @return the registry's own presenter, the one [MainActivity] is driving, reached through the
+     *   single-method hook that is the supported way to it.
+     */
+    private fun presenter(): MediaPresenter {
+        lateinit var result: MediaPresenter
+        DependencyRegistryCommonUi.inject(
+            object : MediaPresenterDependency {
+
+                override fun configureWith(mediaPresenter: MediaPresenter) {
+                    result = mediaPresenter
+                }
+            }
+        )
+        return result
     }
 
     /**
@@ -470,16 +535,6 @@ class LocalStationLifecycleJourneyTest {
         val stations = mProfile.storages.freshLocals().getAll()
         assertEquals("The locals store does not hold exactly one station", 1, stations.size)
         return stations.first()
-    }
-
-    /**
-     * @return the station's media item as the service serves it, which is what a row in the locals
-     *   list would be holding and what the settings dialog is given.
-     */
-    private fun storedMediaItem(): MediaItem {
-        val items = mProfile.browser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-        assertEquals("The service does not serve exactly one local station", 1, items.size)
-        return items.first()
     }
 
     private fun servedLocalTitles(): List<String> {
@@ -587,6 +642,12 @@ class LocalStationLifecycleJourneyTest {
         const val PREFERENCE_DIRECTORY = "shared_prefs"
 
         const val PREFERENCE_FILE_SUFFIX = ".xml"
+
+        /**
+         * How far a case is allowed to have walked into the browse tree, so that popping back out
+         * cannot loop for ever if the stack ever stops shrinking.
+         */
+        const val MAX_BROWSE_DEPTH = 8
 
         /**
          * Covers a fragment transaction and the dialog's own layout pass.

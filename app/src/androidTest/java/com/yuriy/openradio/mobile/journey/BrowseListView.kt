@@ -107,7 +107,22 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      * Taps the row for [mediaId], on the view that carries the click listener a finger lands on.
      */
     fun tapRow(mediaId: String) {
-        val tapped = AtomicBoolean(false)
+        clickInRow(mediaId, R.id.foreground_view)
+    }
+
+    /**
+     * Clicks the settings button of the row for [mediaId].
+     *
+     * On a station row this is the button a swipe reveals. The swipe itself is a drag on a
+     * [com.xenione.libs.swipemaker.SwipeLayout] and is not performed, but the button is a child of
+     * the row either way, so its listener and everything it reaches are the real ones.
+     */
+    fun tapRowSettings(mediaId: String) {
+        clickInRow(mediaId, R.id.settings_btn_view)
+    }
+
+    private fun clickInRow(mediaId: String, viewId: Int) {
+        val clicked = AtomicBoolean(false)
         mScenario.onActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
             val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
@@ -120,11 +135,11 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
                 if (adapter.getItem(position)?.mediaId != mediaId) {
                     continue
                 }
-                child.findViewById<View>(R.id.foreground_view).performClick()
-                tapped.set(true)
+                child.findViewById<View>(viewId).performClick()
+                clicked.set(true)
             }
         }
-        assertTrue("No rendered row carries the media id $mediaId. " + describe(), tapped.get())
+        assertTrue("No rendered row carries the media id $mediaId. " + describe(), clicked.get())
     }
 
     /**
