@@ -41,6 +41,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -81,6 +82,7 @@ class ColdLaunchJourneyTest {
         mAppData = AppDataReset(mContext)
         mBrowser = ServiceBrowser()
         mBrowser.connect()
+        clearApplicationData()
         // The service caches the root and outlives a single test, so whatever an earlier class
         // left in the tree has to go before this one launches an Activity against it.
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
@@ -92,6 +94,31 @@ class ColdLaunchJourneyTest {
         mStorages.clear()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.release()
+    }
+
+    /**
+     * Android's clear-data scenario, minus the process kill. Every case starts from it, because a
+     * cold launch is only a cold launch if nothing an earlier test stored is still there. The
+     * chosen country is the plainest example: it decides the last row of the root menu, and
+     * `ServiceStorages.clear` does not own that file.
+     *
+     * The command clears on a coroutine and answers before it has finished, so the wait needs
+     * something it is known to take away. The last played station is the step it finishes with,
+     * and the registry's storage keeps a copy in memory that outlives the file wipe, so a station
+     * seeded through that instance cannot make the wait pass before the command has run.
+     *
+     * @return the preference files that were emptied.
+     */
+    private fun clearApplicationData(): List<String> {
+        val preferenceFiles = mAppData.clearEveryPreferenceFile()
+        assertTrue("The app owns no preference files, so nothing was cleared", preferenceFiles.isNotEmpty())
+        mStorages.latest.add(makeStation(CLEAR_PROBE_STATION_ID))
+        assertFalse(
+            "The clear probe was not stored, so waiting for it to go would prove nothing",
+            mStorages.latest.get().isInvalid()
+        )
+        mAppData.clearCaches(mBrowser) { mStorages.latest.get().isInvalid() }
+        return preferenceFiles
     }
 
     /**
@@ -121,9 +148,13 @@ class ColdLaunchJourneyTest {
      * An offline first run has no stations to show under any of the entries it lists, and the app
      * has one screen that says so. Showing it at the root would tell a new user the application is
      * broken, so the list has to arrive with both the spinner and that message down.
+     *
+     * The add-station button belongs to the same screen state. The list callback shows it for the
+     * root and hides it everywhere else, and adding a station by hand is the only thing a user
+     * with no connection can actually do here, so the offline root has to keep offering it.
      */
     @Test
-    fun aColdLaunchShowsNeitherTheSpinnerNorTheNoDataMessage() {
+    fun aColdLaunchShowsTheAddButtonAndNeitherTheSpinnerNorTheNoDataMessage() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             awaitRootRows(scenario)
 
@@ -137,6 +168,11 @@ class ColdLaunchJourneyTest {
                     "The root list arrived and the no-data message is showing anyway",
                     View.GONE,
                     activity.findViewById<View>(R.id.no_data_view).visibility
+                )
+                assertEquals(
+                    "The root list hid the only way to add a station without a connection",
+                    View.VISIBLE,
+                    activity.findViewById<View>(R.id.add_station_btn).visibility
                 )
             }
         }
@@ -162,12 +198,7 @@ class ColdLaunchJourneyTest {
             storedIds.contains(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
         )
 
-        val preferenceFiles = mAppData.clearEveryPreferenceFile()
-        assertTrue("The app owns no preference files, so nothing was cleared", preferenceFiles.isNotEmpty())
-        // The last played station is the one piece of this that survives the file wipe: the
-        // registry's storage keeps it in memory in front of the file, and only the clear command
-        // drops that copy. Waiting on it therefore says the whole clear finished.
-        mAppData.clearCaches(mBrowser) { mStorages.latest.get().isInvalid() }
+        val preferenceFiles = clearApplicationData()
         assertTrue("A preference file survived the wipe", mAppData.everyPreferenceFileIsEmpty(preferenceFiles))
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
 
@@ -321,5 +352,10 @@ class ColdLaunchJourneyTest {
         const val POLL_MILLIS = 50L
 
         const val FAVORITE_STATION_ID = "cold-launch-favorite"
+
+        /**
+         * Stored only so that the wait on the asynchronous clear has something to watch go away.
+         */
+        const val CLEAR_PROBE_STATION_ID = "cold-launch-clear-probe"
     }
 }
