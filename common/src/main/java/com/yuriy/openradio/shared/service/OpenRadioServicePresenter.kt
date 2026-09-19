@@ -34,9 +34,11 @@ interface OpenRadioServicePresenter {
 
     fun stopNetworkMonitor(context: Context)
 
-    fun isMobileNetwork(): Boolean
-
-    fun getUseMobile(): Boolean
+    /**
+     * Whether the device is on a mobile network the user has told the application not to stream
+     * over. Playback must not start, and must not resume, while this holds.
+     */
+    fun isPlaybackBlockedByMobileNetwork(): Boolean
 
     fun getStationsInCategory(categoryId: String, pageNumber: Int): Set<RadioStation>
 

@@ -19,6 +19,9 @@ package com.yuriy.openradio.shared.service
 import android.content.ComponentName
 import android.os.Bundle
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaBrowser
@@ -43,6 +46,12 @@ import java.util.concurrent.atomic.AtomicReference
  * dance are wrapped here, always with an explicit deadline: several browse nodes answer through a
  * [com.google.common.util.concurrent.SettableFuture] that production code can leave unset, and an
  * unbounded wait would hang the whole instrumentation run instead of failing one test.
+ *
+ * A [MediaBrowser] is also a [androidx.media3.session.MediaController], so the same connection
+ * carries transport control and the player state the session pushes back. Browsing and playing
+ * share one connection here because they share one in the application too: the phone UI selects a
+ * station from the list it just browsed, and the service answers that selection out of the browse
+ * tree the browse filled.
  */
 @UnstableApi
 internal class ServiceBrowser {
@@ -76,6 +85,8 @@ internal class ServiceBrowser {
         }
     }
 
+    private val mPlayerEvents = PlayerEvents()
+
     fun connect() {
         val context = mInstrumentation.targetContext
         val holder = AtomicReference<ListenableFuture<MediaBrowser>>()
@@ -90,12 +101,16 @@ internal class ServiceBrowser {
             )
         }
         mBrowser = holder.get().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        onMain { addListener(mPlayerEvents) }
     }
 
     fun release() {
         val browser = mBrowser ?: return
         mBrowser = null
-        mInstrumentation.runOnMainSync(browser::release)
+        mInstrumentation.runOnMainSync {
+            browser.removeListener(mPlayerEvents)
+            browser.release()
+        }
     }
 
     fun libraryRoot(): LibraryResult<MediaItem> {
@@ -195,6 +210,159 @@ internal class ServiceBrowser {
         mSearchChanges.clear()
     }
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Transport
+    //
+    // A MediaBrowser is a MediaController, so the same connection that browses also plays. Every
+    // call below goes through onMain for the same reason the browse calls do: the session and its
+    // player live on the application main looper, and a controller call issued from the test
+    // thread is rejected. Reads go through it too, because what a controller reports is state it
+    // was pushed from the session, and that push happens on that looper.
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * Hands the session a single item, which is what selecting a station in a list does. The
+     * service answers by expanding it into the playlist the item belongs to.
+     */
+    fun setMediaItem(mediaItem: MediaItem) {
+        onMain { this.setMediaItem(mediaItem) }
+    }
+
+    fun prepareAndPlay() {
+        onMain {
+            this.prepare()
+            this.play()
+        }
+    }
+
+    fun play() {
+        onMain { this.play() }
+    }
+
+    fun pause() {
+        onMain { this.pause() }
+    }
+
+    fun stop() {
+        onMain { this.stop() }
+    }
+
+    fun seekToNext() {
+        onMain { seekToNextMediaItem() }
+    }
+
+    fun seekToPrevious() {
+        onMain { seekToPreviousMediaItem() }
+    }
+
+    fun clearMediaItems() {
+        onMain { this.clearMediaItems() }
+    }
+
+    fun playbackState(): Int {
+        return read { playbackState }
+    }
+
+    fun isPlaying(): Boolean {
+        return read { isPlaying }
+    }
+
+    fun currentMediaId(): String? {
+        return read { currentMediaItem?.mediaId }
+    }
+
+    fun currentMediaItemIndex(): Int {
+        return read { currentMediaItemIndex }
+    }
+
+    fun mediaItemCount(): Int {
+        return read { mediaItemCount }
+    }
+
+    fun queueMediaIds(): List<String> {
+        return read { (0 until mediaItemCount).map { getMediaItemAt(it).mediaId } }
+    }
+
+    fun currentMediaItemUri(): String? {
+        return read { currentMediaItem?.localConfiguration?.uri?.toString() }
+    }
+
+    fun playerError(): PlaybackException? {
+        return read { playerError }
+    }
+
+    /**
+     * Waits until the controller reports a state that satisfies [predicate].
+     *
+     * The controller's view of the player is pushed to it, so nothing it reports is true the
+     * instant a transport call returns; a test that asserts straight after one is asserting the
+     * state before its own command. [description] names what was being waited for, because the
+     * failure is otherwise a bare timeout.
+     */
+    fun awaitPlayback(
+        description: String,
+        timeoutSeconds: Long = TIMEOUT_SECONDS,
+        predicate: () -> Boolean
+    ) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds)
+        while (true) {
+            if (predicate()) {
+                return
+            }
+            if (System.nanoTime() >= deadline) {
+                throw AssertionError(
+                    "Timed out after ${timeoutSeconds}s waiting for $description. " +
+                            "State is ${playbackState()}, playing ${isPlaying()}, " +
+                            "item ${currentMediaId()}, error ${playerError()}"
+                )
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+    }
+
+    fun awaitPlaying(timeoutSeconds: Long = TIMEOUT_SECONDS) {
+        awaitPlayback("playback to start", timeoutSeconds) { isPlaying() }
+    }
+
+    fun awaitPlaybackState(state: Int, timeoutSeconds: Long = TIMEOUT_SECONDS) {
+        awaitPlayback("playback state $state", timeoutSeconds) { playbackState() == state }
+    }
+
+    /**
+     * @return every metadata push the controller has seen since [forgetPlayerEvents].
+     */
+    fun metadataUpdates(): List<MediaMetadata> {
+        return mPlayerEvents.metadata()
+    }
+
+    /**
+     * Waits for a metadata push whose subtitle is [subtitle], which is where the player reports
+     * what a stream is doing: buffering, live, or the reason it failed.
+     */
+    fun awaitMetadataSubtitle(subtitle: String, timeoutSeconds: Long = TIMEOUT_SECONDS) {
+        awaitPlayback("metadata subtitle '$subtitle'", timeoutSeconds) {
+            metadataUpdates().any { it.subtitle?.toString() == subtitle }
+        }
+    }
+
+    fun mediaItemTransitions(): List<String> {
+        return mPlayerEvents.transitions()
+    }
+
+    fun forgetPlayerEvents() {
+        mPlayerEvents.forget()
+    }
+
+    private fun onMain(call: MediaBrowser.() -> Unit) {
+        mInstrumentation.runOnMainSync { browser().call() }
+    }
+
+    private fun <T> read(call: MediaBrowser.() -> T): T {
+        val holder = AtomicReference<T>()
+        mInstrumentation.runOnMainSync { holder.set(browser().call()) }
+        return holder.get()
+    }
+
     private fun <T> await(
         timeoutSeconds: Long = TIMEOUT_SECONDS,
         call: MediaBrowser.() -> ListenableFuture<T>
@@ -212,8 +380,51 @@ internal class ServiceBrowser {
 
     data class SearchResultChanged(val query: String, val itemCount: Int)
 
+    /**
+     * Records what the session pushes to the controller about the player.
+     *
+     * Every callback arrives on the application main looper and the recorded lists are read from
+     * the test thread, so both sides are synchronized on the recorder itself.
+     */
+    private class PlayerEvents : Player.Listener {
+
+        private val mMetadata = mutableListOf<MediaMetadata>()
+
+        private val mTransitions = mutableListOf<String>()
+
+        override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+            synchronized(this) { mMetadata.add(mediaMetadata) }
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            synchronized(this) { mTransitions.add(mediaItem?.mediaId ?: NO_ITEM) }
+        }
+
+        fun metadata(): List<MediaMetadata> {
+            return synchronized(this) { ArrayList(mMetadata) }
+        }
+
+        fun transitions(): List<String> {
+            return synchronized(this) { ArrayList(mTransitions) }
+        }
+
+        fun forget() {
+            synchronized(this) {
+                mMetadata.clear()
+                mTransitions.clear()
+            }
+        }
+    }
+
     companion object {
 
         const val TIMEOUT_SECONDS = 15L
+
+        /**
+         * What a media item transition reports when the queue has run out of items.
+         */
+        const val NO_ITEM = "<none>"
+
+        private const val POLL_MILLIS = 50L
     }
 }

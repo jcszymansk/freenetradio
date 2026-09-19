@@ -48,6 +48,7 @@ import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
 import com.yuriy.openradio.shared.model.storage.cache.api.ApiCache
+import com.yuriy.openradio.shared.model.storage.preferencesContext
 import com.yuriy.openradio.shared.model.storage.images.ImagesPersistenceLayer
 import com.yuriy.openradio.shared.model.timer.SleepTimerListener
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
@@ -279,7 +280,6 @@ class OpenRadioServicePresenterImplTest {
         }
 
         presenter.startNetworkMonitor(context, listener)
-        assertTrue(presenter.isMobileNetwork())
         presenter.stopNetworkMonitor(context)
 
         assertEquals(1, networkLayer.monitorsStarted)
@@ -291,8 +291,40 @@ class OpenRadioServicePresenterImplTest {
     fun settingsAnswerWithTheirStoredDefaults() {
         val presenter = presenter()
 
-        assertTrue(presenter.getUseMobile())
         assertEquals(Country.COUNTRY_CODE_DEFAULT, presenter.getCountryCode())
+    }
+
+    /**
+     * The whole truth table of the gate the service consults before it starts or resumes playback.
+     * Only one of the four combinations may block, and the one that does is the combination the
+     * user asked for: a mobile network they told the application to stay off.
+     */
+    @Test
+    fun onlyAnUnwantedMobileNetworkBlocksPlayback() {
+        assertTrue(gate(isMobile = true, useMobile = false).isPlaybackBlockedByMobileNetwork())
+        assertFalse(gate(isMobile = true, useMobile = true).isPlaybackBlockedByMobileNetwork())
+        assertFalse(gate(isMobile = false, useMobile = false).isPlaybackBlockedByMobileNetwork())
+        assertFalse(gate(isMobile = false, useMobile = true).isPlaybackBlockedByMobileNetwork())
+    }
+
+    /**
+     * Streaming over mobile is allowed until the user says otherwise, so a profile that has never
+     * opened the network settings must not have playback blocked on it.
+     */
+    @Test
+    fun anUntouchedProfileStreamsOverMobile() {
+        val presenter = presenter(networkLayer = RecordingNetworkLayer(mobile = true))
+
+        assertFalse(presenter.isPlaybackBlockedByMobileNetwork())
+    }
+
+    private fun gate(isMobile: Boolean, useMobile: Boolean): OpenRadioServicePresenter {
+        val context = preferencesContext()
+        NetworkSettingsStorage(WeakReference(context)).setUseMobile(useMobile)
+        return presenter(
+            networkLayer = RecordingNetworkLayer(mobile = isMobile),
+            settingsContext = context
+        )
     }
 
     @Test
@@ -317,9 +349,10 @@ class OpenRadioServicePresenterImplTest {
         persistentCache: RecordingApiCache = RecordingApiCache(),
         memoryCache: RecordingApiCache = RecordingApiCache(),
         sleepTimer: RecordingSleepTimerModel = RecordingSleepTimerModel(),
-        countriesCache: TreeSet<Country> = TreeSet()
+        countriesCache: TreeSet<Country> = TreeSet(),
+        settingsContext: Context = ContextWrapper(null)
     ): OpenRadioServicePresenter {
-        val contextRef = WeakReference<Context>(ContextWrapper(null))
+        val contextRef = WeakReference(settingsContext)
         val favoritesStorage = FavoritesStorage(contextRef)
         val latestRadioStationStorage = LatestRadioStationStorage(contextRef)
         return OpenRadioServicePresenterImpl(
