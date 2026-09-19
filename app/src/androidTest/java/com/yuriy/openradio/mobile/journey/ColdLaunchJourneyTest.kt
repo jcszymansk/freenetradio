@@ -123,14 +123,26 @@ class ColdLaunchJourneyTest {
 
     /**
      * The root menu this journey expects is the Radio Browser one: New and Popular come from that
-     * provider only. The selection is read once per process, at start up, so it can only be
-     * asserted, not set. See `OpenRadioServiceBrowseTest` for the longer version of why.
+     * provider only.
+     *
+     * This is the one piece of the profile [clearApplicationData] cannot reach.
+     * `DependencyRegistryCommon.init` runs from `MainAppCommon.onCreate`, before any `@Before`,
+     * and binds the URL layer, the parser and the root command from whatever `SourcePreferences`
+     * held at that moment. An install left on WebRadio therefore stays on WebRadio for the whole
+     * run, however much this test clears, so all a test can do is assert what was bound.
+     * `OpenRadioServiceBrowseTest` and `OpenRadioServiceSearchTest` carry the same guard.
+     *
+     * The clear has already emptied that preference by the time this runs, so a run that trips
+     * this has put the stored selection back to the default and the next one binds Radio Browser.
+     * Getting a fresh process per test rather than relying on that is TASK-031.
      */
     private fun assertRadioBrowserIsBound() {
         val ids = mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT)
         assertTrue(
-            "The service bound a provider whose root menu differs from the one asserted here. " +
-                "Root offered $ids",
+            "This process bound a provider other than Radio Browser. It read that from " +
+                "SourcePreferences at start up, before any test ran, and no clear from here can " +
+                "change it. The stored selection has now been reset, so running this again binds " +
+                "Radio Browser. Root offered $ids",
             ids.containsAll(
                 listOf(MediaId.MEDIA_ID_NEW_STATIONS, MediaId.MEDIA_ID_POPULAR_STATIONS)
             )
