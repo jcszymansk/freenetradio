@@ -32,16 +32,12 @@ import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
-import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
-import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
 import com.yuriy.openradio.shared.permission.PermissionChecker
-import com.yuriy.openradio.shared.presenter.MediaPresenter
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
 import com.yuriy.openradio.shared.view.dialog.EditStationDialog
 import com.yuriy.openradio.shared.view.dialog.RSSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
-import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.After
@@ -186,7 +182,7 @@ class LocalStationLifecycleJourneyTest {
                     dialogView<View>(edit, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
                 }
             } finally {
-                returnToRoot(scenario)
+                JourneyNavigation(scenario).returnToRoot()
             }
 
             val edited = awaitStoredStation(EDITED_NAME)
@@ -236,7 +232,7 @@ class LocalStationLifecycleJourneyTest {
                     dialogView<View>(remove, DialogR.id.remove_station_dialog_add_btn_view).performClick()
                 }
             } finally {
-                returnToRoot(scenario)
+                JourneyNavigation(scenario).returnToRoot()
             }
 
             assertEquals(
@@ -277,11 +273,7 @@ class LocalStationLifecycleJourneyTest {
             list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
         }
 
-        val preferenceFile = awaitWrittenToDisk(STATION_NAME)
-        assertTrue(
-            "The station was written to $preferenceFile, which is not the locals store",
-            preferenceFile.contains(LOCALS_PREFERENCE_FILE)
-        )
+        mProfile.awaitStoredOnDisk(LOCALS_PREFERENCE_FILE, STATION_NAME)
 
         // The root is the one node the service does cache, so a second Activity would otherwise be
         // handed the list the first one built and this would assert nothing about storage. Dropping
@@ -404,10 +396,7 @@ class LocalStationLifecycleJourneyTest {
         list: BrowseListView,
         station: RadioStation
     ): DialogFragment {
-        val presenter = presenter()
-        scenario.onActivity {
-            presenter.addMediaItemToStack(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-        }
+        JourneyNavigation(scenario).open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
         assertEquals(
             "The locals list does not show the station that was added",
             listOf(BrowseRow(station.id, station.name)),
@@ -431,45 +420,6 @@ class LocalStationLifecycleJourneyTest {
             )
         }
         return settings
-    }
-
-    /**
-     * Walks the presenter back out of whatever node a case opened.
-     *
-     * The stack belongs to a registry singleton that outlives the Activity, so a case that left it
-     * pointing at the locals list would send the next case's Activity straight back there. Popping
-     * stops at the root: `handleBackPressed` treats the root as "leave the application" and sends
-     * `CMD_STOP_SERVICE`, which ends in `Process.killProcess` and would take the whole run with it.
-     *
-     * This asserts nothing, because it runs from a `finally` and an assertion there would replace
-     * whatever failure sent the case into it. Each case's own root-list assertion catches a
-     * failure to get back, and `awaitCleanInstallRoot` catches one that escaped the case entirely.
-     */
-    private fun returnToRoot(scenario: ActivityScenario<MainActivity>) {
-        val presenter = presenter()
-        scenario.onActivity {
-            var remaining = MAX_BROWSE_DEPTH
-            while (presenter.getCurrentCategory() != MediaId.MEDIA_ID_ROOT && remaining-- > 0) {
-                presenter.handleBackPressed()
-            }
-        }
-    }
-
-    /**
-     * @return the registry's own presenter, the one [MainActivity] is driving, reached through the
-     *   single-method hook that is the supported way to it.
-     */
-    private fun presenter(): MediaPresenter {
-        lateinit var result: MediaPresenter
-        DependencyRegistryCommonUi.inject(
-            object : MediaPresenterDependency {
-
-                override fun configureWith(mediaPresenter: MediaPresenter) {
-                    result = mediaPresenter
-                }
-            }
-        )
-        return result
     }
 
     /**
@@ -565,33 +515,6 @@ class LocalStationLifecycleJourneyTest {
         )
     }
 
-    /**
-     * Waits for [needle] to appear in a preference file on disk.
-     *
-     * The stores write with [android.content.SharedPreferences.Editor.apply], so the value is
-     * readable from this process before it has been written anywhere a restart could find it.
-     * Reading the files rather than the preferences is the difference between the two.
-     *
-     * @return the name of the file it was found in.
-     */
-    private fun awaitWrittenToDisk(needle: String): String {
-        val directory = File(mContext.applicationInfo.dataDir, PREFERENCE_DIRECTORY)
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STORE_TIMEOUT_SECONDS)
-        while (System.nanoTime() < deadline) {
-            val file = (directory.listFiles() ?: emptyArray())
-                .filter { it.name.endsWith(PREFERENCE_FILE_SUFFIX) }
-                .firstOrNull { it.readText().contains(needle) }
-            if (file != null) {
-                return file.name
-            }
-            Thread.sleep(POLL_MILLIS)
-        }
-        throw AssertionError(
-            "'$needle' did not reach any file in $directory within $STORE_TIMEOUT_SECONDS " +
-                "seconds, so nothing a restart reads holds it."
-        )
-    }
-
     private fun serveStream(path: String): String {
         return mStreams.serve(path, LoopbackHttpFixture.AUDIO_WAV, STREAM_BODY)
     }
@@ -638,16 +561,6 @@ class LocalStationLifecycleJourneyTest {
         const val STREAM_BODY = "journey"
 
         const val LOCALS_PREFERENCE_FILE = "LocalRadioStationsPreferences"
-
-        const val PREFERENCE_DIRECTORY = "shared_prefs"
-
-        const val PREFERENCE_FILE_SUFFIX = ".xml"
-
-        /**
-         * How far a case is allowed to have walked into the browse tree, so that popping back out
-         * cannot loop for ever if the stack ever stops shrinking.
-         */
-        const val MAX_BROWSE_DEPTH = 8
 
         /**
          * Covers a fragment transaction and the dialog's own layout pass.

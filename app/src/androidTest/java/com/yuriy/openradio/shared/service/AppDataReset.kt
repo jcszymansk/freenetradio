@@ -72,6 +72,39 @@ internal class AppDataReset(private val mContext: Context) {
     }
 
     /**
+     * Waits for the preference file of the store [name] to hold [needle] on disk.
+     *
+     * The stores write with [android.content.SharedPreferences.Editor.apply], so a value is
+     * readable through the preferences of this process before it has been written anywhere a
+     * restart could find it. Reading the file rather than the preferences is the difference
+     * between the two, which is why this looks in the same directory [clearEveryPreferenceFile]
+     * empties rather than asking a storage.
+     *
+     * The store is named rather than searched for, because the same station can be in more than
+     * one of them and finding it in any file would not say it reached the right one. A failure
+     * names the files that do hold it, so writing to the wrong store reads as that rather than as
+     * not writing at all.
+     */
+    fun awaitPreferenceFileContaining(name: String, needle: String) {
+        val directory = File(mContext.applicationInfo.dataDir, PREFERENCE_DIRECTORY)
+        val file = File(directory, name + PREFERENCE_FILE_SUFFIX)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WRITE_TIMEOUT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            if (file.isFile && file.readText().contains(needle)) {
+                return
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+        val elsewhere = (directory.listFiles() ?: emptyArray())
+            .filter { it.name.endsWith(PREFERENCE_FILE_SUFFIX) && it.readText().contains(needle) }
+            .map { it.name }
+        throw AssertionError(
+            "'$needle' did not reach $file within $WRITE_TIMEOUT_SECONDS seconds, so nothing a " +
+                "restart reads in that store holds it. It is in $elsewhere."
+        )
+    }
+
+    /**
      * Hands the caches to the service and waits until [cleared] holds.
      *
      * `CMD_CLEAR_CACHE` hands the work to a coroutine and answers immediately, so its success code
@@ -106,6 +139,11 @@ internal class AppDataReset(private val mContext: Context) {
         const val PREFERENCE_FILE_SUFFIX = ".xml"
 
         const val CLEAR_TIMEOUT_SECONDS = 10L
+
+        /**
+         * Covers the hop onto the thread `apply` writes from, and the write itself.
+         */
+        const val WRITE_TIMEOUT_SECONDS = 20L
 
         const val POLL_MILLIS = 50L
     }
