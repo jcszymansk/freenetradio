@@ -32,12 +32,21 @@ export ANDROID_HOME=$HOME/Android/Sdk
 ./gradlew instrumentedCoverageReport            # JaCoCo for :app instrumentation tests
 ```
 
-Instrumented tests must run with emulator networking disabled:
+Instrumented tests must run with emulator networking disabled, against a device that is not
+carrying application data from earlier use:
 
 ```sh
 adb shell svc wifi disable && adb shell svc data disable
+adb shell pm clear com.github.jcszymansk.freenetradio   # skip if the app is not installed
 ./gradlew :app:connectedDebugAndroidTest
 ```
+
+Gradle installs over whatever is on the device and keeps its data, so the clear is not optional
+housekeeping. The active station provider is read once per process by `ImagesProvider.onCreate`,
+which Android runs before the Application and before the instrumentation, so a device where
+someone selected WebRadio in the app binds WebRadio for the whole run and no test can change it.
+The suites assert the provider they got rather than the one that is stored, and fail loudly when
+it is the wrong one.
 
 Release builds are unsigned — no release signing key exists yet, and `sign.properties` must never be committed.
 `./gradlew signReleaseBundle` increments `VERSION_CODE` in the tracked `version.properties` as a side effect.

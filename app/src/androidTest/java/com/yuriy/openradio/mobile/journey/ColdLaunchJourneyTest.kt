@@ -125,24 +125,26 @@ class ColdLaunchJourneyTest {
      * The root menu this journey expects is the Radio Browser one: New and Popular come from that
      * provider only.
      *
-     * This is the one piece of the profile [clearApplicationData] cannot reach.
-     * `DependencyRegistryCommon.init` runs from `MainAppCommon.onCreate`, before any `@Before`,
-     * and binds the URL layer, the parser and the root command from whatever `SourcePreferences`
-     * held at that moment. An install left on WebRadio therefore stays on WebRadio for the whole
-     * run, however much this test clears, so all a test can do is assert what was bound.
-     * `OpenRadioServiceBrowseTest` and `OpenRadioServiceSearchTest` carry the same guard.
+     * The provider is the one piece of the profile [clearApplicationData] cannot reach, and no
+     * test hook can reach it either: `ImagesProvider.onCreate` calls `DependencyRegistryCommon.init`,
+     * and Android creates content providers before the Application and before the instrumentation,
+     * so the URL layer, the parser and the root command are bound before any test code has run at
+     * all. An install left on WebRadio stays on WebRadio for the whole run, so all a test can do
+     * is assert what was bound. `OpenRadioServiceBrowseTest` and `OpenRadioServiceSearchTest`
+     * carry the same guard.
      *
-     * The clear has already emptied that preference by the time this runs, so a run that trips
-     * this has put the stored selection back to the default and the next one binds Radio Browser.
-     * Getting a fresh process per test rather than relying on that is TASK-031.
+     * Clearing the app's data before the run is what avoids it, which is why `AGENTS.md` asks for
+     * that; a run that trips this has emptied the stored selection on the way past, so the next
+     * one binds Radio Browser regardless. Getting a fresh process per test is TASK-031.
      */
     private fun assertRadioBrowserIsBound() {
         val ids = mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT)
         assertTrue(
             "This process bound a provider other than Radio Browser. It read that from " +
-                "SourcePreferences at start up, before any test ran, and no clear from here can " +
-                "change it. The stored selection has now been reset, so running this again binds " +
-                "Radio Browser. Root offered $ids",
+                "SourcePreferences before any test ran, and nothing here can change it, so the " +
+                "device was carrying a stored selection into the run. Clear the app's data first, " +
+                "as AGENTS.md describes. The stored selection has now been reset either way, so " +
+                "running this again binds Radio Browser. Root offered $ids",
             ids.containsAll(
                 listOf(MediaId.MEDIA_ID_NEW_STATIONS, MediaId.MEDIA_ID_POPULAR_STATIONS)
             )
