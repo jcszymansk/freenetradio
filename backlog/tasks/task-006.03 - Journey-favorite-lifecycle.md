@@ -1,11 +1,11 @@
 ---
 id: TASK-006.03
 title: 'Journey: favorite lifecycle'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-19 20:17'
+updated_date: '2026-09-19 20:18'
 labels: []
 milestone: m-0
 dependencies:
@@ -23,9 +23,9 @@ Favorites are stored in SharedPreferences and invalidate a browse node, so the U
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Seed or browse a local station
-- [ ] #2 Add and remove the favorite
-- [ ] #3 Favorites node and persisted state verified
+- [x] #1 Seed or browse a local station
+- [x] #2 Add and remove the favorite
+- [x] #3 Favorites node and persisted state verified
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -56,3 +56,19 @@ Confirmed it is a real fix rather than a guess: with maybeNotifyRootChanged chan
 
 That experiment also exposed a hole in the assertion. BrowseListView.assertRowsStay skips empty reads because an empty read is also how a list reads mid-layout, so a list that emptied passes it. The case now also asserts the row is still there in its own right, which is the assertion the experiment failed on.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Adds FavoriteLifecycleJourneyTest, the third of the six Phase 6 phone journeys, plus the two helpers it shares with the second one: JourneyNavigation, which opens a browse node and walks back out, and AppDataReset.awaitPreferenceFileContaining, which waits for a value to reach a named store on disk.
+
+Five cases, each starting from a cleared, offline profile holding one station of the user's own, seeded into the locals store. AC1 allows seeding, and creating a station is TASK-006.02's subject; offline it is also the only kind of station there is, since every other node needs a provider.
+
+AC1 and AC2, mark and unmark: the mark is made by clicking the favorite box on the station's row in the locals list and taken away by clicking its box on the row in the favorites list, which is where a user makes and unmakes it. Both are the real control: MobileMediaItemsAdapter binds the box only on playable rows and enables the swipe that reveals it in exactly those two nodes, so only the drag is skipped. Nothing between the click and the lists changing is done by the test. The box is read before each click, so a station that arrived already marked fails rather than passing the case it sets up, and the root is asserted to be without the favorites node first, which is what makes waiting for it mean something.
+
+AC3, the node and persisted state: the favorites node renders exactly the marked station with its box checked; the root gains the node in first place and loses it again; the mark is read back through a FavoritesStorage the test built, because the writer answers isFavorite out of a map it fills as it goes; it is asserted to have reached FavoritesPreferences on disk rather than only the copy Android keeps in memory; and a relaunched Activity, with the service's cached root dropped, offers the node and the station inside it. A real process restart is not asserted and cannot be from here, which is TASK-031.
+
+Verified on emulator-5554, a clean API 34 AVD, with wifi and mobile data disabled and the app's data cleared: the full instrumented suite passes at 191 tests, up from 186, and ./gradlew test --rerun-tasks passes.
+
+Non-vacuous by mutation: with the tapRowFavorite call removed all five cases fail. Changing maybeNotifyRootChanged to notify the favorites node as well makes unmarkingAStationFromTheFavoritesNodeTakesItOffTheRoot fail with the row gone, which is how TASK-050 was confirmed rather than guessed, and that same experiment exposed a hole in BrowseListView.assertRowsStay that the case now covers with an assertion of its own.
+<!-- SECTION:FINAL_SUMMARY:END -->
