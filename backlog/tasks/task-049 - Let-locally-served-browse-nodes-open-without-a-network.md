@@ -5,6 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-19 18:32'
+updated_date: '2026-09-19 18:59'
 labels: []
 dependencies: []
 type: bug
@@ -28,4 +29,5 @@ The same gate is what keeps a cached provider node from opening offline after TA
 - [ ] #3 A node that can only be answered from the network still tells the user there is no connection
 - [ ] #4 The decision covers nodes the API response cache can serve offline, either by opening them or by recording why not
 - [ ] #5 Covered by a test that reaches no network
+- [ ] #6 TASK-006.02's journey drives the rendered locals row and its settings action instead of showing the settings dialog with arguments the test built, and theLocalsRowDoesNotOpenWithoutANetwork is replaced by the opposite assertion
 <!-- AC:END -->

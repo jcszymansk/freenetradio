@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-19 18:48'
+updated_date: '2026-09-19 18:59'
 labels: []
 milestone: m-0
 dependencies:
@@ -55,6 +55,10 @@ The stream url is served by LoopbackHttpFixture because RadioStationValidatorImp
 READ_MEDIA_IMAGES is granted through UiAutomation in setUp. BaseAddEditStationDialog.onResume asks for it, and on a freshly cleared install that puts a system prompt over the Activity the journey is reading.
 
 Extracted JourneyProfile and BrowseListView out of ColdLaunchJourneyTest first, so the four journeys still to come share one copy of the device state a journey starts from and one copy of reading the list by adapter position.
+
+Review round 1. The relaunch in theStationOutlivesTheActivityThatAddedIt was reading the service's cached root, so it asserted nothing about the store: the root is the one node callWhenSourceReady does serve from mBrowseTree. Proved it by emptying the locals store before the relaunch, which the case passed, then failed two assertions later on the storage read. Dropping the cached tree first makes the relaunch rebuild the root through MediaItemRoot, and the same experiment then fails at the relaunch as it should.
+
+The two structural gaps the review named are now acceptance criteria on the tasks that own them rather than prose in a test comment: TASK-031 carries re-running the persistence case across a real process, TASK-049 carries driving the rendered locals row and its settings action and replacing the offline-gate assertion with its opposite.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

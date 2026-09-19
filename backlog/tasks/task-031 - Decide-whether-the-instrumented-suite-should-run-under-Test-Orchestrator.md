@@ -4,7 +4,7 @@ title: Decide whether the instrumented suite should run under Test Orchestrator
 status: To Do
 assignee: []
 created_date: '2026-09-18 05:19'
-updated_date: '2026-09-19 17:53'
+updated_date: '2026-09-19 18:59'
 labels: []
 dependencies:
   - TASK-004.02
@@ -29,6 +29,7 @@ Decide and record the outcome; if orchestration is adopted, update AGENTS.md and
 - [ ] #1 A decision is recorded, with the wall-clock cost of running the current suite both ways measured rather than estimated
 - [ ] #2 If adopted, the Gradle configuration, the runner argument and the AGENTS.md commands are updated together
 - [ ] #3 If declined, the reason is written down where the next reviewer will find it rather than left in a review thread
+- [ ] #4 The persistence case of TASK-006.02's journey is re-run across a genuinely new process, or the reason it stays in-process is written down with the rest of the decision
 <!-- AC:END -->
 
 ## Comments
@@ -55,5 +56,11 @@ Measured, not argued:
 3. Clearing the app's data before the run fixes it completely. Same seeded profile plus adb shell pm clear, then the same command: 3 tests pass.
 
 AGENTS.md now carries that clear step with the reason. That is per-run hygiene and does not settle this task, which is about a fresh process per test; it does mean the documented path is no longer exposed, so the cost side of the decision is the remaining argument.
+---
+
+author: @claude
+created: 2026-09-19 18:59
+---
+Met again in TASK-006.02. Its AC4 is 'restart and verify persistence', and the closest a suite sharing the service's process can get is three assertions that together defeat every way a station could look persisted without being stored: it reached a preference file on disk, a second Activity renders it after the service's cached root is dropped, and a DeviceLocalsStorage built by the test reads it back. None of that crosses a process boundary, which is what this task would give it.
 ---
 <!-- COMMENTS:END -->

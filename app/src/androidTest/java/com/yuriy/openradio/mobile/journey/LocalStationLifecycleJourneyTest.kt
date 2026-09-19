@@ -245,15 +245,20 @@ class LocalStationLifecycleJourneyTest {
     }
 
     /**
-     * The station has to outlive the screen that created it. A process restart is not available to
-     * a suite that shares its process with the service, which is TASK-031, so this asserts the two
-     * halves that restart actually depends on: the station reached the preference file on disk,
-     * rather than only the copy Android keeps in memory, and a newly launched Activity builds its
-     * root list from it.
+     * The station has to outlive the screen that created it.
      *
-     * The store is read back through a [com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage]
-     * this test constructed, not the registry's, so nothing the add left in the writer's memory
-     * can answer for it.
+     * Three things a restart depends on are asserted, each defeating a different way the station
+     * could appear to survive without having been stored: it reached a preference file on disk
+     * rather than only the copy Android keeps in memory for this process; a second Activity
+     * renders it after the service's cached root has been dropped, so the list it shows was built
+     * from the store rather than replayed; and a
+     * [com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage] this test constructed reads
+     * it back, so nothing the writer cached can answer for it.
+     *
+     * What is not asserted is a real process restart, and it cannot be from here: the service
+     * shares this process, so killing it takes the instrumentation with it. That is the whole
+     * suite's limit, not this journey's, and TASK-031 carries the decision that would lift it
+     * along with re-running this case across a genuinely new process.
      */
     @Test
     fun theStationOutlivesTheActivityThatAddedIt() {
@@ -269,6 +274,12 @@ class LocalStationLifecycleJourneyTest {
             "The station was written to $preferenceFile, which is not the locals store",
             preferenceFile.contains(LOCALS_PREFERENCE_FILE)
         )
+
+        // The root is the one node the service does cache, so a second Activity would otherwise be
+        // handed the list the first one built and this would assert nothing about storage. Dropping
+        // it makes the relaunch rebuild the root through MediaItemRoot, which reads the locals
+        // store, so what the new Activity renders is what the store holds.
+        mProfile.refreshTree()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             assertEquals(
