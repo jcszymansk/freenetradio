@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.service
 
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.SessionResult
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.R
@@ -186,6 +187,32 @@ class OpenRadioServiceRecoveryTest {
         selectAndPlay(stations[1])
         mBrowser.awaitPlaying()
         assertEquals(stations[1].id, mBrowser.currentMediaId())
+    }
+
+    /**
+     * A network change is also pushed in from the settings UI, and it re-asks the same question
+     * playback started under. On a network the user allows, the answer is no and a station that
+     * is playing has to keep playing: the command is sent whenever the setting is touched, not
+     * only when it turns streaming off.
+     */
+    @Test
+    fun aNetworkChangeLeavesAnAllowedStreamPlaying() {
+        val stream = mServer.serve(
+            "/fixture.wav", LoopbackHttpFixture.AUDIO_WAV, mAudio.wavBytes(seconds = 10)
+        )
+        val station = mStations.seed(stream).first()
+
+        selectAndPlay(station)
+        mBrowser.awaitPlaying()
+
+        assertEquals(
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(OpenRadioService.CMD_NET_CHANGED).resultCode
+        )
+
+        awaitSettled()
+        assertTrue("A permitted network change stopped playback", mBrowser.isPlaying())
+        assertEquals(station.id, mBrowser.currentMediaId())
     }
 
     private fun selectAndPlay(station: RadioStation) {
