@@ -34,10 +34,8 @@ import com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.shared.model.storage.images.Image
-import com.yuriy.openradio.shared.model.storage.images.ImageDao
 import com.yuriy.openradio.shared.model.storage.images.ImagesDatabase
 import com.yuriy.openradio.shared.model.storage.makeStation
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -71,6 +69,8 @@ class OpenRadioServiceBrowseTest {
 
     private lateinit var mBrowser: ServiceBrowser
 
+    private lateinit var mAppData: AppDataReset
+
     /**
      * Builds the URLs a fixture has to be keyed to. Only the builders are used, and they run
      * before any DNS mirror is resolved, so nothing here touches the network.
@@ -89,6 +89,7 @@ class OpenRadioServiceBrowseTest {
         mContext = InstrumentationRegistry.getInstrumentation().targetContext
         mStorages = ServiceStorages(mContext)
         mStorages.clear()
+        mAppData = AppDataReset(mContext)
         mBrowser = ServiceBrowser()
         mActivityAliveAtConnect = anyActivityExists()
         mBrowser.connect()
@@ -283,11 +284,9 @@ class OpenRadioServiceBrowseTest {
             mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT).contains(MediaId.MEDIA_ID_FAVORITES_LIST)
         )
 
-        // Android asks for a clear-data run. `pm clear` would take the instrumentation process
-        // with it, so do what it does short of the process kill: empty every preference file the
-        // app owns, and let CMD_CLEAR_CACHE take both API caches, the stored images and the
-        // latest station.
-        val preferenceFiles = clearEveryPreferenceFile()
+        // Android asks for a clear-data run, which AppDataReset performs short of the process kill
+        // that would take the instrumentation with it.
+        val preferenceFiles = mAppData.clearEveryPreferenceFile()
         assertTrue("The app owns no preference files, so nothing was cleared", preferenceFiles.isNotEmpty())
 
         // Seed what the command itself is supposed to empty, after the wipe so the wipe cannot be
@@ -314,23 +313,26 @@ class OpenRadioServiceBrowseTest {
         assertNotNull(images.getImage(CLEAR_PROBE_STATION_ID))
         assertEquals(CLEAR_PROBE_STATION_ID, mStorages.freshLatest().get().id)
 
-        assertEquals(
-            SessionResult.RESULT_SUCCESS,
-            mBrowser.command(OpenRadioService.CMD_CLEAR_CACHE).resultCode
+        mAppData.clearCaches(mBrowser) { mStorages.freshLatest().get().isInvalid() }
+        assertTrue(
+            "The persistent cache row outlived the clear",
+            persistentCache[CACHE_KEY].isEmpty()
         )
-        awaitClearCompleted(persistentCache, memoryCache, images)
+        assertTrue(
+            "The in-memory cache row outlived the clear",
+            memoryCache[CACHE_KEY].isEmpty()
+        )
+        assertEquals("The stored image outlived the clear", 0, images.getCount())
         // The service's own storage has to agree, not just the file: it holds the station the next
         // start would adopt as the active one.
         assertTrue(
             "The service still reports a latest station after the clear",
             mStorages.latest.get().isInvalid()
         )
-        for (name in preferenceFiles) {
-            assertTrue(
-                "$name survived the wipe",
-                mContext.getSharedPreferences(name, Context.MODE_PRIVATE).all.isEmpty()
-            )
-        }
+        assertTrue(
+            "A preference file survived the wipe",
+            mAppData.everyPreferenceFileIsEmpty(preferenceFiles)
+        )
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.release()
 
@@ -605,66 +607,6 @@ class OpenRadioServiceBrowseTest {
     }
 
     /**
-     * `CMD_CLEAR_CACHE` hands the work to a coroutine and answers immediately, so its success code
-     * says nothing about whether anything has been emptied yet.
-     *
-     * `OpenRadioServicePresenterImpl.clear` runs its four steps in order: the persistent API cache,
-     * the in-memory one, the stored images, then the latest station. Waiting for the latest station
-     * is therefore a signal that the whole operation finished rather than only the step being
-     * watched, and each of the other three is then asserted on its own rather than inferred from
-     * that ordering.
-     */
-    private fun awaitClearCompleted(
-        persistentCache: PersistentApiCache,
-        memoryCache: InMemoryApiCache,
-        images: ImageDao
-    ) {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(CACHE_CLEAR_TIMEOUT_SECONDS)
-        while (System.nanoTime() < deadline) {
-            if (mStorages.freshLatest().get().isInvalid()) {
-                assertTrue(
-                    "The persistent cache row outlived the clear",
-                    persistentCache[CACHE_KEY].isEmpty()
-                )
-                assertTrue(
-                    "The in-memory cache row outlived the clear",
-                    memoryCache[CACHE_KEY].isEmpty()
-                )
-                assertEquals("The stored image outlived the clear", 0, images.getCount())
-                return
-            }
-            Thread.sleep(CACHE_POLL_MILLIS)
-        }
-        throw AssertionError("CMD_CLEAR_CACHE did not finish: the seeded latest station is still stored")
-    }
-
-    /**
-     * Empties every preference file the app has written, found by listing `shared_prefs` rather
-     * than by naming the stores, so a store added later is covered without touching this test.
-     *
-     * The files are cleared through [android.content.SharedPreferences] instead of being deleted:
-     * Android caches one instance per file per process, and the service holds several of them, so
-     * deleting the file on disk would leave the service reading the values it already has. That is
-     * the one thing `pm clear` gets for free by killing the process.
-     *
-     * The ExoPlayer media cache under the external files directory is left alone. It is not part
-     * of the browse profile and the player holds it open.
-     *
-     * @return the names of the files that were cleared.
-     */
-    private fun clearEveryPreferenceFile(): List<String> {
-        val directory = java.io.File(mContext.applicationInfo.dataDir, "shared_prefs")
-        val names = (directory.listFiles() ?: emptyArray())
-            .map { it.name }
-            .filter { it.endsWith(PREFERENCE_FILE_SUFFIX) }
-            .map { it.removeSuffix(PREFERENCE_FILE_SUFFIX) }
-        for (name in names) {
-            mContext.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
-        }
-        return names
-    }
-
-    /**
      * [Stage.DESTROYED] is excluded on purpose: an Activity an earlier test already tore down is
      * gone as far as this service is concerned, and counting it would make the check depend on
      * which classes ran before. The lifecycle monitor is main thread state, so it is read there.
@@ -695,15 +637,9 @@ class OpenRadioServiceBrowseTest {
          */
         const val UNKNOWN_PARENT_ID = "__NOT_A_NODE__"
 
-        const val PREFERENCE_FILE_SUFFIX = ".xml"
-
         const val CACHE_KEY = "https://radio.example/clear-data-probe"
 
         const val CACHE_VALUE = """[{"stationuuid":"probe","name":"Probe","url":"https://x.test"}]"""
-
-        const val CACHE_CLEAR_TIMEOUT_SECONDS = 10L
-
-        const val CACHE_POLL_MILLIS = 50L
 
         const val CLEAR_PROBE_STATION_ID = "clear-data-probe"
 
