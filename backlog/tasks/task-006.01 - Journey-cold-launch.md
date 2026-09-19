@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-19 17:07'
+updated_date: '2026-09-19 17:18'
 labels: []
 milestone: m-0
 dependencies:
@@ -38,3 +38,15 @@ First-run behavior with no network and no stored state.
 5. Assertions read the RecyclerView children by adapter position, so what is asserted is what a user sees, and the adapter's media ids for identity.
 6. Run ./gradlew test and the full :app:connectedDebugAndroidTest with networking disabled.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Extracted the in-process clear-data recipe from OpenRadioServiceBrowseTest into AppDataReset so the journeys and the service suite share one copy. pm clear stays off limits because the service shares the instrumentation process (TASK-031 holds the Test Orchestrator decision).
+
+ColdLaunchJourneyTest reads rows out of the RecyclerView by adapter position rather than trusting the adapter alone, so an entry the service serves but the UI never renders fails. The offline precondition is asserted in @Before via ConnectivityManager, the same question NetworkLayerImpl asks, because the root menu is built locally and the journey would otherwise pass with wifi on and prove nothing.
+
+The clear waits on the last played station read from the registry's own storage: it survives the preference-file wipe in memory and only CMD_CLEAR_CACHE drops it, so it signals the whole clear finished.
+
+Noticed while working: OpenRadioService.mActiveRS is read once in onCreate and CMD_CLEAR_CACHE does not reset it, the same family as TASK-027. Nothing here depends on it and it is not tracked.
+<!-- SECTION:NOTES:END -->
