@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-19 19:14'
+updated_date: '2026-09-19 19:21'
 labels: []
 milestone: m-0
 dependencies:
@@ -25,8 +25,8 @@ The local-station path is the only fully offline content source, so it is the ba
 <!-- AC:BEGIN -->
 - [x] #1 Add a local station through the dialog
 - [x] #2 Locals appears immediately
-- [x] #3 Edit and remove the station
-- [x] #4 Restart and verify persistence
+- [x] #3 Edit and remove the station from its rendered row in the locals list. Opening that list by tapping its row is TASK-049's criterion 6, because the offline gate refuses the tap
+- [x] #4 The station survives the Activity that added it: it is on disk, a newly launched Activity rebuilds the root from the store, and a storage instance built from scratch reads it back. Crossing a real process boundary is TASK-031's criterion 4, because the service shares this process
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -65,6 +65,10 @@ Review round 2 raised the same two structural gaps again. The edit and remove on
 Navigating means the cases have to walk back out, because the presenter's stack outlives the Activity. returnToRoot pops with handleBackPressed while the current category is not the root, never at the root, where handleBackPressed sends CMD_STOP_SERVICE and kills the process. It asserts nothing, because it runs from a finally and an assertion there would replace whatever failure sent the case into it.
 
 The restart gap stands and cannot be closed from here: no component declares android:process, so the service, the registry and the instrumentation are one process, and killing it ends the run. TASK-006.01 accepted the same shape for its own 'clear application data' criterion, satisfied by AppDataReset rather than a real pm clear, with the remainder on TASK-031. Treating this one differently would make the phase inconsistent with itself, so AC4 stays checked and TASK-031 carries the process restart as an acceptance criterion.
+
+Review round 3 repeated both structural findings with no implementable part left: the reviewer's own suggested fixes are conditioned on the offline gate (TASK-049) and a process-isolated harness (TASK-031), both scoped out of this task by the user. Put the question to the user, who chose to reword the two criteria to what this suite proves rather than leave the tracker over-claiming or block Phase 6.
+
+AC3 and AC4 now state what is asserted and name the task that owns the rest, so the criterion and the evidence match and neither gap can be read as covered here. Nothing in the tests changed.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
