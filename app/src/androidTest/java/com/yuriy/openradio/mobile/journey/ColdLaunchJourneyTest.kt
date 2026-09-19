@@ -222,12 +222,20 @@ class ColdLaunchJourneyTest {
             }
             Thread.sleep(POLL_MILLIS)
         }
-        throw AssertionError("The root list did not render within $LIST_TIMEOUT_SECONDS seconds")
+        throw AssertionError(
+            "The root list did not render within $LIST_TIMEOUT_SECONDS seconds. " +
+                describeList(scenario)
+        )
     }
 
     /**
      * Reads the rendered rows in adapter order, pairing the media id the adapter holds with the
      * name the row's own view displays.
+     *
+     * Every item has to be on screen, which is the one thing here that depends on the device: the
+     * root menu is five entries and the emulator this suite targets shows all of them without
+     * scrolling. A device that cannot is reported by [describeList] rather than left as a bare
+     * timeout.
      *
      * @return the rows, or an empty list while the adapter and the laid out children disagree,
      *   which is every moment the list is still being filled or measured.
@@ -236,7 +244,7 @@ class ColdLaunchJourneyTest {
         val result = AtomicReference(emptyList<RootRow>())
         scenario.onActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
-            val adapter = listView.adapter as MediaItemsAdapter
+            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
             val displayed = HashMap<Int, String>()
             for (index in 0 until listView.childCount) {
                 val child = listView.getChildAt(index)
@@ -256,6 +264,23 @@ class ColdLaunchJourneyTest {
                         displayed.getValue(position)
                     )
                 }
+            )
+        }
+        return result.get()
+    }
+
+    /**
+     * @return what the list held when it ran out of time, so a timeout says which half was
+     *   missing: children the service never sent, or rows the screen was too short to lay out.
+     */
+    private fun describeList(scenario: ActivityScenario<MainActivity>): String {
+        val result = AtomicReference("The Activity holds no browse list at all.")
+        scenario.onActivity { activity ->
+            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
+            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            result.set(
+                "The adapter holds ${adapter.itemCount} items and ${listView.childCount} rows " +
+                    "are laid out."
             )
         }
         return result.get()
