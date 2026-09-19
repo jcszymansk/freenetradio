@@ -46,7 +46,14 @@ internal class LocalAudioFixture(private val mContext: Context) {
      * @param name file name, which also decides the extension the player infers the format from.
      */
     fun wav(name: String, seconds: Int = DEFAULT_SECONDS): String {
-        return write(name, wavBytes(seconds))
+        return write(name, silence(seconds))
+    }
+
+    /**
+     * The same audio as [wav], for the cases that serve it rather than write it.
+     */
+    fun wavBytes(seconds: Int = DEFAULT_SECONDS): ByteArray {
+        return silence(seconds)
     }
 
     /**
@@ -90,7 +97,7 @@ internal class LocalAudioFixture(private val mContext: Context) {
      * +------+------+------+------+------------------+------+-------------------+
      * ```
      */
-    private fun wavBytes(seconds: Int): ByteArray {
+    private fun silence(seconds: Int): ByteArray {
         val dataSize = seconds * SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE
         val buffer = ByteBuffer.allocate(HEADER_SIZE + dataSize).order(ByteOrder.LITTLE_ENDIAN)
         buffer.put("RIFF".toByteArray(Charsets.US_ASCII))

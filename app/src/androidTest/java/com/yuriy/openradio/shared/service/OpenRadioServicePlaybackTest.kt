@@ -17,16 +17,13 @@
 package com.yuriy.openradio.shared.service
 
 import android.content.Context
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.R
-import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
-import com.yuriy.openradio.shared.model.storage.makeStation
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -63,10 +60,7 @@ class OpenRadioServicePlaybackTest {
 
     private lateinit var mAudio: LocalAudioFixture
 
-    /**
-     * An item the player can be left holding when a test empties its queue. See [parkThePlayer].
-     */
-    private var mParkingItem: MediaItem? = null
+    private lateinit var mStations: LocalStationsFixture
 
     @Before
     fun setUp() {
@@ -75,6 +69,7 @@ class OpenRadioServicePlaybackTest {
         mStorages = ServiceStorages(mContext)
         mStorages.clear()
         mBrowser = ServiceBrowser()
+        mStations = LocalStationsFixture(mStorages, mBrowser)
         mBrowser.connect()
         mBrowser.stop()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
@@ -84,38 +79,11 @@ class OpenRadioServicePlaybackTest {
 
     @After
     fun tearDown() {
-        parkThePlayer()
+        mStations.parkThePlayer()
         mStorages.clear()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.release()
         mAudio.delete()
-    }
-
-    /**
-     * Leaves the player stopped but still holding a queue, for the tests that come after this
-     * class as much as for the ones in it.
-     *
-     * The service outlives every test class in the run, and playing a station leaves it holding
-     * an active station it did not have before. From then on every page-0 browse with an empty
-     * queue calls `maybeCreateInitialPlaylist`, which asks the provider for new stations, replaces
-     * the queue with whatever comes back and starts playing it. Offline it comes back with
-     * nothing, so the queue becomes the active station alone, under a browse-tree key that no
-     * later browse invalidates, which is TASK-041. A queue that is not empty shuts that path,
-     * which is the state the rest of the suite was written in and has to be handed back in.
-     *
-     * The item is one this test already holds rather than one browsed for here, because the
-     * browse is itself what would trigger the path this is avoiding.
-     */
-    private fun parkThePlayer() {
-        mBrowser.stop()
-        if (mBrowser.mediaItemCount() != 0) {
-            return
-        }
-        val item = mParkingItem ?: return
-        mBrowser.setMediaItem(item)
-        mBrowser.awaitPlayback("the player to hold a queue again") {
-            mBrowser.mediaItemCount() != 0
-        }
     }
 
     @Test
@@ -350,39 +318,8 @@ class OpenRadioServicePlaybackTest {
      * service holds them in its browse tree, and hands them back in browse order.
      */
     private fun seedStations(count: Int): List<RadioStation> {
-        val stations = (0 until count).map { index ->
-            makeStation(
-                nextStationId(),
-                name = "Fixture ${index + 1}",
-                url = mAudio.wav("fixture-$index.wav"),
-                sortId = index,
-                isLocal = true
-            )
-        }
-        for (station in stations) {
-            mStorages.locals.add(station)
-        }
-        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
-        val browsed = mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-        assertEquals(
-            "The seeded stations are not what the locals node offers",
-            stations.map { it.id }, browsed.map { it.mediaId }
-        )
-        mParkingItem = browsed.first()
-        return stations
-    }
-
-    /**
-     * Station ids are unique for the whole run, not just for one test.
-     *
-     * [com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage.getId] counts up from a fixed
-     * value in the same preference file the tests wipe, so it hands out the same ids to every
-     * test. The browse tree keeps entries keyed by a station id that no browse invalidates, and
-     * one of those left behind by an earlier test would then answer for a station of the same id
-     * in a later one.
-     */
-    private fun nextStationId(): String {
-        return (FIRST_STATION_ID + sStationIds++).toString()
+        val urls = (0 until count).map { mAudio.wav("fixture-$it.wav") }.toTypedArray()
+        return mStations.seed(*urls)
     }
 
     /**
@@ -390,9 +327,7 @@ class OpenRadioServicePlaybackTest {
      * play. The expansion into a playlist is the service's answer, not the caller's doing.
      */
     private fun selectAndPlay(station: RadioStation) {
-        val item = mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-            .first { it.mediaId == station.id }
-        mBrowser.setMediaItem(item)
+        mBrowser.setMediaItem(mStations.item(station))
         mBrowser.prepareAndPlay()
     }
 
@@ -420,16 +355,5 @@ class OpenRadioServicePlaybackTest {
 
     private fun liveStreamLabel(): String {
         return mContext.getString(R.string.media_description_default)
-    }
-
-    private companion object {
-
-        /**
-         * Well clear of the ids
-         * [com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage] hands out itself.
-         */
-        const val FIRST_STATION_ID = 1_900_000_000
-
-        var sStationIds = 0
     }
 }
