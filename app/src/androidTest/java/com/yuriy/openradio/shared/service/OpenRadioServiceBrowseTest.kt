@@ -24,8 +24,6 @@ import androidx.media3.session.LibraryResult
 import androidx.media3.session.SessionResult
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
-import androidx.test.runner.lifecycle.Stage
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.net.UrlLayer
@@ -36,7 +34,6 @@ import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.shared.model.storage.images.Image
 import com.yuriy.openradio.shared.model.storage.images.ImagesDatabase
 import com.yuriy.openradio.shared.model.storage.makeStation
-import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -77,12 +74,14 @@ class OpenRadioServiceBrowseTest {
      */
     private val mUrls = UrlLayerRadioBrowserImpl()
 
+    private val mPresence = ActivityPresence()
+
     /**
-     * Whether an Activity was alive at the moment the browser connected. Sampled here rather than
+     * What the process was holding at the moment the browser connected. Sampled here rather than
      * inside the test because by then the connection has already happened, and an Activity that
      * came and went during it would leave no trace.
      */
-    private var mActivityAliveAtConnect = true
+    private var mActivitiesAliveAtConnect = emptyList<String>()
 
     @Before
     fun setUp() {
@@ -91,7 +90,7 @@ class OpenRadioServiceBrowseTest {
         mStorages.clear()
         mAppData = AppDataReset(mContext)
         mBrowser = ServiceBrowser()
-        mActivityAliveAtConnect = anyActivityExists()
+        mActivitiesAliveAtConnect = mPresence.alive()
         mBrowser.connect()
         // The service caches every node but favorites and locals, and it outlives a single test.
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
@@ -137,11 +136,12 @@ class OpenRadioServiceBrowseTest {
 
     @Test
     fun connectsAndServesTheLibraryRootWithoutAnyActivity() {
-        assertFalse(
+        assertEquals(
             "An Activity was alive when the browser connected, so this is not a service first start",
-            mActivityAliveAtConnect
+            emptyList<String>(),
+            mActivitiesAliveAtConnect
         )
-        assertFalse("An Activity started while the service was serving", anyActivityExists())
+        mPresence.assertNone("An Activity started while the service was serving.")
 
         val result = mBrowser.libraryRoot()
 
@@ -604,24 +604,6 @@ class OpenRadioServiceBrowseTest {
                 OpenRadioStore.makeUpdateSortIdsBundle("not-a-station", 0, node)
             ).resultCode
         )
-    }
-
-    /**
-     * [Stage.DESTROYED] is excluded on purpose: an Activity an earlier test already tore down is
-     * gone as far as this service is concerned, and counting it would make the check depend on
-     * which classes ran before. The lifecycle monitor is main thread state, so it is read there.
-     */
-    private fun anyActivityExists(): Boolean {
-        val monitor = ActivityLifecycleMonitorRegistry.getInstance()
-        val result = AtomicBoolean()
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            result.set(
-                Stage.values()
-                    .filter { it != Stage.DESTROYED }
-                    .any { monitor.getActivitiesInStage(it).isNotEmpty() }
-            )
-        }
-        return result.get()
     }
 
     private companion object {
