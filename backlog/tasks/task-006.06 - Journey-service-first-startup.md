@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-20 10:29'
+updated_date: '2026-09-20 10:33'
 labels: []
 milestone: m-0
 dependencies:
@@ -31,12 +31,12 @@ Android Auto starts the service before any Activity exists, so this ordering mus
 
 <!-- SECTION:PLAN:BEGIN -->
 1. Add ServiceFirstStartupJourneyTest, the sixth phone journey. Profile as every other journey: cleared data, offline, Radio Browser bound, one device-local station seeded through LocalStationsFixture and pointed at a generated WAV.
-2. AC1 is asserted rather than assumed: a private aliveActivities() reads ActivityLifecycleMonitorRegistry on the main looper and reports every Activity in a stage other than DESTROYED, so 'no Activity exists' is a fact the case checks instead of a claim the setup makes. The setup waits for it, because the previous class's scenario is what has to have let go.
-3. AC1 case: with no Activity alive, the ServiceBrowser JourneyProfile connected answers the library root, the whole offline root menu, the locals node and - after CMD_FAVORITE_ON - the favorites node. ActivityManager.getRunningServices says OpenRadioService is up while the process holds no Activity, which is the Android Auto contract stated positively.
+2. AC1 is asserted rather than assumed. OpenRadioServiceBrowseTest already asks privately whether the process holds an Activity, and that is registry-wide state rather than a property of the class asking, so extract it to a shared ActivityPresence next to the other service fixtures and point the browse test at it. It reads ActivityLifecycleMonitorRegistry on the main looper, skips DESTROYED so an earlier class's torn-down Activity cannot make the check order-dependent, names each Activity and its stage so a failure says what is holding the process, and offers awaitNone for the front of a bracket where one is still going away.
+3. AC1 case: with no Activity alive, the ServiceBrowser JourneyProfile connected answers the library root, the whole offline root menu, the locals node and - after the favorite command - the favorites node. Marking from the session is CMD_FAVORITE_OFF: both favorite commands name the state the control is leaving, and CMD_FAVORITE_ON would unmark silently, answering RESULT_SUCCESS and notifying the root anyway. The browser subscribes to the root first, because notifyChildrenChanged reaches subscribers only and a client showing a list subscribes to it anyway. ActivityManager.getRunningServices says OpenRadioService is up while the process holds no Activity, which is the Android Auto contract stated positively.
 4. AC2 cases, each starting from a headless browse and only then launching MainActivity: the rendered root equals the ids the service answered before the Activity existed; a station marked through the service before the Activity existed comes up marked in both the locals list and the favorites node the root grew; and a station started through the session before the Activity existed is on the bar the Activity puts up, with the queue and the current item unchanged by the Activity connecting.
 5. One case for the other half of the ordering: closing the Activity leaves the service answering the same tree and still playing, which is what keeps a head unit working when the phone app is gone.
 6. Say what the suite cannot reach: the service shares this process, so it is already created by the time this class runs and no test can make it start fresh. What is pinned is the Activity-relative ordering; a genuinely new process per test is TASK-031.
-7. Run ./gradlew test and the full :app:connectedDebugAndroidTest with networking disabled, from cleared app data.
+7. Run ./gradlew test and the full :app:connectedDebugAndroidTest with networking disabled, from cleared app data, and check the guard, the mark and the playback by mutation.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
