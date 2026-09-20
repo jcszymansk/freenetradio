@@ -39,7 +39,6 @@ import com.yuriy.openradio.shared.view.dialog.EditStationDialog
 import com.yuriy.openradio.shared.view.dialog.RSSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -155,6 +154,7 @@ class LocalStationLifecycleJourneyTest {
         val url = serveStream(STATION_PATH)
         val editedUrl = serveStream(EDITED_PATH)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val dialogs = JourneyDialogs(scenario)
             val list = BrowseListView(scenario)
             awaitCleanInstallRoot(list)
             addStationThroughTheDialog(scenario, STATION_NAME, url)
@@ -170,16 +170,16 @@ class LocalStationLifecycleJourneyTest {
                     assertEquals(
                         "The edit dialog did not load the station it was opened for",
                         STATION_NAME,
-                        dialogView<EditText>(edit, DialogR.id.add_edit_station_name_edit).text.toString()
+                        dialogs.field<EditText>(edit, DialogR.id.add_edit_station_name_edit).text.toString()
                     )
                     assertEquals(
                         "The edit dialog did not load the station's stream url",
                         url,
-                        dialogView<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).text.toString()
+                        dialogs.field<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).text.toString()
                     )
-                    dialogView<EditText>(edit, DialogR.id.add_edit_station_name_edit).setText(EDITED_NAME)
-                    dialogView<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).setText(editedUrl)
-                    dialogView<View>(edit, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
+                    dialogs.field<EditText>(edit, DialogR.id.add_edit_station_name_edit).setText(EDITED_NAME)
+                    dialogs.field<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).setText(editedUrl)
+                    dialogs.field<View>(edit, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
                 }
             } finally {
                 JourneyNavigation(scenario).returnToRoot()
@@ -212,6 +212,7 @@ class LocalStationLifecycleJourneyTest {
     @Test
     fun removingTheLastStationTakesTheLocalsNodeOffTheRootList() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val dialogs = JourneyDialogs(scenario)
             val list = BrowseListView(scenario)
             awaitCleanInstallRoot(list)
             addStationThroughTheDialog(scenario, STATION_NAME, serveStream(STATION_PATH))
@@ -227,9 +228,9 @@ class LocalStationLifecycleJourneyTest {
                     assertEquals(
                         "The confirmation does not say which station is about to go",
                         mContext.getString(DialogR.string.remove_station_dialog_main_text, STATION_NAME),
-                        dialogView<TextView>(remove, DialogR.id.remove_station_text_view).text.toString()
+                        dialogs.field<TextView>(remove, DialogR.id.remove_station_text_view).text.toString()
                     )
-                    dialogView<View>(remove, DialogR.id.remove_station_dialog_add_btn_view).performClick()
+                    dialogs.field<View>(remove, DialogR.id.remove_station_dialog_add_btn_view).performClick()
                 }
             } finally {
                 JourneyNavigation(scenario).returnToRoot()
@@ -368,14 +369,15 @@ class LocalStationLifecycleJourneyTest {
         name: String,
         url: String
     ) {
+        val dialogs = JourneyDialogs(scenario)
         scenario.onActivity { activity ->
             activity.findViewById<View>(R.id.add_station_btn).performClick()
         }
-        val dialog = awaitDialog(scenario, AddStationDialog.DIALOG_TAG)
+        val dialog = dialogs.awaitDialog(AddStationDialog.DIALOG_TAG)
         scenario.onActivity {
-            dialogView<EditText>(dialog, DialogR.id.add_edit_station_name_edit).setText(name)
-            dialogView<EditText>(dialog, DialogR.id.add_edit_station_stream_url_edit).setText(url)
-            dialogView<View>(dialog, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
+            dialogs.field<EditText>(dialog, DialogR.id.add_edit_station_name_edit).setText(name)
+            dialogs.field<EditText>(dialog, DialogR.id.add_edit_station_stream_url_edit).setText(url)
+            dialogs.field<View>(dialog, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
         }
         awaitStoredStation(name)
     }
@@ -411,12 +413,13 @@ class LocalStationLifecycleJourneyTest {
         }
 
         list.tapRowSettings(station.id)
-        val settings = awaitDialog(scenario, RSSettingsDialog.DIALOG_TAG)
+        val dialogs = JourneyDialogs(scenario)
+        val settings = dialogs.awaitDialog(RSSettingsDialog.DIALOG_TAG)
         scenario.onActivity {
             assertEquals(
                 "The settings dialog for a station of the user's own does not offer edit and remove",
                 View.VISIBLE,
-                dialogView<View>(settings, DialogR.id.dialog_rs_settings_edit_remove).visibility
+                dialogs.field<View>(settings, DialogR.id.dialog_rs_settings_edit_remove).visibility
             )
         }
         return settings
@@ -435,47 +438,9 @@ class LocalStationLifecycleJourneyTest {
         buttonId: Int,
         opened: String
     ): DialogFragment {
-        scenario.onActivity { dialogView<View>(settings, buttonId).performClick() }
-        return awaitDialog(scenario, opened)
-    }
-
-    /**
-     * Waits for the dialog tagged [tag] to be up and to have a view to read.
-     *
-     * A dialog is shown through a fragment transaction, so it exists some time after the click
-     * that asked for it. Which half holds the views depends on the dialog: the add and edit
-     * dialogs build a fragment view, while the settings and remove dialogs build an
-     * [android.app.AlertDialog] and have none, so both are waited for.
-     */
-    private fun awaitDialog(
-        scenario: ActivityScenario<MainActivity>,
-        tag: String
-    ): DialogFragment {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(DIALOG_TIMEOUT_SECONDS)
-        val shown = AtomicReference<DialogFragment?>(null)
-        while (System.nanoTime() < deadline) {
-            scenario.onActivity { activity ->
-                val manager = activity.supportFragmentManager
-                manager.executePendingTransactions()
-                val fragment = manager.findFragmentByTag(tag) as? DialogFragment ?: return@onActivity
-                if (fragment.view != null || fragment.dialog?.isShowing == true) {
-                    shown.set(fragment)
-                }
-            }
-            shown.get()?.let { return it }
-            Thread.sleep(POLL_MILLIS)
-        }
-        throw AssertionError("The $tag dialog did not come up within $DIALOG_TIMEOUT_SECONDS seconds")
-    }
-
-    /**
-     * @return the view [id] inside [fragment], from whichever of its two halves holds it.
-     */
-    private fun <T : View> dialogView(fragment: DialogFragment, id: Int): T {
-        val view = fragment.view?.findViewById<T>(id) ?: fragment.dialog?.findViewById<T>(id)
-        return view ?: throw AssertionError(
-            "The ${fragment.javaClass.simpleName} dialog holds no view for the requested id"
-        )
+        val dialogs = JourneyDialogs(scenario)
+        scenario.onActivity { dialogs.field<View>(settings, buttonId).performClick() }
+        return dialogs.awaitDialog(opened)
     }
 
     /**
@@ -561,11 +526,6 @@ class LocalStationLifecycleJourneyTest {
         const val STREAM_BODY = "journey"
 
         const val LOCALS_PREFERENCE_FILE = "LocalRadioStationsPreferences"
-
-        /**
-         * Covers a fragment transaction and the dialog's own layout pass.
-         */
-        const val DIALOG_TIMEOUT_SECONDS = 10L
 
         /**
          * Covers the validator's probe of the stream, the write, and the answer back to the main
