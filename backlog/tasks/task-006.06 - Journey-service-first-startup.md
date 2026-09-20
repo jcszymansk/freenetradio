@@ -1,11 +1,11 @@
 ---
 id: TASK-006.06
 title: 'Journey: service-first startup'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-20 10:28'
+updated_date: '2026-09-20 10:29'
 labels: []
 milestone: m-0
 dependencies:
@@ -23,8 +23,8 @@ Android Auto starts the service before any Activity exists, so this ordering mus
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Start and browse the service before opening the Activity
-- [ ] #2 Open the Activity and verify consistent state
+- [x] #1 Start and browse the service before opening the Activity
+- [x] #2 Open the Activity and verify consistent state
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -48,3 +48,13 @@ CMD_FAVORITE_ON unmarks. Both favorite commands name the state the control is le
 
 notifyChildrenChanged reaches subscribers only, so the browser subscribes to the root before the mark. That is what a client showing a list does anyway, and it is the only way the push is observable from here.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added ServiceFirstStartupJourneyTest, the sixth and last phone journey, and extracted ActivityPresence from OpenRadioServiceBrowseTest so the service tests and the journeys ask one shared question about what the process is holding.
+
+Five cases, each bracketed by ActivityPresence rather than by having launched nothing. AC1: the service answers the library root, the offline catalogue, the locals node and - after a favorite command from the session - the favorites node, while the process holds no Activity and ActivityManager reports the service itself running. AC2: the Activity that opens afterwards renders exactly the root the service had already answered; finds the station marked before it existed marked in both the favorites node and the locals list; and raises its now-playing bar for the station the session was already playing, without moving the player or rebuilding its queue. A fifth case reads the ordering backwards, closing the Activity and finding the service still serving and still playing.
+
+Verified on a clean API 34 emulator with wifi and mobile data disabled, from a fresh install: ./gradlew :app:connectedDebugAndroidTest ran 207 tests with 0 failures and 0 skipped, up from 202, and ./gradlew test --rerun-tasks passed. The assertions were checked by mutation as well: launching an Activity before the guard fails it naming 'MainActivity in RESUMED'; dropping the favorite command fails the marked root; and dropping the playback leaves the bar showing the previous case's station, which is what the run-wide unique station name is there to separate.
+<!-- SECTION:FINAL_SUMMARY:END -->
