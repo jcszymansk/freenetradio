@@ -113,6 +113,18 @@ internal class ServiceBrowser {
         }
     }
 
+    /**
+     * @return whether [connect] has completed and [release] has not been called since.
+     *
+     * Every other call here throws without a connection, which is right in a test body: a browse
+     * that cannot reach the service is a failure. A teardown running after a setup that never got
+     * this far is the one caller that has to ask first, because there the throw would replace the
+     * failure that stopped the setup.
+     */
+    fun isConnected(): Boolean {
+        return mBrowser != null
+    }
+
     fun libraryRoot(): LibraryResult<MediaItem> {
         return await { getLibraryRoot(null) }
     }

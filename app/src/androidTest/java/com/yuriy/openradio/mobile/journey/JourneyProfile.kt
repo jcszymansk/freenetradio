@@ -63,9 +63,20 @@ internal class JourneyProfile(private val mContext: Context) {
         assertRadioBrowserIsBound()
     }
 
+    /**
+     * Undoes as much of [start] as it got through.
+     *
+     * The tree is only worth dropping if this profile ever reached it, and asking is not
+     * defensiveness: [start] asserts the device is offline before it connects anything, so the
+     * plainest way to run this suite wrongly is also the one that leaves the browser unconnected
+     * here. Refreshing regardless would answer that operator with "Browser is not connected"
+     * instead of with the message telling them to disable networking.
+     */
     fun finish() {
         storages.clear()
-        refreshTree()
+        if (browser.isConnected()) {
+            refreshTree()
+        }
         browser.release()
     }
 

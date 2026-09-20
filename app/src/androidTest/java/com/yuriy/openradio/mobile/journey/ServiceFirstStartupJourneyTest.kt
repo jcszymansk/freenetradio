@@ -68,15 +68,15 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ServiceFirstStartupJourneyTest {
 
-    private lateinit var mContext: Context
+    private val mContext = InstrumentationRegistry.getInstrumentation().targetContext
 
-    private lateinit var mPresence: ActivityPresence
+    private val mPresence = ActivityPresence()
 
-    private lateinit var mProfile: JourneyProfile
+    private val mAudio = LocalAudioFixture(mContext)
 
-    private lateinit var mAudio: LocalAudioFixture
+    private val mProfile = JourneyProfile(mContext)
 
-    private lateinit var mStations: LocalStationsFixture
+    private val mStations = LocalStationsFixture(mProfile.storages, mProfile.browser)
 
     private lateinit var mStation: RadioStation
 
@@ -89,22 +89,23 @@ class ServiceFirstStartupJourneyTest {
      * [ActivityScenario] hands its Activity to the framework to destroy and this one would
      * otherwise race that teardown; by the back of the bracket nothing has launched one, so a
      * plain read is enough.
+     *
+     * The fixtures are built as fields rather than here on purpose. JUnit runs [tearDown] whether
+     * or not this method finished, and the very first thing it does can fail, so a fixture that
+     * only exists once the setup has got past a given line is one the cleanup can be handed
+     * uninitialized. Constructing them costs nothing and connects to nothing; [start] is where the
+     * work is.
      */
     @Before
     fun setUp() {
-        mContext = InstrumentationRegistry.getInstrumentation().targetContext
-        mPresence = ActivityPresence()
         mPresence.awaitNone(
             "An Activity from an earlier test was still alive when this journey started, so " +
                 "nothing it does with the service is a service first start."
         )
-        mAudio = LocalAudioFixture(mContext)
-        mProfile = JourneyProfile(mContext)
         mProfile.start()
         // The player outlives every test class in the run, so a case that asserts what playing
         // does has to start from a player that is not.
         mProfile.browser.stop()
-        mStations = LocalStationsFixture(mProfile.storages, mProfile.browser)
         mStation = mStations.seed(mAudio.wav(WAV_NAME)).first()
         mProfile.browser.forgetNotifications()
         mPresence.assertNone(

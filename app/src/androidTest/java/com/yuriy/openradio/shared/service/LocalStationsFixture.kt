@@ -87,13 +87,18 @@ internal class LocalStationsFixture(
      *
      * The item is one already in hand rather than one browsed for here, because the browse is
      * itself what would trigger the path this is avoiding.
+     *
+     * A fixture that never seeded anything has nothing to hand back and no item to hand it back
+     * with, and it is reached that way only from a teardown after a setup that failed before
+     * [seed]. Touching the browser there would answer with "Browser is not connected" in place of
+     * whatever stopped the setup.
      */
     fun parkThePlayer() {
+        val item = mItems.firstOrNull() ?: return
         mBrowser.stop()
         if (mBrowser.mediaItemCount() != 0) {
             return
         }
-        val item = mItems.firstOrNull() ?: return
         mBrowser.setMediaItem(item)
         mBrowser.awaitPlayback("the player to hold a queue again") {
             mBrowser.mediaItemCount() != 0

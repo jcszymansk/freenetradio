@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-20 10:33'
+updated_date: '2026-09-20 10:47'
 labels: []
 milestone: m-0
 dependencies:
@@ -47,6 +47,12 @@ Every case brackets its work with ActivityPresence rather than relying on having
 CMD_FAVORITE_ON unmarks. Both favorite commands name the state the control is leaving, which is also how the phone's own check box sends them, so marking a station from the session is CMD_FAVORITE_OFF. Sending the wrong one is silent: the service removes a station that was never there, answers RESULT_SUCCESS and still notifies the root, so only the store read afterwards catches it.
 
 notifyChildrenChanged reaches subscribers only, so the browser subscribes to the root before the mark. That is what a client showing a list does anyway, and it is the only way the push is observable from here.
+
+JUnit runs tearDown whether or not setUp finished, and the journey's first act can fail, so cleanup was able to be handed a fixture that did not exist yet. Reproduced: an early throw in setUp came back as 'lateinit property mStations has not been initialized' with the real failure gone from the console.
+
+Fixed where it comes from rather than with isInitialized guards, which would be branches no green run ever takes. The fixtures are plain fields, since constructing them connects to nothing; JourneyProfile.finish skips the tree refresh when the browser never connected, which is the path a run with networking still on takes, so that operator now reads the message telling them to disable it; and LocalStationsFixture.parkThePlayer returns before touching the browser when it seeded nothing. ServiceBrowser gained isConnected for the one caller that has to ask.
+
+All six journeys benefit: every one of them calls JourneyProfile.finish from a tearDown that runs after a failed start.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
