@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-09-19 18:32'
-updated_date: '2026-09-19 20:17'
+updated_date: '2026-09-20 05:48'
 labels: []
 dependencies: []
 type: bug
@@ -31,4 +31,11 @@ The same gate is what keeps a cached provider node from opening offline after TA
 - [ ] #5 Covered by a test that reaches no network
 - [ ] #6 TASK-006.02's journey opens the locals node by tapping its row rather than by calling addMediaItemToStack, and theLocalsRowDoesNotOpenWithoutANetwork is replaced by the opposite assertion
 - [ ] #7 TASK-006.03's journey opens the favorites node by tapping its row rather than by calling addMediaItemToStack, and theFavoritesRowDoesNotOpenWithoutANetwork is replaced by the opposite assertion
+- [ ] #8 The decision covers a playable row as well as a browsable one, so a station whose stream is on the device can be started offline, and TASK-006.04's theStationRowStartsNothingWithoutANetwork asserts the tap starting it instead of the refusal
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+TASK-006.04 found the gate refuses a playable row too, not only a browsable one: a station stored on the device cannot be started offline, which is criterion 8. Confirmed by experiment rather than by reading - making that journey's theStationRowStartsNothingWithoutANetwork select the station the way a tap would past the gate fails it with the station playing, and nothing else in the class changes answer.
+<!-- SECTION:NOTES:END -->
