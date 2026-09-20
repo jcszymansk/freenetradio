@@ -243,6 +243,51 @@ class OpenRadioServiceCommandTest {
         )
     }
 
+    /**
+     * The same fallback with the playing station gone from the browse tree, which is the other
+     * branch of TASK-051 and the one the full suite meets: the command marks the station and then
+     * refuses, so what it answers and what it did disagree outright.
+     *
+     * Both branches are pinned rather than one, so that no change to which station gets marked can
+     * pass unnoticed while the defect stands. What cannot be asserted from here is the contract the
+     * command is supposed to keep - a refusal that stores nothing - because the fallback exists
+     * from the first play onwards and the service holds its active station for the life of the
+     * process, which every component and the instrumentation share.
+     */
+    @Test
+    fun aRefusedFavoriteCommandStillMarksTheStationThatIsPlaying() {
+        val station = mStations.seed(mAudio.wav(WAV_NAME)).first()
+        mBrowser.setMediaItem(mStations.item(station))
+        mBrowser.prepareAndPlay()
+        mBrowser.awaitPlaying()
+        awaitActiveStation(station.id)
+
+        mBrowser.subscribe(MediaId.MEDIA_ID_ROOT)
+        mBrowser.subscribe(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        mStorages.freshLocals().remove(station)
+        updateTreeAndAwaitRefresh()
+        assertTrue(
+            "The station is still in the browse tree, so this is the branch above rather than " +
+                "the refusing one",
+            mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST).isEmpty()
+        )
+
+        assertEquals(
+            SessionResult.RESULT_ERROR_NOT_SUPPORTED,
+            mBrowser.command(
+                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioStore.makeUpdateIsFavoriteBundle("never-browsed")
+            ).resultCode
+        )
+
+        assertEquals(
+            "TASK-051 asks for a refused command to leave the favorites store as it found it, so " +
+                "this assertion is what has to change, not the fix",
+            listOf(station.id),
+            mStorages.freshFavorites().getAll().map { it.id }
+        )
+    }
+
     @Test
     fun sortUpdateReordersLocalsAndRefreshesThem() {
         val stations = (0 until 3).map {

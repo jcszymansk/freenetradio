@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-20 05:53'
-updated_date: '2026-09-20 05:56'
+updated_date: '2026-09-20 06:11'
 labels: []
 dependencies: []
 type: bug
@@ -30,4 +30,13 @@ Found by TASK-006.04's offline playback journey, which is the first test in the 
 - [ ] #3 A controller that names the active station, or names nothing, still marks the now playing station
 - [ ] #4 Covered by a test that reaches no network and does not depend on whether a station has played in the same process
 - [ ] #5 OpenRadioServiceCommandTest.aFavoriteCommandForAnUnknownStationMarksTheStationThatIsPlaying asserts the refusal and the untouched store instead of the mark it pins today
+- [ ] #6 Both pinned cases in OpenRadioServiceCommandTest, the RESULT_SUCCESS branch and the refusing one, assert a store the command left alone
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+The fallback has two outcomes and both are now pinned in OpenRadioServiceCommandTest. When the active station is still in the browse tree the command answers RESULT_SUCCESS and marks it; when it is not, the store is written on the way to RESULT_ERROR_NOT_SUPPORTED, so the answer and the effect disagree. The second is the one a full suite run meets, because a class that played something clears up after itself.
+
+The contract the command is supposed to keep cannot be asserted from an instrumented test while this stands: mActiveRS is set on the first play and never cleared, and the service shares its process with the instrumentation, so no later test can get back to having no active station. Restoring that coverage is part of this fix rather than something a test can do first.
+<!-- SECTION:NOTES:END -->
