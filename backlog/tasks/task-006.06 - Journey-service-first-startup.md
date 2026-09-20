@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-20 10:47'
+updated_date: '2026-09-20 10:58'
 labels: []
 milestone: m-0
 dependencies:
@@ -53,6 +53,10 @@ JUnit runs tearDown whether or not setUp finished, and the journey's first act c
 Fixed where it comes from rather than with isInitialized guards, which would be branches no green run ever takes. The fixtures are plain fields, since constructing them connects to nothing; JourneyProfile.finish skips the tree refresh when the browser never connected, which is the path a run with networking still on takes, so that operator now reads the message telling them to disable it; and LocalStationsFixture.parkThePlayer returns before touching the browser when it seeded nothing. ServiceBrowser gained isConnected for the one caller that has to ask.
 
 All six journeys benefit: every one of them calls JourneyProfile.finish from a tearDown that runs after a failed start.
+
+The first attempt at the failure-safe teardown guarded parkThePlayer on mItems being empty, which was a proxy for 'the browser was never connected' and wrong in one direction: a setup that connected and then failed before seed left the player running into the next class. Reproduced by parking an unseeded fixture while a station played, and the player was still playing afterwards.
+
+The guard is now isConnected, which is the question actually being asked, and the stop comes first again. An unseeded fixture still stops the player; the only thing it cannot do is put a queue back, having no item to put there.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
