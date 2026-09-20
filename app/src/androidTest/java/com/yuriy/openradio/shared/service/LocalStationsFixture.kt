@@ -46,9 +46,10 @@ internal class LocalStationsFixture(
      */
     fun seed(vararg urls: String): List<RadioStation> {
         val stations = urls.mapIndexed { index, url ->
+            val id = nextId()
             makeStation(
-                nextId(),
-                name = "Fixture ${index + 1}",
+                id,
+                name = "Fixture $id",
                 url = url,
                 sortId = index,
                 isLocal = true
@@ -100,12 +101,16 @@ internal class LocalStationsFixture(
     }
 
     /**
-     * Station ids are unique for the whole run, not just for one test.
+     * Station ids are unique for the whole run, not just for one test, and the name is built from
+     * the id so that it is too.
      *
      * [com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage.getId] counts up from a fixed
      * value held in the same preference file the tests wipe, so it hands out the same ids to every
      * test. The browse tree keeps entries keyed by a station id that no browse invalidates, and one
      * left behind by an earlier test would then answer for a station of the same id in a later one.
+     * The name matters for the same reason once a test reads one off the screen: what the phone's
+     * now-playing bar shows outlives the test that put it there, so a repeated name would let a
+     * stale bar pass for the one this test was waiting for.
      */
     private fun nextId(): String {
         return (FIRST_STATION_ID + sStationIds++).toString()

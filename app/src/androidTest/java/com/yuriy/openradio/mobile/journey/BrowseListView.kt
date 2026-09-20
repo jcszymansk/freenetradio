@@ -19,6 +19,7 @@ package com.yuriy.openradio.mobile.journey
 import android.view.View
 import android.widget.CheckBox
 import android.widget.TextView
+import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
@@ -26,10 +27,9 @@ import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.view.list.MediaItemsAdapter
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
 
 /**
  * The browse list an [ActivityScenario] is showing, read the way a user reads it.
@@ -161,29 +161,34 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      *   playable shows.
      */
     fun rowFavorite(mediaId: String): Boolean? {
-        val result = AtomicReference<Boolean?>(null)
-        inRow(mediaId) { row ->
+        return inRow(mediaId) { row, _ ->
             val box = row.findViewById<CheckBox>(R.id.favorite_btn_view)
-            if (box.visibility == View.VISIBLE) {
-                result.set(box.isChecked)
-            }
+            if (box.visibility == View.VISIBLE) box.isChecked else null
         }
-        return result.get()
-    }
-
-    private fun clickInRow(mediaId: String, viewId: Int) {
-        val clicked = inRow(mediaId) { row -> row.findViewById<View>(viewId).performClick() }
-        assertTrue("No rendered row carries the media id $mediaId. " + describe(), clicked)
     }
 
     /**
-     * Runs [action] on the rendered row whose adapter position holds [mediaId].
-     *
-     * @return whether such a row was on screen at all, which is the difference between a control
-     *   that did not react and a row the list never laid out.
+     * @return the item the adapter bound the row for [mediaId] from, which is what a tap on that
+     *   row hands the presenter, or null while no rendered row carries that media id.
      */
-    private fun inRow(mediaId: String, action: (View) -> Unit): Boolean {
-        val found = AtomicBoolean(false)
+    fun rowItem(mediaId: String): MediaItem? {
+        return inRow(mediaId) { _, item -> item }
+    }
+
+    private fun clickInRow(mediaId: String, viewId: Int) {
+        val clicked = inRow(mediaId) { row, _ -> row.findViewById<View>(viewId).performClick() }
+        assertNotNull("No rendered row carries the media id $mediaId. " + describe(), clicked)
+    }
+
+    /**
+     * Reads the rendered row whose adapter position holds [mediaId], handing [read] both the row
+     * on screen and the item the adapter bound it from.
+     *
+     * @return what [read] answered, or null when no such row was on screen at all, which is the
+     *   difference between a control that did not react and a row the list never laid out.
+     */
+    private fun <T> inRow(mediaId: String, read: (View, MediaItem) -> T): T? {
+        val result = AtomicReference<T?>(null)
         mScenario.onActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
             val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
@@ -193,14 +198,14 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
                 if (position == RecyclerView.NO_POSITION) {
                     continue
                 }
-                if (adapter.getItem(position)?.mediaId != mediaId) {
+                val item = adapter.getItem(position) ?: continue
+                if (item.mediaId != mediaId) {
                     continue
                 }
-                action(child)
-                found.set(true)
+                result.set(read(child, item))
             }
         }
-        return found.get()
+        return result.get()
     }
 
     /**
