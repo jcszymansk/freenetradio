@@ -51,6 +51,14 @@ internal class JourneyNavigation(private val mScenario: ActivityScenario<MainAct
     }
 
     /**
+     * @return the node the presenter is standing in. A selection is answered against it, so a
+     *   journey that plays a station reads the parent from here rather than naming it itself.
+     */
+    fun currentCategory(): String {
+        return presenter().getCurrentCategory()
+    }
+
+    /**
      * Walks the presenter back out of whatever node a case opened.
      *
      * Popping stops at the root: `handleBackPressed` treats the root as "leave the application"
