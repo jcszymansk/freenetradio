@@ -102,6 +102,14 @@ internal class JourneyProfile(private val mContext: Context) {
         return preferenceFiles
     }
 
+    /**
+     * Waits until the store [preferenceFile] holds [needle] in its file on disk, which is what a
+     * restart would read, rather than in the copy Android keeps in memory for this process.
+     */
+    fun awaitStoredOnDisk(preferenceFile: String, needle: String) {
+        mAppData.awaitPreferenceFileContaining(preferenceFile, needle)
+    }
+
     fun assertEveryPreferenceFileIsEmpty(preferenceFiles: List<String>) {
         assertTrue("A preference file survived the wipe", mAppData.everyPreferenceFileIsEmpty(preferenceFiles))
     }
@@ -133,6 +141,17 @@ internal class JourneyProfile(private val mContext: Context) {
                 MediaId.MEDIA_ID_COUNTRY_STATIONS,
                 LocationService.COUNTRY_CODE_TO_NAME.getValue(Country.COUNTRY_CODE_DEFAULT)
             )
+        )
+    }
+
+    /**
+     * @return the row the root grows once a station has been marked, which `MediaItemRoot` adds
+     *   first, ahead of everything in [cleanInstallRoot].
+     */
+    fun favoritesRow(): BrowseRow {
+        return BrowseRow(
+            MediaId.MEDIA_ID_FAVORITES_LIST,
+            mContext.getString(com.yuriy.openradio.R.string.favorites_list_title)
         )
     }
 

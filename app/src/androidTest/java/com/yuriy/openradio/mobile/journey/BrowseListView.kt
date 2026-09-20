@@ -17,6 +17,7 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.view.View
+import android.widget.CheckBox
 import android.widget.TextView
 import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.RecyclerView
@@ -121,8 +122,68 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
         clickInRow(mediaId, R.id.settings_btn_view)
     }
 
+    /**
+     * Clicks the favorite check box of the row for [mediaId].
+     *
+     * This is the whole favorite gesture on the phone: the box is a child of every playable row,
+     * `performClick` flips it the way a finger does, and the listener the adapter put on it sends
+     * the command. Nothing about the toggle is assembled here.
+     */
+    fun tapRowFavorite(mediaId: String) {
+        clickInRow(mediaId, R.id.favorite_btn_view)
+    }
+
+    /**
+     * Waits for the favorite box of the row for [mediaId] to read [expected], and fails naming what
+     * it read instead.
+     *
+     * The box is bound when the adapter binds the row, so the state a journey is asking about
+     * arrives with the list rather than with the click that caused it: a node reopened after a
+     * toggle is a fresh set of children and a fresh bind.
+     */
+    fun awaitRowFavorite(mediaId: String, expected: Boolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(LIST_TIMEOUT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            if (rowFavorite(mediaId) == expected) {
+                return
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+        throw AssertionError(
+            "The favorite box of the row $mediaId reads ${rowFavorite(mediaId)} rather than " +
+                "$expected. " + describe()
+        )
+    }
+
+    /**
+     * @return whether the favorite box of the row for [mediaId] is checked, or null while no
+     *   rendered row carries that media id or the box is hidden, which is what a row that is not
+     *   playable shows.
+     */
+    fun rowFavorite(mediaId: String): Boolean? {
+        val result = AtomicReference<Boolean?>(null)
+        inRow(mediaId) { row ->
+            val box = row.findViewById<CheckBox>(R.id.favorite_btn_view)
+            if (box.visibility == View.VISIBLE) {
+                result.set(box.isChecked)
+            }
+        }
+        return result.get()
+    }
+
     private fun clickInRow(mediaId: String, viewId: Int) {
-        val clicked = AtomicBoolean(false)
+        val clicked = inRow(mediaId) { row -> row.findViewById<View>(viewId).performClick() }
+        assertTrue("No rendered row carries the media id $mediaId. " + describe(), clicked)
+    }
+
+    /**
+     * Runs [action] on the rendered row whose adapter position holds [mediaId].
+     *
+     * @return whether such a row was on screen at all, which is the difference between a control
+     *   that did not react and a row the list never laid out.
+     */
+    private fun inRow(mediaId: String, action: (View) -> Unit): Boolean {
+        val found = AtomicBoolean(false)
         mScenario.onActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
             val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
@@ -135,11 +196,11 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
                 if (adapter.getItem(position)?.mediaId != mediaId) {
                     continue
                 }
-                child.findViewById<View>(viewId).performClick()
-                clicked.set(true)
+                action(child)
+                found.set(true)
             }
         }
-        assertTrue("No rendered row carries the media id $mediaId. " + describe(), clicked.get())
+        return found.get()
     }
 
     /**
