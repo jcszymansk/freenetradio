@@ -53,12 +53,18 @@ class OpenRadioServiceCommandTest {
 
     private lateinit var mBrowser: ServiceBrowser
 
+    private lateinit var mAudio: LocalAudioFixture
+
+    private lateinit var mStations: LocalStationsFixture
+
     @Before
     fun setUp() {
         mContext = InstrumentationRegistry.getInstrumentation().targetContext
+        mAudio = LocalAudioFixture(mContext)
         mStorages = ServiceStorages(mContext)
         mStorages.clear()
         mBrowser = ServiceBrowser()
+        mStations = LocalStationsFixture(mStorages, mBrowser)
         mBrowser.connect()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.forgetNotifications()
@@ -66,9 +72,11 @@ class OpenRadioServiceCommandTest {
 
     @After
     fun tearDown() {
+        mStations.parkThePlayer()
         mStorages.clear()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.release()
+        mAudio.delete()
     }
 
     /**
@@ -197,16 +205,42 @@ class OpenRadioServiceCommandTest {
         )
     }
 
+    /**
+     * What the service does with a favorite command about a station it has never heard of, which
+     * is not what the command says it does.
+     *
+     * `handleFavorite` falls back to the active station for a media id it cannot resolve, whatever
+     * id the caller named, and writes the favorites store before it decides whether it can answer
+     * at all. So the command marks the station that is playing instead of refusing, and a user who
+     * never asked for it gets a favorite. TASK-051 holds that; this pins the behaviour as it
+     * stands, so the fix lands with a test that changes answer.
+     *
+     * The playing station is set up here rather than inherited. The fallback only exists once
+     * something has played, and the service keeps its active station for the life of the process,
+     * so a case that assumed one way or the other would be asserting what ran before it.
+     */
     @Test
-    fun favoriteCommandRejectsAStationOutsideTheBrowseTree() {
+    fun aFavoriteCommandForAnUnknownStationMarksTheStationThatIsPlaying() {
+        val station = mStations.seed(mAudio.wav(WAV_NAME)).first()
+        mBrowser.setMediaItem(mStations.item(station))
+        mBrowser.prepareAndPlay()
+        mBrowser.awaitPlaying()
+        awaitActiveStation(station.id)
+
         assertEquals(
-            SessionResult.RESULT_ERROR_NOT_SUPPORTED,
+            SessionResult.RESULT_SUCCESS,
             mBrowser.command(
                 OpenRadioService.CMD_FAVORITE_OFF,
                 OpenRadioStore.makeUpdateIsFavoriteBundle("never-browsed")
             ).resultCode
         )
-        assertTrue(mStorages.freshFavorites().getAll().isEmpty())
+
+        assertEquals(
+            "TASK-051 asks for a command about an unknown station to store nothing, so this " +
+                "assertion is what has to change, not the fix",
+            listOf(station.id),
+            mStorages.freshFavorites().getAll().map { it.id }
+        )
     }
 
     @Test
@@ -396,6 +430,18 @@ class OpenRadioServiceCommandTest {
     }
 
     /**
+     * Waits until the service has taken [id] as its active station.
+     *
+     * The service sets that and writes the last played station from the same callback, on a
+     * coroutine, so the store is what a test can see it through.
+     */
+    private fun awaitActiveStation(id: String) {
+        mBrowser.awaitPlayback("the service to take $id as its active station") {
+            mStorages.freshLatest().get().id == id
+        }
+    }
+
+    /**
      * `CMD_UPDATE_TREE` invalidates the root and the locals node, so wait for both pushes before
      * reading either node back.
      */
@@ -421,5 +467,10 @@ class OpenRadioServiceCommandTest {
         )
 
         const val UNKNOWN_COMMAND = "com.github.jcszymansk.freenetradio.COMMAND.NO_SUCH_COMMAND"
+
+        /**
+         * The extension decides the format the player infers, so it has to be the real one.
+         */
+        const val WAV_NAME = "command-active-station.wav"
     }
 }
