@@ -87,8 +87,20 @@ internal class LocalStationsFixture(
      *
      * The item is one already in hand rather than one browsed for here, because the browse is
      * itself what would trigger the path this is avoiding.
+     *
+     * Stopping comes first and is not conditional on this fixture having seeded anything. A
+     * teardown after a setup that failed before [seed] still runs, and what is playing then is
+     * whatever an earlier class left, which is exactly the state that must not reach the next one.
+     * All an unseeded fixture cannot do is put a queue back, because it has no item to put there.
+     *
+     * A browser that was never connected is the one case where nothing can be done at all, and it
+     * has to be asked rather than assumed: reaching it would answer with "Browser is not
+     * connected" in place of whatever stopped the setup.
      */
     fun parkThePlayer() {
+        if (mBrowser.isConnected().not()) {
+            return
+        }
         mBrowser.stop()
         if (mBrowser.mediaItemCount() != 0) {
             return
