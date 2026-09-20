@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-20 10:58'
+updated_date: '2026-09-20 11:04'
 labels: []
 milestone: m-0
 dependencies:
@@ -50,13 +50,13 @@ notifyChildrenChanged reaches subscribers only, so the browser subscribes to the
 
 JUnit runs tearDown whether or not setUp finished, and the journey's first act can fail, so cleanup was able to be handed a fixture that did not exist yet. Reproduced: an early throw in setUp came back as 'lateinit property mStations has not been initialized' with the real failure gone from the console.
 
-Fixed where it comes from rather than with isInitialized guards, which would be branches no green run ever takes. The fixtures are plain fields, since constructing them connects to nothing; JourneyProfile.finish skips the tree refresh when the browser never connected, which is the path a run with networking still on takes, so that operator now reads the message telling them to disable it; and LocalStationsFixture.parkThePlayer returns before touching the browser when it seeded nothing. ServiceBrowser gained isConnected for the one caller that has to ask.
+Fixed where it comes from rather than with isInitialized guards, which would be branches no green run ever takes. The fixtures are plain fields, since constructing them connects to nothing; JourneyProfile.finish skips the tree refresh when the browser never connected, which is the path a run with networking still on takes, so that operator now reads the message telling them to disable it; and ServiceBrowser gained isConnected for the callers that have to ask before touching it.
 
 All six journeys benefit: every one of them calls JourneyProfile.finish from a tearDown that runs after a failed start.
 
-The first attempt at the failure-safe teardown guarded parkThePlayer on mItems being empty, which was a proxy for 'the browser was never connected' and wrong in one direction: a setup that connected and then failed before seed left the player running into the next class. Reproduced by parking an unseeded fixture while a station played, and the player was still playing afterwards.
+LocalStationsFixture.parkThePlayer took two attempts, and the first was wrong. Guarding it on mItems being empty read as 'the browser was never connected' but does not mean that: a setup that connected and then failed before seed leaves a connected browser and an empty fixture, and the guard skipped the stop there. Reproduced by parking an unseeded fixture while a station played, and the player was still playing afterwards, which is the state parkThePlayer exists to keep out of the next class.
 
-The guard is now isConnected, which is the question actually being asked, and the stop comes first again. An unseeded fixture still stops the player; the only thing it cannot do is put a queue back, having no item to put there.
+It now asks isConnected, which is the question it meant to ask, and stops first as it always did. An unseeded fixture stops the player like any other; the only thing it cannot do is put a queue back, having no item to put there.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -66,5 +66,7 @@ Added ServiceFirstStartupJourneyTest, the sixth and last phone journey, and extr
 
 Five cases, each bracketed by ActivityPresence rather than by having launched nothing. AC1: the service answers the library root, the offline catalogue, the locals node and - after a favorite command from the session - the favorites node, while the process holds no Activity and ActivityManager reports the service itself running. AC2: the Activity that opens afterwards renders exactly the root the service had already answered; finds the station marked before it existed marked in both the favorites node and the locals list; and raises its now-playing bar for the station the session was already playing, without moving the player or rebuilding its queue. A fifth case reads the ordering backwards, closing the Activity and finding the service still serving and still playing.
 
-Verified on a clean API 34 emulator with wifi and mobile data disabled, from a fresh install: ./gradlew :app:connectedDebugAndroidTest ran 207 tests with 0 failures and 0 skipped, up from 202, and ./gradlew test --rerun-tasks passed. The assertions were checked by mutation as well: launching an Activity before the guard fails it naming 'MainActivity in RESUMED'; dropping the favorite command fails the marked root; and dropping the playback leaves the bar showing the previous case's station, which is what the run-wide unique station name is there to separate.
+Three shared fixtures changed on the way, and all six journeys get them. A teardown used to run after a failed setup and report the fixture it was missing instead of the failure: the journey's fixtures are now plain fields, JourneyProfile.finish skips the tree refresh when the browser never connected, LocalStationsFixture.parkThePlayer asks the same question before touching it, and ServiceBrowser answers it with isConnected.
+
+Verified on a clean API 34 emulator with wifi and mobile data disabled, from a fresh install: ./gradlew :app:connectedDebugAndroidTest ran 207 tests with 0 failures and 0 skipped, up from 202, and the JVM suite passed. The assertions were checked by mutation as well: launching an Activity before the guard fails it naming 'MainActivity in RESUMED'; dropping the favorite command fails the marked root; dropping the playback leaves the bar showing the previous case's station, which is what the run-wide unique station name is there to separate; and a throw in setUp comes back as itself at each of the three points the setup can stop.
 <!-- SECTION:FINAL_SUMMARY:END -->
