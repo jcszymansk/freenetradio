@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-20 10:13'
+updated_date: '2026-09-20 10:28'
 labels: []
 milestone: m-0
 dependencies:
@@ -38,3 +38,13 @@ Android Auto starts the service before any Activity exists, so this ordering mus
 6. Say what the suite cannot reach: the service shares this process, so it is already created by the time this class runs and no test can make it start fresh. What is pinned is the Activity-relative ordering; a genuinely new process per test is TASK-031.
 7. Run ./gradlew test and the full :app:connectedDebugAndroidTest with networking disabled, from cleared app data.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Every case brackets its work with ActivityPresence rather than relying on having launched no Activity. The process is shared with every other test class, so 'launched none' and 'holds none' are different claims; the setup waits for the previous class's scenario to let go, then asserts again after the connect, refresh and browse.
+
+CMD_FAVORITE_ON unmarks. Both favorite commands name the state the control is leaving, which is also how the phone's own check box sends them, so marking a station from the session is CMD_FAVORITE_OFF. Sending the wrong one is silent: the service removes a station that was never there, answers RESULT_SUCCESS and still notifies the root, so only the store read afterwards catches it.
+
+notifyChildrenChanged reaches subscribers only, so the browser subscribes to the root before the mark. That is what a client showing a list does anyway, and it is the only way the push is observable from here.
+<!-- SECTION:NOTES:END -->
