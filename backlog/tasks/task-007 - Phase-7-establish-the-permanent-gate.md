@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-21 18:59'
+updated_date: '2026-09-21 19:00'
 labels: []
 milestone: m-0
 dependencies:
@@ -30,9 +30,9 @@ The main roadmap restarts only when every item here holds. Run policy: affected 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All JVM tests pass
-- [ ] #2 Instrumentation tests compile and pass on the canonical emulator
-- [ ] #3 All offline end-to-end journeys pass
+- [x] #1 All JVM tests pass
+- [x] #2 Instrumentation tests compile and pass on the canonical emulator
+- [x] #3 All offline end-to-end journeys pass
 - [ ] #4 Critical pure-core coverage is at least 80% line and 70% branch
 - [ ] #5 No critical class is considered covered solely because another class happened to execute it
 - [ ] #6 Every fixed bug has a regression test at the lowest appropriate layer
@@ -69,4 +69,8 @@ Attribution is checked by re-running each owner test class alone, 26 isolated Gr
 Neither task is wired into check, deliberately, because verifyPureCoreCoverage fails today.
 
 Two things the first run exposed. The list can be gamed: TASK-062 split getConnectionUrl out and carried 30 uncovered lines of mirror lookup into the unlisted DnsMirrorUrlResolver, lifting the aggregate three points. That move is correct under rule 3, but the shape is not, and it is recorded as a known limit in the roadmap. And the owner of JsonUtils is EqualizerSerializationTest, measured rather than guessed (36/49 lines alone, against 10 and 8 for the other candidates), which satisfies the mechanical rule but not criterion 5: JsonUtils is covered precisely because serializers executed it. Left as it stands pending a decision, since setting it to NONE makes the gate demand a JsonUtilsTest that does not exist.
+
+Criteria 1 to 3 are checked on the 2026-09-21 run, re-verified after TASK-062 merged: 196 JVM tests and 207 instrumented tests including all 28 journeys, 0 failures and 0 skipped in both. They are point-in-time by nature and get re-run in one pass when the remaining blockers clear, because the gate asks that every criterion hold at the same moment, not at some moment each.
+
+Criterion 4 is left unchecked although the aggregate passes at 83.7% line and 77.2% branch. Read literally it holds; read as what it is for, it does not, because the same task enforces the per-class floor and the owner column and fails on both. Checking it while ./gradlew verifyPureCoreCoverage exits non-zero would put a green box next to a red command.
 <!-- SECTION:NOTES:END -->
