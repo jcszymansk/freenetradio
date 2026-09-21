@@ -41,7 +41,7 @@ import java.util.concurrent.Executors
  * [HTTPDownloaderImpl] allows to download data from the
  * resource over HTTP protocol.
  */
-class HTTPDownloaderImpl(private val mUrlLayer: UrlLayer) : DownloaderLayer {
+class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : DownloaderLayer {
 
     private val mExecutor = Executors.newFixedThreadPool(8)
 
@@ -51,14 +51,14 @@ class HTTPDownloaderImpl(private val mUrlLayer: UrlLayer) : DownloaderLayer {
         contentTypeFilter: String?
     ): ByteArray {
         val task = BytesDownloader(
-            context, mUrlLayer, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING
+            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING
         )
         return mExecutor.submit(task).get()
     }
 
     class BytesDownloader(
         private val mContext: Context,
-        private val mUrlLayer: UrlLayer,
+        private val mResolver: ConnectionUrlResolver,
         private val mUri: Uri,
         private val mParameters: List<Pair<String, String>>,
         private val mContentTypeFilter: String
@@ -72,8 +72,8 @@ class HTTPDownloaderImpl(private val mUrlLayer: UrlLayer) : DownloaderLayer {
                 val connection: HttpURLConnection? = null
             )
 
-            fun getConnectionUrl(): Response {
-                val url = mUrlLayer.getConnectionUrl(mUri, mParameters) ?: return Response()
+            fun openConnection(): Response {
+                val url = mResolver.resolve(mUri, mParameters) ?: return Response()
                 AppLogger.i("$CLASS_NAME Request URL:$url")
                 val connection = NetUtils.getHttpURLConnection(
                     mContext,
@@ -100,7 +100,7 @@ class HTTPDownloaderImpl(private val mUrlLayer: UrlLayer) : DownloaderLayer {
 
             var response = ByteArray(0)
 
-            var responseObj = getConnectionUrl()
+            var responseObj = openConnection()
             var attempt = 5
             while (true) {
                 if (attempt < 0) {
@@ -110,7 +110,7 @@ class HTTPDownloaderImpl(private val mUrlLayer: UrlLayer) : DownloaderLayer {
                 val responseCode = responseObj.responseCode
                 if (responseCode < HttpURLConnection.HTTP_OK || responseCode > HttpURLConnection.HTTP_MULT_CHOICE - 1) {
                     NetUtils.closeHttpURLConnection(responseObj.connection)
-                    responseObj = getConnectionUrl()
+                    responseObj = openConnection()
                     attempt--
                     continue
                 }

@@ -1,0 +1,76 @@
+# The "critical pure-core" class set of TASK-007: the logic that has no Android
+# framework excuse for being untested, and the JVM test class that answers for it.
+#
+# Why an owner column exists at all: a line counter cannot tell a class that a
+# test set out to exercise from one that happened to execute because something
+# else called it. The owner is the single test class that carries this class
+# past the floor with nothing else running, which is what
+# verifyPureCoreAttribution re-measures. It is therefore the test responsible
+# for the coverage, which is not always the test named after the class, and an
+# owner is not a promise that the class has a test of its own.
+#
+# NONE means no single test class carries it: either nothing exercises the
+# class at all, or its coverage is spread so thin across unrelated tests that
+# none of them would be missed. That is a recorded gap, not a formality:
+# verifyPureCoreCoverage fails on it until a test claims the class. Never
+# invent an owner to silence the gate, and never record one that
+# verifyPureCoreAttribution has not confirmed.
+#
+# Format: three tab-separated columns, comments and blank lines ignored.
+#   1. class         JaCoCo class name, slash form, no package-less shorthand.
+#                    Inner and synthetic classes (names containing '$') are
+#                    outside the set and must not be listed.
+#   2. owner_test    fully qualified JVM test class, dot form, or NONE.
+#   3. owner_module  Gradle path of the module holding owner_test, or - for NONE.
+#
+# class	owner_test	owner_module
+
+com/yuriy/openradio/shared/model/parser/ParserLayerRadioBrowserImpl	com.yuriy.openradio.shared.model.parser.ParserLayerMappingTest	:common
+com/yuriy/openradio/shared/model/parser/ParserLayerWebRadioImpl	com.yuriy.openradio.shared.model.parser.ParserLayerMappingTest	:common
+com/yuriy/openradio/shared/model/ModelLayerImpl	com.yuriy.openradio.shared.model.ModelLayerImplTest	:common
+com/yuriy/openradio/shared/model/media/MediaId	com.yuriy.openradio.shared.model.media.MediaIdTest	:common
+com/yuriy/openradio/shared/model/media/BrowseTree	com.yuriy.openradio.shared.model.media.BrowseTreeTest	:common
+com/yuriy/openradio/shared/model/media/RadioStation	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
+com/yuriy/openradio/shared/model/media/MediaStream	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
+com/yuriy/openradio/shared/model/media/RadioStationToAdd	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
+com/yuriy/openradio/shared/model/media/RadioStationManagerLayerImpl	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
+com/yuriy/openradio/shared/model/media/item/IndexableMediaItemCommand	com.yuriy.openradio.shared.model.media.item.IndexableMediaItemCommandTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemCommandImpl	com.yuriy.openradio.shared.model.media.item.MediaItemCountryStationsTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemAllCategories	com.yuriy.openradio.shared.model.media.item.MediaItemAllCategoriesTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemChildCategories	com.yuriy.openradio.shared.model.media.item.MediaItemChildCategoriesTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemCountriesList	com.yuriy.openradio.shared.model.media.item.MediaItemCountriesListTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemCountryStations	com.yuriy.openradio.shared.model.media.item.MediaItemCountryStationsTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemFavoritesList	com.yuriy.openradio.shared.model.media.item.MediaItemFavoritesListTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemLocalsList	com.yuriy.openradio.shared.model.media.item.MediaItemLocalsListTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemNewStations	com.yuriy.openradio.shared.model.media.item.MediaItemChartsTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemPopularStations	com.yuriy.openradio.shared.model.media.item.MediaItemChartsTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemRoot	com.yuriy.openradio.shared.model.media.item.MediaItemRootTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemRootCar	com.yuriy.openradio.shared.model.media.item.MediaItemCarRootTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemBrowseCar	com.yuriy.openradio.shared.model.media.item.MediaItemCarRootTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemSearchFromService	com.yuriy.openradio.shared.model.media.item.MediaItemSearchTest	:common
+com/yuriy/openradio/shared/model/translation/RadioStationJsonSerializer	com.yuriy.openradio.shared.model.translation.RadioStationJsonSerializerTest	:common
+com/yuriy/openradio/shared/model/translation/RadioStationJsonDeserializer	com.yuriy.openradio.shared.model.translation.RadioStationJsonSerializerTest	:common
+com/yuriy/openradio/shared/model/translation/EqualizerJsonStateSerializer	com.yuriy.openradio.shared.model.translation.EqualizerSerializationTest	:common
+com/yuriy/openradio/shared/model/translation/EqualizerStateJsonDeserializer	com.yuriy.openradio.shared.model.translation.EqualizerSerializationTest	:common
+com/yuriy/openradio/shared/model/translation/MediaIdBuilderDefault	com.yuriy.openradio.shared.model.parser.ParserLayerMappingTest	:common
+com/yuriy/openradio/shared/model/storage/cache/api/InMemoryApiCache	com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCacheTest	:common
+com/yuriy/openradio/shared/model/storage/StorageManagerLayerImpl	NONE	-
+com/yuriy/openradio/shared/model/net/DirectUrlResolver	com.yuriy.openradio.shared.model.net.ConnectionUrlResolverTest	:common
+com/yuriy/openradio/shared/model/net/UrlLayerRadioBrowserImpl	NONE	-
+com/yuriy/openradio/shared/model/net/UrlLayerWebRadioImpl	NONE	-
+com/yuriy/openradio/shared/model/filter/FilterImpl	com.yuriy.openradio.shared.model.filter.FilterImplTest	:common
+com/yuriy/openradio/shared/model/timer/SleepTimerImpl	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
+com/yuriy/openradio/shared/model/timer/CoroutineTimerTask	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
+com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
+com/yuriy/openradio/shared/service/player/PlaybackErrorClassifier	com.yuriy.openradio.shared.service.player.PlaybackErrorClassifierTest	:common
+com/yuriy/openradio/shared/service/location/Country	com.yuriy.openradio.shared.model.parser.ParserLayerMappingTest	:common
+com/yuriy/openradio/shared/utils/JsonUtils	NONE	-
+com/yuriy/openradio/shared/utils/SortUtils	NONE	-
+wseemann/media/jplaylistparser/parser/AutoDetectParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
+wseemann/media/jplaylistparser/parser/AbstractParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
+wseemann/media/jplaylistparser/parser/m3u/M3UPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
+wseemann/media/jplaylistparser/parser/m3u8/M3U8PlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
+wseemann/media/jplaylistparser/parser/pls/PLSPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
+wseemann/media/jplaylistparser/parser/asx/ASXPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
+wseemann/media/jplaylistparser/parser/xspf/XSPFPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
+wseemann/media/jplaylistparser/mime/MediaType	wseemann.media.jplaylistparser.mime.MediaTypeTest	:common

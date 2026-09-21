@@ -1,8 +1,6 @@
 package com.yuriy.openradio.shared.model.net
 
 import android.net.Uri
-import androidx.core.util.Pair
-import java.net.URL
 
 interface UrlLayer {
 
@@ -13,8 +11,6 @@ interface UrlLayer {
          */
         const val FIRST_PAGE_INDEX = 0
     }
-
-    fun getConnectionUrl(uri: Uri, parameters: List<Pair<String, String>>): URL?
 
     /**
      * Get Uri for the All Categories list.
