@@ -4,6 +4,7 @@ title: Clear the permanent gate
 status: To Do
 assignee: []
 created_date: '2026-09-21 20:03'
+updated_date: '2026-09-21 20:33'
 labels: []
 milestone: m-0
 dependencies:
@@ -21,6 +22,9 @@ dependencies:
   - TASK-065
   - TASK-066
   - TASK-067
+  - TASK-069
+  - TASK-070
+  - TASK-071
 type: chore
 ordinal: 21500
 ---
