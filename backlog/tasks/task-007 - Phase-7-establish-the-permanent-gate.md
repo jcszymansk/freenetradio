@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-21 19:00'
+updated_date: '2026-09-21 19:07'
 labels: []
 milestone: m-0
 dependencies:
@@ -73,4 +73,8 @@ Two things the first run exposed. The list can be gamed: TASK-062 split getConne
 Criteria 1 to 3 are checked on the 2026-09-21 run, re-verified after TASK-062 merged: 196 JVM tests and 207 instrumented tests including all 28 journeys, 0 failures and 0 skipped in both. They are point-in-time by nature and get re-run in one pass when the remaining blockers clear, because the gate asks that every criterion hold at the same moment, not at some moment each.
 
 Criterion 4 is left unchecked although the aggregate passes at 83.7% line and 77.2% branch. Read literally it holds; read as what it is for, it does not, because the same task enforces the per-class floor and the owner column and fails on both. Checking it while ./gradlew verifyPureCoreCoverage exits non-zero would put a green box next to a red command.
+
+JsonUtils owner set to NONE. The mechanical rule qualified EqualizerSerializationTest, which covers 36 of its 49 lines alone, but that is the shape criterion 5 exists to reject: JsonUtils is covered because serializers executed it, not because anything tests it. The gate now reports five classes with no owning test rather than four, and JsonUtils is the one of the five that is above the per-class floor, at 81.6% line. That is the owner column earning its place, since no percentage would have flagged it.
+
+Three of the five unowned classes have no task yet: JsonUtils, SortUtils (no test anywhere, one production caller, station reordering) and StorageManagerLayerImpl (twelve instrumented tests although the class imports nothing from Android). TASK-061 carries the other two.
 <!-- SECTION:NOTES:END -->

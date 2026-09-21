@@ -200,8 +200,12 @@ roadmap rules out in its opening paragraph.
 The per-class floor exists because an aggregate hides zeroes. Measured on 2026-09-21 the set scored
 83.7% line and 77.2% branch across 49 classes while four of them sat at 0%, and dropping those four
 raises the rest to 88.2%. The floor is 60% provisionally. It catches seven classes today: the four
-with no test at all, plus `RadioStationToAdd` at 33.3%, `ASXPlaylistParser` at 52.6% and
+at 0%, plus `RadioStationToAdd` at 33.3%, `ASXPlaylistParser` at 52.6% and
 `RadioStationManagerLayerImpl` at 55.6%.
+
+The owner column is what criterion 5 turns on, and it catches what a percentage cannot. `JsonUtils`
+sits at 81.6% line, comfortably over the floor, and has no owner: every line of it is executed by
+serializers that were testing something else, so nothing would miss it if it broke.
 
 The set is a hand-maintained list, which it has to be while rules 2 to 5 take judgement, and that
 leaves a hole worth knowing about: moving untested code into an unlisted class raises the

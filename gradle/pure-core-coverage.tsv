@@ -64,7 +64,7 @@ com/yuriy/openradio/shared/model/timer/CoroutineTimerTask	com.yuriy.openradio.sh
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/player/PlaybackErrorClassifier	com.yuriy.openradio.shared.service.player.PlaybackErrorClassifierTest	:common
 com/yuriy/openradio/shared/service/location/Country	com.yuriy.openradio.shared.model.parser.ParserLayerMappingTest	:common
-com/yuriy/openradio/shared/utils/JsonUtils	com.yuriy.openradio.shared.model.translation.EqualizerSerializationTest	:common
+com/yuriy/openradio/shared/utils/JsonUtils	NONE	-
 com/yuriy/openradio/shared/utils/SortUtils	NONE	-
 wseemann/media/jplaylistparser/parser/AutoDetectParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/AbstractParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
