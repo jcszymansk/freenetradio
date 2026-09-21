@@ -1,9 +1,11 @@
 ---
 id: TASK-054
 title: Fix tests that pass without asserting anything
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 17:45'
+updated_date: '2026-09-21 20:11'
 labels:
   - test
 milestone: m-0
@@ -25,3 +27,14 @@ Four shapes go green without evaluating their claim, which is what criterion 8 o
 - [ ] #3 The five media item tests that accept an empty result also assert the presenter was asked
 - [ ] #4 testStartsWithAndEquals is removed
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. BrowseListView.assertRowsStay counts the reads it actually compared and fails at the end when none of them was, naming what the list held instead. An empty read stays skipped, because rows() cannot tell an emptied list from one mid-layout, but a window of nothing but empty reads is now a failure rather than a pass.
+2. Update the FavoriteLifecycleJourneyTest comment that documents the hole assertRowsStay used to have, keeping the extra awaitRowFavorite check for the claim it makes in its own right.
+3. MediaItemCarRootTest.carEntriesAreBrowsableFolders pins the three entries the loop is meant to walk with assertMediaIds before looping over them.
+4. The five empty-result media item tests assert the presenter counter or request list that separates an empty catalogue from a command that timed out or never reached the presenter: categoryRequests, countryRequests plus countriesRequests, searchRequests, favoritesRequests, deviceLocalsRequests.
+5. Delete MediaIDHelperTest.testStartsWithAndEquals.
+6. Run the full JVM suite; compile the instrumentation tests; run the instrumented journey suites if a device is reachable.
+<!-- SECTION:PLAN:END -->

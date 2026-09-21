@@ -98,5 +98,11 @@ class MediaItemLocalsListTest {
         listener.awaitResult()
         assertTrue(listener.items.isEmpty())
         listener.assertNoError()
+        assertEquals(
+            "The command did not read the device locals store exactly once, so the empty list " +
+                "above says nothing about an empty store",
+            1,
+            presenter.deviceLocalsRequests
+        )
     }
 }
