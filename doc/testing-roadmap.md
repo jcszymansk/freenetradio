@@ -148,11 +148,14 @@ branches, and storage boundaries belong in cheaper test layers, not in UI tests.
 **Exit check:** all six journeys pass on a clean API 34 emulator with networking disabled, without retries or
 test-order assumptions.
 
-### Phase 7: Establish the permanent gate — `TASK-007`
+### Phase 7: Establish the permanent gate — `TASK-007` and `TASK-068`
 
 **Purpose:** define the standing condition for resuming main roadmap work.
 
-The main roadmap restarts only when every criterion on that task holds — all suites passing, critical pure-core
+Defining the gate and clearing it are separate jobs. `TASK-007` built it and established where every
+criterion stood; `TASK-068` runs it, and depends on the tasks that first audit produced.
+
+The main roadmap restarts only when every criterion on `TASK-068` holds — all suites passing, critical pure-core
 coverage met, no test covered only incidentally, every fixed bug carrying a regression test, no external network
 requests, no ignored or assertion-free tests, and a recorded Android Auto manual result for the current build.
 
