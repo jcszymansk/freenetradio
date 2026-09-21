@@ -165,6 +165,60 @@ Run policy:
 | Before restarting main roadmap work | JVM plus offline emulator component and end-to-end suites |
 | Before a personal release | All automated tests plus DHU and real-car checklist |
 
+#### What "critical pure-core" means
+
+The gate measures a named set of classes, not the repository. The set lives in
+`gradle/pure-core-coverage.tsv`, one row per class with the JVM test that owns it, and
+`./gradlew verifyPureCoreCoverage` reads it. A class belongs to the set when all five hold:
+
+1. It is production source in `:common` or `:common-ui`. `:app` is the phone shell and
+   `:android-jvm-stubs` is test infrastructure.
+2. It decides something: at least one branch, loop or computed return. Marker interfaces, enums
+   that only enumerate, data holders whose methods are field access, and generated code are out.
+3. Its behaviour follows from its inputs rather than from a platform service. It may name an
+   Android or AndroidX type as a value, but it must not ask SharedPreferences, Room, a
+   ContentResolver, a PackageManager, a ConnectivityManager, resources, a Looper, ExoPlayer or a
+   Service or Activity lifecycle for an answer.
+4. It is honestly reachable on the JVM. `unitTests.returnDefaultValues` is on in every module, so
+   a class built on `ContextWrapper(null)` can look covered while the framework quietly answers in
+   its place. That does not count as covering it.
+5. It is not UI. No View, Fragment, Dialog or Adapter. A presenter that holds no View stays in.
+
+Dependencies do not join transitively. A class that a core class calls is in the set only if it
+passes 2 to 5 on its own: `ModelLayerImpl` is in, the `DownloaderLayer` it calls is not, because
+the downloader's observable behaviour is OkHttp's. Taking the transitive closure instead is how a
+coverage number starts rewarding tests of Android wrappers and generated Room code, which this
+roadmap rules out in its opening paragraph.
+
+| Check | Value |
+| --- | --- |
+| Line coverage across the set | at least 80% |
+| Branch coverage across the set | at least 70% |
+| Line coverage of any one class | at least 60% |
+| Listed classes missing from the report | none |
+
+The per-class floor exists because an aggregate hides zeroes. Measured on 2026-09-21 the set scored
+83.7% line and 77.2% branch across 49 classes while four of them sat at 0%, and dropping those four
+raises the rest to 88.2%. The floor is 60% provisionally. It catches seven classes today: the four
+with no test at all, plus `RadioStationToAdd` at 33.3%, `ASXPlaylistParser` at 52.6% and
+`RadioStationManagerLayerImpl` at 55.6%.
+
+The set is a hand-maintained list, which it has to be while rules 2 to 5 take judgement, and that
+leaves a hole worth knowing about: moving untested code into an unlisted class raises the
+aggregate. Splitting `getConnectionUrl` out of the URL layer did exactly that, carrying 30
+uncovered lines of mirror lookup into `DnsMirrorUrlResolver` and lifting the aggregate by three
+points. That particular move is right, because rule 3 puts anything that reaches a name server
+outside the set and the reason to extract it was that no test may call it. The general shape is
+not right. Until the check can also ask whether an unlisted class in these packages is big enough
+to deserve a row, the list has to be read as well as run.
+
+Two consequences are the point rather than side effects. A decision worth gating that sits inside a
+class the rule excludes gets extracted, rather than the class admitted: `PlaybackErrorClassifier`
+came out of the player that way and `DnsMirrorUrlResolver` out of the URL layer, and
+`MediaPresenterImpl.handleChildrenLoaded` is the next candidate. And a class that passes the rule
+but whose test needs a device means the test is misplaced, not the rule: that is the URL layer, and
+`StorageManagerLayerImpl` after it.
+
 ## Android Auto boundary — `TASK-008`
 
 Automated Media3 service tests can cover the protocol shared by the phone and Android Auto, but not the complete

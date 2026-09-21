@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-21 17:47'
+updated_date: '2026-09-21 18:59'
 labels: []
 milestone: m-0
 dependencies:
@@ -57,4 +57,16 @@ Criterion 9 needs a head unit and is carried by TASK-008, which is now a depende
 Two record corrections the audit turned up and this task did not act on: TASK-027 names the instrumented LatestRadioStationStorageTest as its regression pin, but the defect is a one-field in-memory cache in :common that the JVM test OpenRadioServicePresenterImplTest.clearingDropsEveryCacheAndTheLatestStation covers identically and without a device. TASK-029 still claims its instrumented test asserts both provider nodes; it was narrowed to one.
 
 Behind criterion 6 sits a process cause worth naming: nine defects were repaired inside commits whose subject reads like test work, so they got no task, no acceptance criterion and no decision about where their test belongs. Most landed covered because fix and tests arrived together. The ones that did not are exactly the sub-fixes incidental to whatever the commit was nominally about.
+
+Pure-core set defined and written down on 2026-09-21. The rule lives in doc/testing-roadmap.md under Phase 7; the set itself lives in gradle/pure-core-coverage.tsv, one row per class with the JVM test that owns it, so each fact has one home. verifyPureCoreCoverage and verifyPureCoreAttribution read that file.
+
+Membership is five tests: production source in :common or :common-ui, decides something, behaviour follows from inputs rather than a platform service, honestly reachable on the JVM (a class built on ContextWrapper(null) does not count, since returnDefaultValues answers for it), and not UI. Dependencies do not join transitively: ModelLayerImpl is in, the DownloaderLayer it calls is not, because the downloader behaviour is OkHttps. Thresholds are 80% line and 70% branch across the set, a 60% line floor per class, and no listed class missing from the report.
+
+First run over 49 classes: 83.7% line, 77.2% branch, failing on four classes with no owning test (StorageManagerLayerImpl, both UrlLayer implementations, SortUtils) and seven below the floor (those four plus RadioStationToAdd 33.3%, ASXPlaylistParser 52.6%, RadioStationManagerLayerImpl 55.6%). The failure is the gate working. TASK-061 clears the two UrlLayer rows; StorageManagerLayerImpl is the same finding one module over, its twelve tests being instrumented although the class imports nothing from Android; SortUtils has no test anywhere and one production caller.
+
+Attribution is checked by re-running each owner test class alone, 26 isolated Gradle invocations, about two minutes. JaCoCo merges every session into one set of probes, so a merged report cannot attribute a line to a test and the exec file keeps session ids but not per-session probes; an isolated re-run is the only honest mechanism available. It fails on exactly the three classes already below the floor, at identical percentages, which says those three take all their coverage from their owner with no incidental top-up.
+
+Neither task is wired into check, deliberately, because verifyPureCoreCoverage fails today.
+
+Two things the first run exposed. The list can be gamed: TASK-062 split getConnectionUrl out and carried 30 uncovered lines of mirror lookup into the unlisted DnsMirrorUrlResolver, lifting the aggregate three points. That move is correct under rule 3, but the shape is not, and it is recorded as a known limit in the roadmap. And the owner of JsonUtils is EqualizerSerializationTest, measured rather than guessed (36/49 lines alone, against 10 and 8 for the other candidates), which satisfies the mechanical rule but not criterion 5: JsonUtils is covered precisely because serializers executed it. Left as it stands pending a decision, since setting it to NONE makes the gate demand a JsonUtilsTest that does not exist.
 <!-- SECTION:NOTES:END -->

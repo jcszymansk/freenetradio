@@ -1,0 +1,312 @@
+import groovy.xml.XmlSlurper
+
+/**
+ * The machine-checkable half of the TASK-007 test gate.
+ *
+ * verifyPureCoreCoverage answers "is the pure core covered enough", and
+ * verifyPureCoreAttribution answers "is it covered on purpose". They are split
+ * because the second one has to re-run each owning test class in its own JVM,
+ * which costs a Gradle invocation per owner; wiring that into the cheap check
+ * would make the cheap check unusable in a normal edit cycle.
+ *
+ * Attribution is done by isolated re-runs rather than by reading the coverage
+ * data more cleverly because the data cannot answer it: JaCoCo merges every
+ * session into one set of probes, so a merged report cannot say which test
+ * executed a line. The .exec file keeps session ids but not per-session probes.
+ * Running the owner alone is the only honest mechanism available here.
+ */
+
+def rootDirectory = rootProject.projectDir
+def pureCoreListFile = rootProject.file('gradle/pure-core-coverage.tsv')
+def gradleLauncher = rootProject.file('gradlew')
+
+def coverageReports = [
+        ':common'   : rootProject.file('common/build/reports/coverage/test/debug/report.xml'),
+        ':common-ui': rootProject.file('common-ui/build/reports/coverage/test/debug/report.xml')
+]
+
+def aggregateLineFloor = 80.0d
+def aggregateBranchFloor = 70.0d
+def classLineFloor = 60.0d
+
+def percent = { int covered, int total ->
+    total == 0 ? 0.0d : (covered * 100.0d) / total
+}
+
+def formatPercent = { double value ->
+    String.format(Locale.ROOT, '%5.1f%%', value)
+}
+
+def readPureCoreList = { File source ->
+    if (!source.exists()) {
+        throw new GradleException("Pure-core class list is missing: ${source}")
+    }
+    def rows = []
+    def seen = [:]
+    def lineNumber = 0
+    source.eachLine('UTF-8') { String raw ->
+        lineNumber++
+        def trimmed = raw.trim()
+        if (trimmed.isEmpty() || trimmed.startsWith('#')) {
+            return
+        }
+        def columns = raw.split('\t', -1)*.trim()
+        if (columns.size() != 3 || columns.any { it.isEmpty() }) {
+            throw new GradleException(
+                    "${source.name}:${lineNumber}: expected 3 tab-separated columns, got: ${raw}")
+        }
+        def row = [
+                className  : columns[0],
+                ownerTest  : columns[1],
+                ownerModule: columns[2],
+                lineNumber : lineNumber
+        ]
+        if (row.className.contains('$')) {
+            throw new GradleException(
+                    "${source.name}:${lineNumber}: inner and synthetic classes are outside the set: ${row.className}")
+        }
+        if (seen.containsKey(row.className)) {
+            throw new GradleException(
+                    "${source.name}:${lineNumber}: ${row.className} is already listed on line ${seen[row.className]}")
+        }
+        seen[row.className] = lineNumber
+        rows << row
+    }
+    rows
+}
+
+def parseCoverageReport = { File report ->
+    def slurper = new XmlSlurper(false, false)
+    // The report references report.dtd, which Gradle would try to fetch over
+    // the network and which the test gate must never depend on.
+    slurper.setFeature('http://apache.org/xml/features/disallow-doctype-decl', false)
+    slurper.setFeature('http://apache.org/xml/features/nonvalidating/load-external-dtd', false)
+    def root = slurper.parse(report)
+    def classes = [:]
+    root.'package'.'class'.each { cls ->
+        def className = cls.@name.text()
+        if (className.contains('$')) {
+            return
+        }
+        // A <class> repeats its counters after its <method> children, so a
+        // recursive search would add every method total to the class total.
+        // GPath child access reaches direct children only, which is what the
+        // class-level numbers are.
+        def counters = [:]
+        cls.counter.each { counter ->
+            def missed = counter.@missed.text() as int
+            def covered = counter.@covered.text() as int
+            counters[counter.@type.text()] = [covered: covered, total: missed + covered]
+        }
+        classes[className] = [
+                lineCovered  : counters.LINE?.covered ?: 0,
+                lineTotal    : counters.LINE?.total ?: 0,
+                branchCovered: counters.BRANCH?.covered ?: 0,
+                branchTotal  : counters.BRANCH?.total ?: 0
+        ]
+    }
+    classes
+}
+
+def collectCoverage = { Map<String, File> reports, Logger logger ->
+    def merged = [:]
+    reports.each { module, report ->
+        if (!report.exists()) {
+            throw new GradleException("Coverage report is missing: ${report}")
+        }
+        parseCoverageReport(report).each { className, coverage ->
+            def existing = merged[className]
+            if (existing == null) {
+                merged[className] = coverage + [module: module]
+                return
+            }
+            // The same class instrumented by two modules means two independent
+            // runs of the same bytecode; adding them up would double its lines,
+            // so the run that reached further wins.
+            logger.warn("Class ${className} appears in both ${existing.module} and ${module} coverage reports; " +
+                    "keeping the run with more covered lines.")
+            if (coverage.lineCovered > existing.lineCovered) {
+                merged[className] = coverage + [module: module]
+            }
+        }
+    }
+    merged
+}
+
+def ownerSourceFile = { Map row ->
+    def modulePath = row.ownerModule.replace(':', '')
+    def relative = row.ownerTest.replace('.', '/')
+    ['kt', 'java']
+            .collect { new File(rootDirectory, "${modulePath}/src/test/java/${relative}.${it}") }
+            .find { it.exists() }
+}
+
+tasks.register('verifyPureCoreCoverage') {
+    group = 'verification'
+    description = 'Checks the critical pure-core class set against the TASK-007 coverage thresholds.'
+    dependsOn 'localCoverageReport'
+
+    doLast {
+        def rows = readPureCoreList(pureCoreListFile)
+        def coverage = collectCoverage(coverageReports, logger)
+
+        def unowned = []
+        def unknownOwnerSource = []
+        def absent = []
+        def belowFloor = []
+        def measured = []
+
+        rows.each { row ->
+            if (row.ownerTest == 'NONE') {
+                if (row.ownerModule != '-') {
+                    unknownOwnerSource << "${row.className} has no owner but names module ${row.ownerModule}"
+                }
+                unowned << row
+            } else if (ownerSourceFile(row) == null) {
+                unknownOwnerSource << "${row.className} names owner ${row.ownerTest} in ${row.ownerModule}, " +
+                        'but no such test source exists'
+            }
+
+            def classCoverage = coverage[row.className]
+            if (classCoverage == null || classCoverage.lineTotal == 0) {
+                absent << row
+                return
+            }
+            def entry = row + classCoverage + [linePercent: percent(classCoverage.lineCovered, classCoverage.lineTotal)]
+            measured << entry
+            if (entry.linePercent < classLineFloor) {
+                belowFloor << entry
+            }
+        }
+
+        def lineCovered = measured.sum(0) { it.lineCovered }
+        def lineTotal = measured.sum(0) { it.lineTotal }
+        def branchCovered = measured.sum(0) { it.branchCovered }
+        def branchTotal = measured.sum(0) { it.branchTotal }
+        def aggregateLine = percent(lineCovered, lineTotal)
+        def aggregateBranch = percent(branchCovered, branchTotal)
+
+        def report = new StringBuilder()
+        report.append("Pure-core coverage over ${rows.size()} listed classes (${measured.size()} measured)\n")
+        report.append("  line   ${formatPercent(aggregateLine)}  (${lineCovered}/${lineTotal}, floor ${formatPercent(aggregateLineFloor)})\n")
+        report.append("  branch ${formatPercent(aggregateBranch)}  (${branchCovered}/${branchTotal}, floor ${formatPercent(aggregateBranchFloor)})\n")
+
+        def failures = []
+
+        if (absent) {
+            failures << "${absent.size()} listed class(es) carry no line counters in the coverage reports. " +
+                    'They were renamed, deleted or moved out of the covered modules, so the list has drifted:\n' +
+                    absent.collect { "    ${it.className}  (${pureCoreListFile.name}:${it.lineNumber})" }.join('\n')
+        }
+        if (unowned) {
+            failures << "${unowned.size()} listed class(es) have no owning test recorded:\n" +
+                    unowned.collect { "    ${it.className}  (${pureCoreListFile.name}:${it.lineNumber})" }.join('\n')
+        }
+        if (unknownOwnerSource) {
+            failures << "${unknownOwnerSource.size()} row(s) name an owner that cannot be resolved:\n" +
+                    unknownOwnerSource.collect { "    ${it}" }.join('\n')
+        }
+        if (belowFloor) {
+            failures << "${belowFloor.size()} listed class(es) are below the ${formatPercent(classLineFloor)} per-class line floor:\n" +
+                    belowFloor.sort { it.linePercent }.collect {
+                        "    ${formatPercent(it.linePercent)}  ${it.className}  (${it.lineCovered}/${it.lineTotal} lines)"
+                    }.join('\n')
+        }
+        if (aggregateLine < aggregateLineFloor) {
+            failures << "Aggregate line coverage ${formatPercent(aggregateLine)} is below the ${formatPercent(aggregateLineFloor)} floor."
+        }
+        if (aggregateBranch < aggregateBranchFloor) {
+            failures << "Aggregate branch coverage ${formatPercent(aggregateBranch)} is below the ${formatPercent(aggregateBranchFloor)} floor."
+        }
+
+        if (failures) {
+            report.append('\n').append(failures.join('\n\n')).append('\n')
+            throw new GradleException(report.toString())
+        }
+
+        def worst = measured.sort { it.linePercent }.take(5)
+        report.append('  thinnest margins:\n')
+        worst.each {
+            report.append("    ${formatPercent(it.linePercent)}  ${it.className}  (${it.lineCovered}/${it.lineTotal} lines)\n")
+        }
+        println report.toString()
+    }
+}
+
+tasks.register('verifyPureCoreAttribution') {
+    group = 'verification'
+    description = 'Runs each owning test class alone and checks it still covers the classes it owns.'
+
+    doLast {
+        def rows = readPureCoreList(pureCoreListFile).findAll { it.ownerTest != 'NONE' }
+        def owners = rows.groupBy { it.ownerTest }.sort { it.key }
+        if (owners.isEmpty()) {
+            throw new GradleException("No owned classes listed in ${pureCoreListFile.name}; nothing to attribute.")
+        }
+
+        def failures = []
+        def index = 0
+
+        owners.each { ownerTest, ownedRows ->
+            index++
+            def module = ownedRows.first().ownerModule
+            def modules = ownedRows*.ownerModule.unique()
+            if (modules.size() > 1) {
+                throw new GradleException("${ownerTest} is listed in more than one module: ${modules}")
+            }
+            if (!coverageReports.containsKey(module)) {
+                throw new GradleException("${ownerTest} names module ${module}, which produces no local coverage report; " +
+                        "known modules are ${coverageReports.keySet()}")
+            }
+            print "[${index}/${owners.size()}] ${ownerTest} (${module}) "
+            System.out.flush()
+
+            def started = System.currentTimeMillis()
+            def process = new ProcessBuilder(
+                    gradleLauncher.absolutePath, '--console=plain',
+                    "${module}:testDebugUnitTest", '--tests', ownerTest,
+                    "${module}:createDebugUnitTestCoverageReport")
+                    .directory(rootDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+            def output = process.inputStream.getText('UTF-8')
+            def exitCode = process.waitFor()
+            def seconds = String.format(Locale.ROOT, '%.1fs', (System.currentTimeMillis() - started) / 1000.0d)
+
+            if (exitCode != 0) {
+                println "FAILED to run (${seconds})"
+                failures << "${ownerTest} could not be run in isolation:\n" +
+                        output.readLines().takeRight(20).collect { "    ${it}" }.join('\n')
+                return
+            }
+
+            def isolated = parseCoverageReport(coverageReports[module])
+            def offenders = ownedRows.collect { row ->
+                def classCoverage = isolated[row.className]
+                def covered = classCoverage?.lineCovered ?: 0
+                def total = classCoverage?.lineTotal ?: 0
+                row + [lineCovered: covered, lineTotal: total, linePercent: percent(covered, total)]
+            }.findAll { it.lineTotal == 0 || it.linePercent < classLineFloor }
+
+            if (offenders) {
+                println "${offenders.size()} of ${ownedRows.size()} owned class(es) unattributed (${seconds})"
+                failures << "${ownerTest} does not carry the classes it owns:\n" +
+                        offenders.sort { it.linePercent }.collect {
+                            "    ${formatPercent(it.linePercent)}  ${it.className}  (${it.lineCovered}/${it.lineTotal} lines)"
+                        }.join('\n')
+            } else {
+                println "${ownedRows.size()} owned class(es) ok (${seconds})"
+            }
+        }
+
+        // The isolated runs have overwritten the coverage reports with partial
+        // data, so say so rather than let the next reader trust them.
+        println "\nCoverage reports now hold only the last isolated run; re-run verifyPureCoreCoverage for whole-suite numbers."
+
+        if (failures) {
+            throw new GradleException("Pure-core attribution failed for ${failures.size()} owner(s):\n\n" +
+                    failures.join('\n\n') + '\n')
+        }
+        println "All ${owners.size()} owner test class(es) carry their listed classes when run alone."
+    }
+}
