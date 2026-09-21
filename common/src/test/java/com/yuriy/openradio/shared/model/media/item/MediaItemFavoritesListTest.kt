@@ -114,6 +114,12 @@ class MediaItemFavoritesListTest {
         assertTrue(listener.items.isEmpty())
         assertTrue(listener.radioStations.isEmpty())
         listener.assertNoError()
+        assertEquals(
+            "The command did not read the favorites store exactly once, so the empty list above " +
+                "says nothing about an empty store",
+            1,
+            presenter.favoritesRequests
+        )
     }
 
     @Test

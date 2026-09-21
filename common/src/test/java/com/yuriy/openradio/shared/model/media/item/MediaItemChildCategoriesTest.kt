@@ -120,6 +120,12 @@ class MediaItemChildCategoriesTest {
         assertTrue(listener.items.isEmpty())
         assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber)
         listener.assertNoError()
+        assertEquals(
+            "The command did not ask for exactly the first page of the category, so the empty " +
+                "result above says nothing about an empty page",
+            listOf("rock" to UrlLayer.FIRST_PAGE_INDEX),
+            presenter.categoryRequests
+        )
     }
 
     @Test

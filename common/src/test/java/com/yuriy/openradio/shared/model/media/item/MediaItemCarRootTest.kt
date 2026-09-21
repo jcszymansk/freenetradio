@@ -124,6 +124,12 @@ class MediaItemCarRootTest {
         )
 
         listener.awaitResult()
+        assertEquals(
+            "The loop below walks whatever the car root offered, so a root that came back short " +
+                "leaves it asserting less than it claims, and an empty one asserting nothing",
+            3,
+            listener.items.size
+        )
         for (item in listener.items) {
             assertTrue("${item.mediaId} is not browsable", item.mediaMetadata.isBrowsable == true)
             assertFalse("${item.mediaId} is playable", item.mediaMetadata.isPlayable == true)

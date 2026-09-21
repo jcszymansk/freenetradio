@@ -68,6 +68,12 @@ class MediaItemSearchTest {
         listener.awaitResult()
         assertTrue(listener.items.isEmpty())
         listener.assertNoError()
+        assertEquals(
+            "The command did not run exactly the search it was given, so the empty result above " +
+                "says nothing about a query without matches",
+            listOf("nothing"),
+            presenter.searchRequests
+        )
     }
 
     /**

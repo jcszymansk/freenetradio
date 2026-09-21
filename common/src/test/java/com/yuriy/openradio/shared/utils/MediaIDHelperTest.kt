@@ -71,12 +71,4 @@ class MediaIDHelperTest {
             CoreMatchers.`is`(Country.COUNTRY_CODE_DEFAULT)
         )
     }
-
-    @Test
-    fun testStartsWithAndEquals() {
-        val name = MediaId.MEDIA_ID_COUNTRIES_LIST
-        val id = MediaId.MEDIA_ID_COUNTRIES_LIST
-        MatcherAssert.assertThat(name.startsWith(id), CoreMatchers.`is`(true))
-        MatcherAssert.assertThat(name == id, CoreMatchers.`is`(true))
-    }
 }

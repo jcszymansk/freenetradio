@@ -94,6 +94,12 @@ class MediaItemCountryStationsTest {
         listener.awaitResult()
         assertTrue(listener.items.isEmpty())
         listener.assertNoError()
+        assertEquals(
+            "The command did not ask for exactly the first page of the country, so the empty " +
+                "result above says nothing about a country without stations",
+            listOf(DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX),
+            presenter.countryRequests
+        )
     }
 
     @Test
