@@ -4,10 +4,12 @@ title: Move the URL layer test to the JVM and cover country code encoding
 status: To Do
 assignee: []
 created_date: '2026-09-21 17:46'
+updated_date: '2026-09-21 18:27'
 labels:
   - test
 milestone: m-0
-dependencies: []
+dependencies:
+  - TASK-062
 type: chore
 ordinal: 76000
 ---
