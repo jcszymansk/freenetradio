@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-21 19:07'
+updated_date: '2026-09-21 19:11'
 labels: []
 milestone: m-0
 dependencies:
@@ -18,6 +18,9 @@ dependencies:
   - TASK-059
   - TASK-060
   - TASK-061
+  - TASK-063
+  - TASK-064
+  - TASK-065
 type: chore
 ordinal: 21000
 ---
