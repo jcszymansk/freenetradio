@@ -27,6 +27,7 @@ import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.view.list.MediaItemsAdapter
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -92,15 +93,37 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      * A list that is about to change has not changed yet, so a single read cannot tell "nothing
      * happened" from "it has not happened yet". This keeps reading for as long as the pushes this
      * suite does trigger take to arrive, and fails on the first row that differs.
+     *
+     * [rows] answers empty for two states a read here has to tell apart: a list the service
+     * emptied, which is the change this is watching for, and a list whose rows are not all laid
+     * out yet, which is no answer at all. The adapter separates them, so the first fails and the
+     * second is skipped. A window of nothing but skipped reads compared nothing, and fails rather
+     * than passing on an assertion that never ran.
      */
     fun assertRowsStay(expected: List<BrowseRow>, reason: String) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(SETTLE_SECONDS)
+        var comparisons = 0
         while (System.nanoTime() < deadline) {
             val rows = rows()
-            if (rows.isNotEmpty()) {
+            if (rows.isEmpty()) {
+                if (adapterItemCount() == 0) {
+                    throw AssertionError(
+                        "$reason. The list emptied rather than going on showing $expected. " +
+                            describe()
+                    )
+                }
+            } else {
                 assertEquals(reason, expected, rows)
+                comparisons++
             }
             Thread.sleep(POLL_MILLIS)
+        }
+        if (comparisons == 0) {
+            throw AssertionError(
+                "The list never read as a laid out set of rows over $SETTLE_SECONDS seconds, so " +
+                    "this was never checked: $reason. It was waiting to go on seeing $expected. " +
+                    describe()
+            )
         }
     }
 
@@ -242,6 +265,22 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
     }
 
     /**
+     * @return how many children the adapter holds, regardless of how many of them are laid out,
+     *   or [NO_ADAPTER] while the Activity carries no browse list. This is the half of [rows] a
+     *   caller needs to tell a list that emptied from one that is still being measured: only the
+     *   first reads zero here.
+     */
+    private fun adapterItemCount(): Int {
+        val result = AtomicInteger(NO_ADAPTER)
+        mScenario.onActivity { activity ->
+            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
+            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            result.set(adapter.itemCount)
+        }
+        return result.get()
+    }
+
+    /**
      * @return what the list held when it ran out of time, so a timeout says which half was
      *   missing: children the service never sent, or rows the screen was too short to lay out.
      */
@@ -273,6 +312,12 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
         const val SETTLE_SECONDS = 5L
 
         const val POLL_MILLIS = 50L
+
+        /**
+         * What [adapterItemCount] answers when the Activity carries no browse list, which is not
+         * an empty list and must not read as one.
+         */
+        const val NO_ADAPTER = -1
     }
 }
 

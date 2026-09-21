@@ -184,9 +184,9 @@ class FavoriteLifecycleJourneyTest {
                         "TASK-050 asks for exactly that, so this assertion is what has to " +
                         "change, not the fix"
                 )
-                // A list that emptied reads as no rows at all, which is also how a list reads
-                // while it is being laid out, so assertRowsStay cannot tell those apart and lets
-                // the empty one through. This says the row is still there in its own right.
+                // A BrowseRow carries the media id and the title, so a rebind that put the row
+                // back with its old favorite state would leave the comparison above equal. The
+                // box is not part of that comparison and is read on its own.
                 list.awaitRowFavorite(mStation.id, false)
             } finally {
                 navigation.returnToRoot()
