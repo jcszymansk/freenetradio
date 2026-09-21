@@ -4,6 +4,7 @@ title: Cover the local station home page on add and on edit
 status: To Do
 assignee: []
 created_date: '2026-09-21 17:46'
+updated_date: '2026-09-21 19:59'
 labels:
   - test
 milestone: m-0
@@ -23,4 +24,5 @@ ordinal: 74000
 - [ ] #1 Adding a station with a home page stores that home page and a test reads it back
 - [ ] #2 Opening the edit dialog for a stored station shows its home page
 - [ ] #3 The add-side test runs on the JVM against a preferences fake rather than on a device
+- [ ] #4 RadioStationManagerLayerImpl and RadioStationToAdd clear the per-class line floor in the JVM coverage report, which replacing ContextWrapper(null) with a preferences fake should achieve as a side effect
 <!-- AC:END -->

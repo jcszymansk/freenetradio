@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-17 18:24'
-updated_date: '2026-09-21 19:11'
+updated_date: '2026-09-21 19:59'
 labels: []
 milestone: m-0
 dependencies:
@@ -21,6 +21,8 @@ dependencies:
   - TASK-063
   - TASK-064
   - TASK-065
+  - TASK-066
+  - TASK-067
 type: chore
 ordinal: 21000
 ---
@@ -80,4 +82,20 @@ Criterion 4 is left unchecked although the aggregate passes at 83.7% line and 77
 JsonUtils owner set to NONE. The mechanical rule qualified EqualizerSerializationTest, which covers 36 of its 49 lines alone, but that is the shape criterion 5 exists to reject: JsonUtils is covered because serializers executed it, not because anything tests it. The gate now reports five classes with no owning test rather than four, and JsonUtils is the one of the five that is above the per-class floor, at 81.6% line. That is the owner column earning its place, since no percentage would have flagged it.
 
 Three of the five unowned classes have no task yet: JsonUtils, SortUtils (no test anywhere, one production caller, station reordering) and StorageManagerLayerImpl (twelve instrumented tests although the class imports nothing from Android). TASK-061 carries the other two.
+
+What stays on this task once every blocker has landed, recorded so it is not rediscovered late.
+
+1. Re-audit criteria 7 and 8 against the tree as it will then be. This is the large one. Fourteen blockers will add and rewrite tests, and those tests are themselves unaudited; criterion 8 says no ignored, commented-out, assertion-free or retry-masked test exists, which has to be true of the new ones too. The audit that produced TASK-052 to TASK-054 read 80 test files and was a snapshot. Budget it as work in its own right, not as a final read-through.
+
+2. Re-run every suite in one pass. Criteria 1 to 3 are checked against the 2026-09-21 run. The gate asks that all nine hold at the same moment, not at some moment each, so the checks get cleared and redone together with verifyPureCoreCoverage and verifyPureCoreAttribution.
+
+3. Wire verifyPureCoreCoverage into check once it passes. It is deliberately unwired while it fails, and leaving it unwired after it passes would waste it.
+
+4. The gameability limit stays recorded rather than fixed: a hand-maintained list rewards moving untested code out of the set, as TASK-062 demonstrated by accident. Closing it needs a package-scoped rule asking whether an unlisted class in these packages is big enough to deserve a row. Decide then whether it is worth building.
+
+Residue that is now filed: ASXPlaylistParser and the ENTRYREF network hazard as TASK-066, the children-changed item count as TASK-067, and the two below-floor classes as a fourth criterion on TASK-059.
+
+Residue still unfiled and deliberately so: callWhenSearchReady RESULT_ERROR_BAD_VALUE is unreachable and probably wants deleting rather than testing; RadioStationValidatorImpl and ImagesPersistenceLayerImpl reach the network without consulting the connectivity gate, which TASK-052 neutralises for the suite but not for production; TASK-027 designates the wrong regression test and TASK-029 final summary claims two provider nodes where it asserts one; and the test-file hygiene items, two missing Apache headers, two missing trailing newlines, dead blank lines in ModelLayerImplTest, the unreachable NowPlayingView.assertStaysDown and BrowseListView.inRow clicking every matching row without a break.
+
+Owner judgement calls left open in gradle/pure-core-coverage.tsv: MediaItemCommandImpl, arbitrary among twelve qualifying command tests, and Country, a three-line data class owned by ParserLayerMappingTest.
 <!-- SECTION:NOTES:END -->
