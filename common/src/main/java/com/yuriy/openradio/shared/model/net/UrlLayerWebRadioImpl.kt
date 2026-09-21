@@ -17,32 +17,11 @@
 package com.yuriy.openradio.shared.model.net
 
 import android.net.Uri
-import androidx.core.util.Pair
-import com.yuriy.openradio.shared.utils.AppLogger
-import com.yuriy.openradio.shared.utils.NetUtils
-import java.net.MalformedURLException
-import java.net.URL
 
 /**
  * Use single url to get whole dataset and parse it into the data object.
  */
 class UrlLayerWebRadioImpl : UrlLayer {
-
-    override fun getConnectionUrl(uri: Uri, parameters: List<Pair<String, String>>): URL? {
-        return try {
-            URL(uri.toString())
-        } catch (exception: MalformedURLException) {
-            AppLogger.e(
-                "$TAG getUrl ${
-                    NetUtils.createExceptionMessage(
-                        uri,
-                        parameters
-                    )
-                }", exception
-            )
-            null
-        }
-    }
 
     override fun getAllCategoriesUrl(): Uri {
         return URI
@@ -77,7 +56,6 @@ class UrlLayerWebRadioImpl : UrlLayer {
 
     companion object {
 
-        private const val TAG = "ULWRI"
         private const val URL = "https://jcorporation.github.io/webradiodb/db/index/webradios.min.json"
         private val URI = Uri.parse(URL)
         private val URI_COUNTRIES = Uri.parse(

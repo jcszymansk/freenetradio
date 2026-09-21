@@ -19,7 +19,6 @@ package com.yuriy.openradio.shared.service
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.Uri
-import androidx.core.util.Pair
 import com.yuriy.openradio.shared.model.ModelLayer
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.eq.EqualizerState
@@ -57,7 +56,6 @@ import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.AppUtils
 import java.lang.ref.WeakReference
-import java.net.URL
 import java.util.Date
 import java.util.TreeSet
 import org.junit.Assert.assertEquals
@@ -382,8 +380,6 @@ class OpenRadioServicePresenterImplTest {
         val countryRequests = mutableListOf<kotlin.Pair<String, Int>>()
 
         val searchRequests = mutableListOf<String>()
-
-        override fun getConnectionUrl(uri: Uri, parameters: List<Pair<String, String>>): URL? = null
 
         override fun getAllCategoriesUrl(): Uri = Uri.parse("categories")
 

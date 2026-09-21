@@ -27,6 +27,9 @@ import com.yuriy.openradio.shared.model.eq.EqualizerLayerImpl
 import com.yuriy.openradio.shared.model.filter.FilterImpl
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayer
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImpl
+import com.yuriy.openradio.shared.model.net.ConnectionUrlResolver
+import com.yuriy.openradio.shared.model.net.DirectUrlResolver
+import com.yuriy.openradio.shared.model.net.DnsMirrorUrlResolver
 import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.net.NetworkLayerImpl
@@ -129,7 +132,7 @@ object DependencyRegistryCommon {
         val source = sSourcesLayer.getActiveSource()
         val parser = getParserLayer(source, countriesCache)
         val urlLayer = getUrlLayer(source)
-        val downloader = HTTPDownloaderImpl(urlLayer)
+        val downloader = HTTPDownloaderImpl(getUrlResolver(source))
         val apiCachePersistent = PersistentApiCache(context, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         val apiCacheInMemory = InMemoryApiCache()
         val modelLayer = ModelLayerImpl(
@@ -240,6 +243,14 @@ object DependencyRegistryCommon {
             UrlLayerRadioBrowserImpl()
         } else {
             UrlLayerWebRadioImpl()
+        }
+    }
+
+    private fun getUrlResolver(source: Source): ConnectionUrlResolver {
+        return if (source == Source.RADIO_BROWSER) {
+            DnsMirrorUrlResolver()
+        } else {
+            DirectUrlResolver()
         }
     }
 
