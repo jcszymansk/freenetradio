@@ -4,11 +4,13 @@ title: Restore core phone functionality
 status: To Do
 assignee: []
 created_date: '2026-09-17 18:26'
-updated_date: '2026-09-21 20:03'
+updated_date: '2026-09-22 11:55'
 labels: []
 milestone: m-1
 dependencies:
   - TASK-068
+  - TASK-074
+  - TASK-075
 type: feature
 ordinal: 30000
 ---
