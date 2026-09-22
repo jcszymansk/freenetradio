@@ -1,9 +1,11 @@
 ---
 id: TASK-069
 title: Stop a timed-out browse command from reading as an empty catalogue
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 20:32'
+updated_date: '2026-09-22 04:36'
 labels:
   - test
 milestone: m-0
@@ -25,3 +27,14 @@ Five restored-instance tests are the remaining live instance, and the counters d
 - [ ] #2 The five restored-instance tests assert the cached node they are named for, not only that nothing was delivered
 - [ ] #3 assertMediaIds rejects an empty expectation, which today degenerates to comparing two empty lists
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Bind RecordingCommandListener's await deadline to MediaItemCommand.CMD_TIMEOUT_MS (half of it) so a command that has not answered by then fails awaitResult/awaitError by name instead of passing as an empty result.
+2. Give RecordingCommandListener an assertion for the restored-instance contract: the result is already delivered when execute() returns (the early return happens before the coroutine launches), and it carries no items, no stations, and the first page index.
+3. Rewrite the five restored-instance tests around that assertion and rename them so the name matches the claim - the command leaves the node to BrowseTree, it does not deliver it.
+4. Make assertMediaIds(first, vararg rest) so an empty expectation does not compile.
+5. Cover the harness itself in MediaItemCommandTestSupportTest: the await is shorter than the command timeout, and a command that does not answer in time fails awaitResult by name.
+6. Run ./gradlew test.
+<!-- SECTION:PLAN:END -->

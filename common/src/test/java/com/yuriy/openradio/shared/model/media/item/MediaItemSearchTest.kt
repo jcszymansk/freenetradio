@@ -94,16 +94,19 @@ class MediaItemSearchTest {
         assertEquals(listOf("first", "second"), listener.mediaIds.map { MediaId.normalizeFromSearchId(it) })
     }
 
+    /**
+     * The presenter is given a station the query would match, so the empty result is a decision
+     * the command made rather than a search that found nothing.
+     */
     @Test
-    fun aRestoredInstanceDeliversTheCachedResultsWithoutSearchingAgain() {
+    fun aRestoredInstanceLeavesTheResultsToTheCacheWithoutSearchingAgain() {
         val presenter = RecordingPresenter(mSearchStations = stations("first"))
         val listener = RecordingCommandListener()
 
         execute(presenter, listener, AppUtils.makeSearchQueryBundle("jazz"), isSavedInstance = true)
 
-        listener.awaitResult()
-        assertTrue(listener.items.isEmpty())
-        assertTrue(presenter.searchRequests.isEmpty())
+        listener.assertAnsweredFromCacheBeforeReturning()
+        assertEquals(emptyList<String>(), presenter.searchRequests)
         listener.assertNoError()
     }
 

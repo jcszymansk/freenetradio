@@ -26,6 +26,7 @@ import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.setVariant
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
+import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.service.OpenRadioService
@@ -193,12 +194,12 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
     }
 
     fun awaitResult(): RecordingCommandListener {
-        assertTrue("Command did not deliver a result", mResultLatch.await(AWAIT_SECONDS, TimeUnit.SECONDS))
+        assertTrue(RESULT_MISSING, mResultLatch.await(AWAIT_MILLIS, TimeUnit.MILLISECONDS))
         return this
     }
 
     fun awaitError(): RecordingCommandListener {
-        assertTrue("Command did not report an error", mErrorLatch.await(AWAIT_SECONDS, TimeUnit.SECONDS))
+        assertTrue(ERROR_MISSING, mErrorLatch.await(AWAIT_MILLIS, TimeUnit.MILLISECONDS))
         return this
     }
 
@@ -209,17 +210,52 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
         )
     }
 
-    fun assertMediaIds(vararg expected: String) {
-        assertEquals(expected.toList(), mediaIds)
+    /**
+     * Names every media id that arrived, in order. The first one is a parameter of its own so that
+     * `assertMediaIds()` does not compile: an empty expectation degenerates into comparing two
+     * empty lists, which is bit for bit what a command that never ran also delivers. A test that
+     * expects no items asserts what the command did instead - the page it asked the presenter for,
+     * or the error it reported.
+     */
+    fun assertMediaIds(first: String, vararg rest: String) {
+        assertEquals(listOf(first) + rest, mediaIds)
+    }
+
+    /**
+     * Asserts the contract of a browse command restored onto a catalogue that is already in
+     * [com.yuriy.openradio.shared.model.media.BrowseTree]: it answers on the calling thread,
+     * before `execute` returns and before it reaches its coroutine, and the empty result it leaves
+     * behind is what makes `OpenRadioService.callWhenSourceReady` serve the node from the tree
+     * rather than from the provider.
+     *
+     * The delivery that has already happened is the whole claim. An empty result on its own is bit
+     * for bit what a command that never ran delivers, so it is worth asserting only together with
+     * the moment it arrived, which is why this has to be called before any await.
+     */
+    fun assertAnsweredFromCacheBeforeReturning() {
+        assertEquals("A restored instance did not answer before execute returned", 1, results)
+        assertEquals("A restored instance built media items of its own", emptyList<String>(), mediaIds)
+        assertEquals("A restored instance carried radio stations of its own", emptySet<RadioStation>(), radioStations)
+        assertEquals("A restored instance did not answer for the first page", UrlLayer.FIRST_PAGE_INDEX, pageNumber)
     }
 
     companion object {
 
         const val UNSET_PAGE_NUMBER = -1
 
-        private const val UPDATE_PLAYBACK_STATE = "updatePlaybackState"
+        /**
+         * Shorter than [MediaItemCommand.CMD_TIMEOUT_MS] on purpose. A command that exhausts its
+         * own timeout answers with no items, the first page and no error, which is exactly the
+         * state several of these tests expect of a command that ran and found nothing. Expiring
+         * first turns that into a named failure instead of a pass (TASK-069).
+         */
+        const val AWAIT_MILLIS = MediaItemCommand.CMD_TIMEOUT_MS / 2
 
-        private const val AWAIT_SECONDS = 10L
+        const val RESULT_MISSING = "Command did not deliver a result"
+
+        const val ERROR_MISSING = "Command did not report an error"
+
+        private const val UPDATE_PLAYBACK_STATE = "updatePlaybackState"
 
         private const val SETTLE_MILLIS = 250L
     }

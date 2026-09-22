@@ -77,8 +77,12 @@ class MediaItemAllCategoriesTest {
         assertEquals(STRING_RESOURCE, listener.error)
     }
 
+    /**
+     * The presenter is given a category it would happily hand over, so the node arriving empty is
+     * a decision the command made rather than an absence of data.
+     */
     @Test
-    fun aRestoredInstanceAnswersFromTheCacheWithoutAskingTheProvider() {
+    fun aRestoredInstanceLeavesTheCategoriesToTheCacheWithoutAskingTheProvider() {
         val presenter = RecordingPresenter(mCategories = setOf(Category("rock", "Rock", 42)))
         val listener = RecordingCommandListener()
 
@@ -92,8 +96,7 @@ class MediaItemAllCategoriesTest {
             )
         )
 
-        listener.awaitResult()
-        assertTrue(listener.items.isEmpty())
+        listener.assertAnsweredFromCacheBeforeReturning()
         assertEquals(0, presenter.categoriesRequests)
         listener.assertNoError()
     }

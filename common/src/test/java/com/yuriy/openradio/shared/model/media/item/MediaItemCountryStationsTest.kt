@@ -102,9 +102,16 @@ class MediaItemCountryStationsTest {
         )
     }
 
+    /**
+     * The presenter is given a country and a station it would happily hand over, so the node
+     * arriving empty is a decision the command made rather than an absence of data.
+     */
     @Test
-    fun aRestoredInstanceDeliversTheCachedNodeWithoutAskingTheProvider() {
-        val presenter = RecordingPresenter(mCountryStations = stations("first"))
+    fun aRestoredInstanceLeavesTheNodeToTheCacheWithoutAskingTheProvider() {
+        val presenter = RecordingPresenter(
+            mCountries = setOf(Country("Poland", "PL")),
+            mCountryStations = stations("first")
+        )
         val listener = RecordingCommandListener()
 
         MediaItemCountryStations().execute(
@@ -117,9 +124,9 @@ class MediaItemCountryStationsTest {
             )
         )
 
-        listener.awaitResult()
-        assertTrue(listener.items.isEmpty())
-        assertTrue(presenter.countryRequests.isEmpty())
+        listener.assertAnsweredFromCacheBeforeReturning()
+        assertEquals(emptyList<Pair<String, Int>>(), presenter.countryRequests)
         assertEquals(0, presenter.countriesRequests)
+        listener.assertNoError()
     }
 }
