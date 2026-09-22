@@ -77,7 +77,13 @@ class RadioStationValidatorImplTest {
             "http://",
             "http://127.0.0.1:0/stream",
             "http://127.0.0.1:65536/stream",
-            "http://127.0.0.1:99999/stream"
+            "http://127.0.0.1:99999/stream",
+            "http://bad host:1/stream",
+            "http://bad\\host:1/stream",
+            "http://bad%41host:1/stream",
+            "http://bad]host:1/stream",
+            "http://bad\u007fhost:1/stream",
+            "http://[zz]:1/stream"
         )
         for (url in unusable) {
             mEvents.clear()
@@ -103,7 +109,10 @@ class RadioStationValidatorImplTest {
             "http://127.0.0.1/stream",
             "http://127.0.0.1:65535/stream",
             "http://127.0.0.1:1/my stream.mp3",
-            "http://127.0.0.1:1/%zz"
+            "http://127.0.0.1:1/%zz",
+            "http://[::1]:1/stream",
+            "http://my_host.test:1/stream",
+            "http://zażółć.test:1/stream"
         )
         for (url in usable) {
             mEvents.clear()

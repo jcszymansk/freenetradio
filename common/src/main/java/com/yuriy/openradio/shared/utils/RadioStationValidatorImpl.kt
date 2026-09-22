@@ -26,10 +26,10 @@ import java.net.URL
  * Validator that reaches the stream and the home page over the network to decide whether a
  * candidate Radio Station is usable.
  *
- * A candidate without a name, or whose stream url is not an http or https url with a host, fails
- * at once, before anything is probed. Otherwise
- * the stream is probed first and an unreachable one fails the candidate. The home page is optional:
- * an empty one is not probed at all, and an unreachable one warns ahead of the success.
+ * A candidate without a name, or whose stream url the probe could never open, fails at once,
+ * before anything is probed. Otherwise the stream is probed first and an unreachable one fails
+ * the candidate. The home page is optional: an empty one is not probed at all, and an
+ * unreachable one warns ahead of the success.
  *
  * @param mUiScope Scope the answers are delivered on.
  * @param mScope   Scope the network probes run on.
@@ -78,6 +78,43 @@ class RadioStationValidatorImpl(
         }
     }
 
+    /**
+     * Whether [url] is one the production probe could open at all.
+     *
+     * [NetUtils.checkResource] parses with [URL] and opens an HTTP connection, so anything this
+     * rejects would fail there too, only after a trip to the network.
+     *
+     * It must reject nothing the probe could open. That is why it is not a strict RFC 3986
+     * parse: a path with a space fails [URL.toURI], yet the probe sends it and a server may
+     * answer 200, and turning such a station away would be a regression, not validation.
+     */
+    private fun isHttpUrl(url: String): Boolean {
+        val parsed = runCatching { URL(url) }.getOrNull() ?: return false
+        return parsed.protocol in PROBEABLE_PROTOCOLS
+                && isConnectableHost(parsed.host)
+                && (parsed.port == DEFAULT_PORT || parsed.port in CONNECTABLE_PORTS)
+    }
+
+    /**
+     * Whether [host] names something a connection could be made to.
+     *
+     * [URL] passes a host through with characters no host can carry, and the probe would
+     * only find out from a failed name lookup. The rule is the one OkHttp applies before
+     * connecting, since OkHttp is what serves Android's HttpURLConnection. Underscores and
+     * non-ASCII letters pass, as they do there. A bracketed IPv6 literal has already been
+     * checked by [URL] itself. The JDK's [URL] also refuses control characters in a host, so no
+     * JVM test reaches that half of the rule. Android's own [URL] makes no such promise.
+     */
+    private fun isConnectableHost(host: String): Boolean {
+        if (host.isEmpty()) {
+            return false
+        }
+        if (host.startsWith(IPV6_LITERAL_START)) {
+            return true
+        }
+        return host.none { it == ' ' || it.isISOControl() || it in HOST_FORBIDDEN_CHARACTERS }
+    }
+
     companion object {
         private val CLASS_NAME = RadioStationValidatorImpl::class.java.simpleName
         private val PROBEABLE_PROTOCOLS = setOf("http", "https")
@@ -88,21 +125,8 @@ class RadioStationValidatorImpl(
         /** [URL] parses any port up to 99999, but a connection can only be made to these. */
         private val CONNECTABLE_PORTS = 1..65535
 
-        /**
-         * Whether [url] is one the production probe could open at all.
-         *
-         * [NetUtils.checkResource] parses with [URL] and opens an HTTP connection, so anything this
-         * rejects would fail there too, only after a trip to the network.
-         *
-         * It must reject nothing the probe could open. That is why it is not a strict RFC 3986
-         * parse: a path with a space fails [URL.toURI], yet the probe sends it and a server may
-         * answer 200, and turning such a station away would be a regression, not validation.
-         */
-        private fun isHttpUrl(url: String): Boolean {
-            val parsed = runCatching { URL(url) }.getOrNull() ?: return false
-            return parsed.protocol in PROBEABLE_PROTOCOLS
-                    && parsed.host.isNotEmpty()
-                    && (parsed.port == DEFAULT_PORT || parsed.port in CONNECTABLE_PORTS)
-        }
+        /** Characters OkHttp refuses in a host, beside the controls and the space. */
+        private const val HOST_FORBIDDEN_CHARACTERS = "#%/:?@[\\]"
+        private const val IPV6_LITERAL_START = '['
     }
 }

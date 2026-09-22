@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-21 17:46'
-updated_date: '2026-09-22 20:14'
+updated_date: '2026-09-22 20:37'
 labels:
   - test
 milestone: m-0
@@ -45,4 +45,6 @@ With the probe injected the validator passes rules 2 to 5 of the pure-core membe
 The pre-probe check also rejects a port outside 1..65535 (java.net.URL parses up to 99999 and 0; neither can be connected to). It stays syntactic: anything that needs a resolver or a connection to decide is left to the probe.
 
 Deliberately not a strict RFC 3986 parse (URL.toURI): a JDK probe sent http://127.0.0.1:<port>/my stream.mp3 and got 200 although toURI rejects it, so strict parsing would turn away stations the probe accepts. aStreamUrlTheProbeCouldOpenIsProbed pins that.
+
+The pre-probe check also rejects a host with a space, a control character or one of #%/:?@[\], which is the rule OkHttp applies before connecting; underscores and non-ASCII hosts still pass. The url helpers are members of the class, not of its companion, so the pure-core gate measures them.
 <!-- SECTION:NOTES:END -->
