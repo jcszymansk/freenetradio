@@ -1,10 +1,11 @@
 ---
 id: TASK-061
 title: Move the URL layer test to the JVM and cover country code encoding
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 17:46'
-updated_date: '2026-09-21 18:27'
+updated_date: '2026-09-22 06:56'
 labels:
   - test
 milestone: m-0
@@ -26,3 +27,24 @@ UrlLayerTest lives in app/src/androidTest although UrlLayer*Impl is pure string 
 - [ ] #2 getStationsByCountry is covered with a country code that changes under encoding
 - [ ] #3 The JVM coverage report attributes both UrlLayer implementations to this test
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Move UrlLayerTest from app/src/androidTest to common/src/test/java/com/yuriy/openradio/shared/model/net/, dropping AndroidJUnit4 so it runs as a plain JVM test against the :android-jvm-stubs Uri.
+2. Widen it to every Uri-building method of both implementations, so the two classes clear the 60% per-class line floor on this test alone and verifyPureCoreAttribution can name it as their owner.
+3. Cover getStationsByCountry with a code that changes under Uri.encode, pinning WebRadioDB's encoded output (reverting 88d4955 must fail) and Radio Browser's raw output, which is the one method there that skips encodeValue.
+4. Record the Radio Browser gap as a follow-up task rather than fixing it here.
+5. Claim both UrlLayer rows in gradle/pure-core-coverage.tsv for the new owner test.
+6. Verify: ./gradlew test, ./gradlew localCoverageReport, ./gradlew verifyPureCoreCoverage, ./gradlew verifyPureCoreAttribution, and ./gradlew :app:assembleDebugAndroidTest to prove the androidTest source set still compiles.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+UrlLayerTest now lives in common/src/test/java/com/yuriy/openradio/shared/model/net/ as a plain JUnit4 class. Nothing about it needed a device once TASK-062 took getConnectionUrl out of the interface: :android-jvm-stubs answers Uri.parse and Uri.encode, and DependencyRegistryCommon.PAGE_SIZE is a const val, so reading it inlines the literal and never touches the registry.
+
+It grew from three assertions over three methods to ten tests over all fourteen, which is what lets verifyPureCoreAttribution name one owner for both classes.
+
+The encoding fixture is "A&", two characters like every real code, with a second one that means something in an address. WebRadioDB carries the country code in a query parameter, so leaving the ampersand alone would end countryId early and filter on "A"; that is the assertion reverting 88d4955 has to fail. Radio Browser splices the same argument into the path unencoded, the one method in that class that skips encodeValue, so the test states that rather than hide it behind an ISO code that encodes to itself. Filed as TASK-074, referenced from the test, and left alone here.
+<!-- SECTION:NOTES:END -->
