@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-21 17:46'
-updated_date: '2026-09-22 19:50'
+updated_date: '2026-09-22 20:14'
 labels:
   - test
 milestone: m-0
@@ -43,4 +43,6 @@ AC #3: the validator now rejects before probing any stream url the production pr
 With the probe injected the validator passes rules 2 to 5 of the pure-core membership rule, so it joined gradle/pure-core-coverage.tsv with RadioStationValidatorImplTest as owner, confirmed by verifyPureCoreAttribution.
 
 The pre-probe check also rejects a port outside 1..65535 (java.net.URL parses up to 99999 and 0; neither can be connected to). It stays syntactic: anything that needs a resolver or a connection to decide is left to the probe.
+
+Deliberately not a strict RFC 3986 parse (URL.toURI): a JDK probe sent http://127.0.0.1:<port>/my stream.mp3 and got 200 although toURI rejects it, so strict parsing would turn away stations the probe accepts. aStreamUrlTheProbeCouldOpenIsProbed pins that.
 <!-- SECTION:NOTES:END -->

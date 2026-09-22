@@ -93,6 +93,10 @@ class RadioStationValidatorImpl(
          *
          * [NetUtils.checkResource] parses with [URL] and opens an HTTP connection, so anything this
          * rejects would fail there too, only after a trip to the network.
+         *
+         * It must reject nothing the probe could open. That is why it is not a strict RFC 3986
+         * parse: a path with a space fails [URL.toURI], yet the probe sends it and a server may
+         * answer 200, and turning such a station away would be a regression, not validation.
          */
         private fun isHttpUrl(url: String): Boolean {
             val parsed = runCatching { URL(url) }.getOrNull() ?: return false

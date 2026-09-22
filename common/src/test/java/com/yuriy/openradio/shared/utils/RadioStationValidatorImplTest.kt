@@ -90,14 +90,20 @@ class RadioStationValidatorImplTest {
         }
     }
 
+    /**
+     * The last two are not valid RFC 3986, but the probe can still open them and a server may
+     * answer. Rejecting them up front would turn away stations the probe would have accepted.
+     */
     @Test
-    fun httpAndHttpsStreamUrlsInAnyCaseAreProbed() {
+    fun aStreamUrlTheProbeCouldOpenIsProbed() {
         val usable = listOf(
             "https://127.0.0.1:1/stream",
             "HTTPS://127.0.0.1:1/stream",
             "Http://127.0.0.1:1/stream",
             "http://127.0.0.1/stream",
-            "http://127.0.0.1:65535/stream"
+            "http://127.0.0.1:65535/stream",
+            "http://127.0.0.1:1/my stream.mp3",
+            "http://127.0.0.1:1/%zz"
         )
         for (url in usable) {
             mEvents.clear()
