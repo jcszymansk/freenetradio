@@ -255,11 +255,11 @@ class AutoDetectParser private constructor(
         )
 
         /**
-         * The name of the first element, past an XML declaration, comments, a doctype and
-         * whitespace.
+         * The name of the first element, past an XML declaration, comments, whitespace and a
+         * doctype, whose internal subset carries the `>` of its own declarations.
          */
         private val ROOT_ELEMENT = Regex(
-            "^(?:<\\?.*?\\?>|<!--.*?-->|<!DOCTYPE[^>]*>|\\s)*<([A-Za-z][\\w.:-]*)",
+            "^(?:<\\?.*?\\?>|<!--.*?-->|<!DOCTYPE(?:[^>\\[]|\\[[^\\]]*\\])*>|\\s)*<([A-Za-z][\\w.:-]*)",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
         )
 

@@ -41,12 +41,22 @@ interface DownloaderLayer {
      * @param uri Provided [Uri].
      * @param parameters List of parameters to attach to connection.
      * @param contentTypeFilter Content type to download. An empty string - for any type.
-     * @return Downloaded data.
+     * @param maxBytes Most that may be read, or [NO_LIMIT]. A response longer than this is
+     * discarded rather than truncated, because half a document is not a shorter document. Pass a
+     * limit whenever the address comes from downloaded content: a url that looks like a playlist
+     * can answer with a live stream that never ends.
+     * @return Downloaded data, or an empty array when nothing could be read.
      */
     fun downloadDataFromUri(
         context: Context,
         uri: Uri,
         parameters: List<Pair<String, String>> = ArrayList(),
-        contentTypeFilter: String? = AppUtils.EMPTY_STRING
+        contentTypeFilter: String? = AppUtils.EMPTY_STRING,
+        maxBytes: Int = NO_LIMIT
     ): ByteArray
+
+    companion object {
+
+        const val NO_LIMIT = -1
+    }
 }

@@ -300,6 +300,23 @@ class ASXPlaylistParserTest {
         assertEquals("Rock <b>&</b> Roll", playlist.playlistEntries.single()[PlaylistEntry.PLAYLIST_METADATA])
     }
 
+    /**
+     * The repair upper cases tag names to mend an end tag that differs from its start tag only in
+     * case. CDATA is the document's own text, so what looks like a tag inside it is not one.
+     */
+    @Test
+    fun cdataSurvivesTheRepairOfAMismatchedEndTag() {
+        val playlist = parse(
+            "<ASX><Entry><TITLE><![CDATA[Rock <b>and</b> Roll]]></title>" +
+                    "<REF href=\"$HOST/stream\"/></entry></ASX>",
+            RecordingFetcher()
+        )
+
+        val entry = playlist.playlistEntries.single()
+        assertEquals("$HOST/stream", entry[PlaylistEntry.URI])
+        assertEquals("Rock <b>and</b> Roll", entry[PlaylistEntry.PLAYLIST_METADATA])
+    }
+
     @Test
     fun ampersandsOutsideCdataAreEscapedWhileCdataKeepsItsText() {
         val playlist = parse(
@@ -415,6 +432,19 @@ class ASXPlaylistParserTest {
                 "ASX",
                 "<asx version=\"3.0\"><entry><ref href=\"$HOST/from-asx\"/></entry></asx>",
                 "$HOST/from-asx"
+            ),
+            Fixture(
+                "ASX behind a doctype whose internal subset carries its own angle brackets",
+                "<?xml version=\"1.0\"?><!DOCTYPE ASX [<!ELEMENT ASX ANY>]>" +
+                        "<ASX><ENTRY><REF href=\"$HOST/from-doctype-asx\"/></ENTRY></ASX>",
+                "$HOST/from-doctype-asx"
+            ),
+            Fixture(
+                "XSPF behind a doctype and a comment",
+                "<?xml version=\"1.0\"?><!DOCTYPE playlist [<!ELEMENT playlist ANY>]><!-- made here -->" +
+                        "<playlist><trackList><track><location>$HOST/from-doctype-xspf</location>" +
+                        "</track></trackList></playlist>",
+                "$HOST/from-doctype-xspf"
             )
         )
 

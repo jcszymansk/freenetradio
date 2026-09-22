@@ -62,9 +62,9 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
      * Parses [xml] as it is, and once more with every tag name upper cased when that fails.
      *
      * The second attempt is what mends an element whose end tag differs from its start tag only
-     * in case. It is not the first, so a well formed document keeps its text exactly, CDATA
-     * included. Input still malformed after it, such as an element that is never closed, yields
-     * no document.
+     * in case. It is not the first, so a well formed document keeps its text exactly, and either
+     * way CDATA is left alone. Input still malformed after it, such as an element that is never
+     * closed, yields no document.
      *
      * @return The document, or null when [xml] cannot be read as one.
      */
@@ -149,28 +149,36 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
          */
         private val BARE_AMPERSAND = Regex("&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)")
 
-        /**
-         * CDATA is text to the XML parser already, so an ampersand inside it is left alone.
-         */
         private val CDATA_SECTION = Regex("<!\\[CDATA\\[.*?]]>", RegexOption.DOT_MATCHES_ALL)
-
-        private fun escapeBareAmpersands(xml: String): String {
-            val escaped = StringBuilder(xml.length)
-            var start = 0
-            for (section in CDATA_SECTION.findAll(xml)) {
-                escaped.append(xml.substring(start, section.range.first).replace(BARE_AMPERSAND, "&amp;"))
-                escaped.append(section.value)
-                start = section.range.last + 1
-            }
-            escaped.append(xml.substring(start).replace(BARE_AMPERSAND, "&amp;"))
-            return escaped.toString()
-        }
 
         private val TAG_NAME = Regex("<(/?)([A-Za-z][\\w.:-]*)")
 
+        /**
+         * Applies [transform] to everything outside the CDATA sections. Their content is text to
+         * an XML parser already, so neither repair may touch it: an ampersand there is an
+         * ampersand, and `<b>` there is the title's own text, not a tag.
+         */
+        private fun outsideCdata(xml: String, transform: (String) -> String): String {
+            val result = StringBuilder(xml.length)
+            var start = 0
+            for (section in CDATA_SECTION.findAll(xml)) {
+                result.append(transform(xml.substring(start, section.range.first)))
+                result.append(section.value)
+                start = section.range.last + 1
+            }
+            result.append(transform(xml.substring(start)))
+            return result.toString()
+        }
+
+        private fun escapeBareAmpersands(xml: String): String {
+            return outsideCdata(xml) { it.replace(BARE_AMPERSAND, "&amp;") }
+        }
+
         private fun upperCaseTagNames(xml: String): String {
-            return TAG_NAME.replace(xml) {
-                "<" + it.groupValues[1] + it.groupValues[2].uppercase(Locale.ROOT)
+            return outsideCdata(xml) { text ->
+                TAG_NAME.replace(text) {
+                    "<" + it.groupValues[1] + it.groupValues[2].uppercase(Locale.ROOT)
+                }
             }
         }
     }

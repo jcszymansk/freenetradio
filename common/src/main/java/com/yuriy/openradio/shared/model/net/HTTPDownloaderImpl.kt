@@ -25,7 +25,6 @@ import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Callable
@@ -48,10 +47,11 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
     override fun downloadDataFromUri(
         context: Context, uri: Uri,
         parameters: List<Pair<String, String>>,
-        contentTypeFilter: String?
+        contentTypeFilter: String?,
+        maxBytes: Int
     ): ByteArray {
         val task = BytesDownloader(
-            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING
+            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING, maxBytes
         )
         return mExecutor.submit(task).get()
     }
@@ -61,7 +61,8 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         private val mResolver: ConnectionUrlResolver,
         private val mUri: Uri,
         private val mParameters: List<Pair<String, String>>,
-        private val mContentTypeFilter: String
+        private val mContentTypeFilter: String,
+        private val mMaxBytes: Int = DownloaderLayer.NO_LIMIT
     ) : Callable<ByteArray> {
 
         override fun call(): ByteArray {
@@ -128,7 +129,10 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
 
             try {
                 val inputStream = BufferedInputStream(connection.inputStream)
-                response = toByteArray(inputStream)
+                response = toByteArray(inputStream, mMaxBytes)
+                    ?: ByteArray(0).also {
+                        AppLogger.e("$CLASS_NAME more than $mMaxBytes bytes at ${responseObj.url}")
+                    }
             } catch (exception: IOException) {
                 AppLogger.e(
                     "$CLASS_NAME getStream ${
@@ -152,10 +156,6 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
          */
         private const val CLASS_NAME = "HTTPDI"
 
-        /**
-         * The default buffer size ({@value}) to use for
-         * [.copyLarge]
-         */
         private const val DEFAULT_BUFFER_SIZE = 1024 * 4
 
         /**
@@ -166,132 +166,26 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         const val CONTENT_TYPE_IMG = "image/"
 
         /**
-         * Gets the contents of an `InputStream` as a `byte[]`.
+         * Reads [input] whole.
          *
-         *
-         * This method buffers the input internally, so there is no need to use a
-         * `BufferedInputStream`.
-         *
-         * @param input the `InputStream` to read from
-         * @return the requested byte array
-         * @throws NullPointerException if the input is null
-         * @throws IOException          if an I/O error occurs
+         * @param maxBytes Most that may be read, or [DownloaderLayer.NO_LIMIT].
+         * @return The content, or null when there is more of it than [maxBytes]. A response that
+         * long is not the document the caller asked for, so it is refused rather than cut short.
          */
         @Throws(IOException::class)
-        private fun toByteArray(input: InputStream): ByteArray {
+        private fun toByteArray(input: InputStream, maxBytes: Int): ByteArray? {
             val output = ByteArrayOutputStream()
-            copy(input, output)
-            return output.toByteArray()
-        }
-
-        /**
-         * Copies bytes from an `InputStream` to an
-         * `OutputStream`.
-         *
-         *
-         * This method buffers the input internally, so there is no need to use a
-         * `BufferedInputStream`.
-         *
-         *
-         * Large streams (over 2GB) will return a bytes copied value of
-         * `-1` after the copy has completed since the correct
-         * number of bytes cannot be returned as an int. For large streams
-         * use the `copyLarge(InputStream, OutputStream)` method.
-         *
-         * @param input  the `InputStream` to read from
-         * @param output the `OutputStream` to write to
-         * @return the number of bytes copied, or -1 if &gt; Integer.MAX_VALUE
-         * @throws NullPointerException if the input or output is null
-         * @throws IOException          if an I/O error occurs
-         * @since 1.1
-         */
-        @Throws(IOException::class)
-        private fun copy(input: InputStream, output: OutputStream): Int {
-            val count = copyLarge(input, output)
-            return if (count > Int.MAX_VALUE) {
-                -1
-            } else count.toInt()
-        }
-
-        /**
-         * Copies bytes from a large (over 2GB) `InputStream` to an
-         * `OutputStream`.
-         *
-         *
-         * This method buffers the input internally, so there is no need to use a
-         * `BufferedInputStream`.
-         *
-         *
-         * The buffer size is given by [.DEFAULT_BUFFER_SIZE].
-         *
-         * @param input  the `InputStream` to read from
-         * @param output the `OutputStream` to write to
-         * @return the number of bytes copied
-         * @throws NullPointerException if the input or output is null
-         * @throws IOException          if an I/O error occurs
-         * @since 1.3
-         */
-        @Throws(IOException::class)
-        private fun copyLarge(input: InputStream, output: OutputStream): Long {
-            return copy(input, output, DEFAULT_BUFFER_SIZE)
-        }
-
-        /**
-         * Copies bytes from an `InputStream` to an `OutputStream`
-         * using an internal buffer of the given size.
-         *
-         *
-         * This method buffers the input internally, so there is no need to use
-         * a `BufferedInputStream`.
-         *
-         *
-         *
-         * @param input      the `InputStream` to read from
-         * @param output     the `OutputStream` to write to
-         * @param bufferSize the bufferSize used to copy from the input to the output
-         * @return the number of bytes copied
-         * @throws NullPointerException if the input or output is null
-         * @throws IOException          if an I/O error occurs
-         * @since 2.5
-         */
-        @Throws(IOException::class)
-        fun copy(
-            input: InputStream, output: OutputStream,
-            bufferSize: Int
-        ): Long {
-            return copyLarge(input, output, ByteArray(bufferSize))
-        }
-
-        /**
-         * Copies bytes from a large (over 2GB) `InputStream` to an
-         * `OutputStream`.
-         *
-         *
-         * This method uses the provided buffer, so there is no need to use a
-         * `BufferedInputStream`.
-         *
-         *
-         *
-         * @param input  the `InputStream` to read from
-         * @param output the `OutputStream` to write to
-         * @param buffer the buffer to use for the copy
-         * @return the number of bytes copied
-         * @throws NullPointerException if the input or output is null
-         * @throws IOException          if an I/O error occurs
-         * @since 2.2
-         */
-        @Throws(IOException::class)
-        private fun copyLarge(
-            input: InputStream, output: OutputStream,
-            buffer: ByteArray
-        ): Long {
-            var count: Long = 0
-            var n: Int
-            while (EOF != input.read(buffer).also { n = it }) {
-                output.write(buffer, 0, n)
-                count += n.toLong()
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == EOF) {
+                    return output.toByteArray()
+                }
+                if (maxBytes != DownloaderLayer.NO_LIMIT && output.size() + read > maxBytes) {
+                    return null
+                }
+                output.write(buffer, 0, read)
             }
-            return count
         }
     }
 }

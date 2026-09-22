@@ -295,7 +295,8 @@ class ModelLayerImplTest {
             context: Context,
             uri: Uri,
             parameters: List<Pair<String, String>>,
-            contentTypeFilter: String?
+            contentTypeFilter: String?,
+            maxBytes: Int
         ): ByteArray {
             calls++
             return data.toByteArray()

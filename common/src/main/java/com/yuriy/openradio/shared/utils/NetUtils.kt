@@ -41,6 +41,14 @@ object NetUtils {
     const val HTTP_METHOD_GET = "GET"
     const val HTTP_METHOD_POST = "POST"
 
+    /**
+     * A playlist is a handful of urls, and the biggest ones seen in the wild are a few hundred
+     * lines. The address of a playlist a playlist names comes from downloaded content, though, and
+     * it can answer with a live stream instead, which never ends. Anything past this is not a
+     * playlist.
+     */
+    private const val PLAYLIST_MAX_BYTES = 1024 * 1024
+
     private val CLASS_NAME = NetUtils::class.java.simpleName
     private const val USER_AGENT_PARAMETER_KEY = "User-Agent"
     private const val HEADER_FIELD_LOCATION = "Location"
@@ -232,7 +240,7 @@ object NetUtils {
     private fun fetchPlaylist(context: Context, downloader: DownloaderLayer, url: String): ByteArray {
         AppLogger.d("$CLASS_NAME reading playlist $url")
         return try {
-            downloader.downloadDataFromUri(context, Uri.parse(url))
+            downloader.downloadDataFromUri(context, Uri.parse(url), maxBytes = PLAYLIST_MAX_BYTES)
         } catch (exception: ExecutionException) {
             AppLogger.e("$CLASS_NAME can not read playlist $url", exception)
             ByteArray(0)
