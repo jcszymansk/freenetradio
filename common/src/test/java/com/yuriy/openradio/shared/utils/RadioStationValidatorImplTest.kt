@@ -66,6 +66,48 @@ class RadioStationValidatorImplTest {
     }
 
     @Test
+    fun aStreamUrlTheProbeCouldNotOpenFailsBeforeAnythingIsProbed() {
+        val unusable = listOf(
+            "127.0.0.1:1/stream",
+            "not a url",
+            "rtsp://127.0.0.1:1/stream",
+            "ftp://127.0.0.1:1/stream",
+            "file:///sdcard/stream.mp3",
+            "http:///stream",
+            "http://"
+        )
+        for (url in unusable) {
+            mEvents.clear()
+            val probeDispatcher = QueuedDispatcher()
+
+            validate(candidate(url = url), probeScope = CoroutineScope(probeDispatcher))
+
+            assertEquals(url, listOf("failure: Radio Station's url is invalid"), mEvents)
+            assertEquals("nothing may be queued for probing $url", 0, probeDispatcher.pending)
+        }
+    }
+
+    @Test
+    fun httpAndHttpsStreamUrlsInAnyCaseAreProbed() {
+        val usable = listOf(
+            "https://127.0.0.1:1/stream",
+            "HTTPS://127.0.0.1:1/stream",
+            "Http://127.0.0.1:1/stream"
+        )
+        for (url in usable) {
+            mEvents.clear()
+
+            validate(candidate(url = url, homePage = ""))
+
+            assertEquals(
+                url,
+                listOf("probe: $url", "success: Radio Station validated successfully"),
+                mEvents
+            )
+        }
+    }
+
+    @Test
     fun aCandidateWithoutANameFailsEvenWithoutAStreamUrl() {
         validate(candidate(name = "", url = ""))
 

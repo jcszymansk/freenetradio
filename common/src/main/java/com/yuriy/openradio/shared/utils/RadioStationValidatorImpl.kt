@@ -20,12 +20,14 @@ import android.content.Context
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.net.URL
 
 /**
  * Validator that reaches the stream and the home page over the network to decide whether a
  * candidate Radio Station is usable.
  *
- * A candidate without a name or a stream url fails at once, before anything is probed. Otherwise
+ * A candidate without a name, or whose stream url is not an http or https url with a host, fails
+ * at once, before anything is probed. Otherwise
  * the stream is probed first and an unreachable one fails the candidate. The home page is optional:
  * an empty one is not probed at all, and an unreachable one warns ahead of the success.
  *
@@ -51,8 +53,8 @@ class RadioStationValidatorImpl(
             return
         }
         val url = rsToAdd.url
-        if (url.isEmpty()) {
-            AppLogger.w("$CLASS_NAME candidate '${rsToAdd.name}' has no stream url")
+        if (!isHttpUrl(url)) {
+            AppLogger.w("$CLASS_NAME candidate '${rsToAdd.name}' has no usable stream url: '$url'")
             onFailure("Radio Station's url is invalid")
             return
         }
@@ -78,5 +80,17 @@ class RadioStationValidatorImpl(
 
     companion object {
         private val CLASS_NAME = RadioStationValidatorImpl::class.java.simpleName
+        private val PROBEABLE_PROTOCOLS = setOf("http", "https")
+
+        /**
+         * Whether [url] is one the production probe could open at all.
+         *
+         * [NetUtils.checkResource] parses with [URL] and opens an HTTP connection, so anything this
+         * rejects would fail there too, only after a trip to the network.
+         */
+        private fun isHttpUrl(url: String): Boolean {
+            val parsed = runCatching { URL(url) }.getOrNull() ?: return false
+            return parsed.protocol in PROBEABLE_PROTOCOLS && parsed.host.isNotEmpty()
+        }
     }
 }
