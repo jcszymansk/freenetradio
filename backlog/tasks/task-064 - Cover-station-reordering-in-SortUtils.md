@@ -1,11 +1,11 @@
 ---
 id: TASK-064
 title: Cover station reordering in SortUtils
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 19:11'
-updated_date: '2026-09-22 08:31'
+updated_date: '2026-09-22 08:49'
 labels:
   - test
 milestone: m-0
@@ -26,12 +26,12 @@ It takes the concrete FavoritesStorage and DeviceLocalsStorage, so a JVM test ne
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Reordering within favorites renumbers only favorites, and within locals only locals
-- [ ] #2 A category media id that is neither favorites nor locals changes nothing
-- [ ] #3 The dragged station ends up with the requested sort id
-- [ ] #4 The renumbering rule for the remaining stations is pinned, including the case where one already holds the requested sort id
-- [ ] #5 An empty category and a media id that matches no station are covered
-- [ ] #6 The tests run on the JVM against a preferences fake and reach no device
+- [x] #1 Reordering within favorites renumbers only favorites, and within locals only locals
+- [x] #2 A category media id that is neither favorites nor locals changes nothing
+- [x] #3 The dragged station ends up with the requested sort id
+- [x] #4 The renumbering rule for the remaining stations is pinned, including the case where one already holds the requested sort id
+- [x] #5 An empty category and a media id that matches no station are covered
+- [x] #6 The tests run on the JVM against a preferences fake and reach no device
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -44,3 +44,25 @@ It takes the concrete FavoritesStorage and DeviceLocalsStorage, so a JVM test ne
 5. Record whatever the double increment turns out to do; if it is a defect, open a follow up task rather than changing SortUtils here.
 6. Run ./gradlew :common:testDebugUnitTest and the full ./gradlew test.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Established the rule in two halves. AbstractRadioStationsStorage.getAll sorts the stored stations by sort id and renumbers them 0..n-1 before resortIds is handed them, so the set the rule walks is always contiguous, ascending and numbered from zero whatever the preference file held. Walking it, the dragged station takes the requested sort id and every other station takes a running counter, incremented twice when the station being looked at currently holds the requested sort id and once otherwise.
+
+The double increment is a defect, not room making. It reserves the requested slot only when the station holding it is met after the counter has already reached that value, which is to say only on a drag towards the top of the list. Dragging down (a to 2 of a b c d) gives b=0, a=2, c=2, d=3; dropping a row back on its own position (b to 1) gives a=0, b=1, c=1, d=2. Both leave two stations sharing one sort id, which the next getAll renumbers apart by station name, so the row lands one place from where the user dropped it. TASK-075 carries the fix and SortUtilsTest names it next to the two expectations that will have to change.
+
+Assertions read what was written, through getAllFromString over getAllAsString, because getAll renumbers on the way out and would report a tidy 0..n-1 over a gap or a collision, leaving every interesting assertion vacuous. FavoritesStorage.get would do for favorites, but DeviceLocalsStorage overrides get to go through getAll, so one helper covers both. The categories that must not change are seeded with sort ids no read would ever produce (4, 9, 7), so a renumbering of the untouched collection shows up as a change rather than passing by coincidence.
+
+Verified on a clean build: ./gradlew clean, then ./gradlew test PASS (SortUtilsTest 10 tests, 0 failures, 0 skipped; whole JVM suite green) and ./gradlew :common:createDebugUnitTestCoverageReport PASS, reporting SortUtils at 19/19 lines, 10/10 branches, 80/80 instructions, 2/2 methods, against the 0% the task recorded. Mutation check: replacing item.sortId == sortId with counter == sortId fails exactly the two collision tests and produces the contiguous order in both, which is the evidence behind TASK-075 as much as it is a check that the suite discriminates; SortUtils.kt was restored unchanged.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added common/src/test/java/com/yuriy/openradio/shared/utils/SortUtilsTest.kt, ten JVM tests driving the production FavoritesStorage and DeviceLocalsStorage over the existing preferencesContext in memory fake, taking SortUtils from 0% to 19/19 lines and 10/10 branches. No production code changed.
+
+The renumbering rule is established rather than assumed: getAll compacts the collection to 0..n-1 before resortIds sees it, then the dragged station takes the requested sort id and the rest take a running counter that skips one number at the station currently holding that id. The skip lands in the right place only on a drag towards the top of the list; dragging down and dropping a row back where it was picked up each leave two stations sharing one sort id. The tests state that behaviour as it is and name TASK-075, which carries the fix.
+
+Verified on a clean build with ./gradlew test (SortUtilsTest 10 tests, 0 failures, 0 skipped, whole JVM suite green) and ./gradlew :common:createDebugUnitTestCoverageReport. Replacing the condition with counter == sortId fails exactly the two collision tests and yields the contiguous order in both.
+<!-- SECTION:FINAL_SUMMARY:END -->
