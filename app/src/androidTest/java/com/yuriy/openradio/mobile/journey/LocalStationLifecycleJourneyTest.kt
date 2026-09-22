@@ -16,9 +16,7 @@
 
 package com.yuriy.openradio.mobile.journey
 
-import android.Manifest
 import android.content.Context
-import android.os.Build
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
@@ -32,7 +30,7 @@ import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
-import com.yuriy.openradio.shared.permission.PermissionChecker
+import com.yuriy.openradio.shared.permission.grantImageReadPermission
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
 import com.yuriy.openradio.shared.view.dialog.EditStationDialog
@@ -91,7 +89,7 @@ class LocalStationLifecycleJourneyTest {
     @Before
     fun setUp() {
         mContext = InstrumentationRegistry.getInstrumentation().targetContext
-        grantImageReadPermission()
+        grantImageReadPermission(mContext)
         mProfile = JourneyProfile(mContext)
         mProfile.start()
         mStreams = LoopbackHttpFixture()
@@ -482,31 +480,6 @@ class LocalStationLifecycleJourneyTest {
 
     private fun serveStream(path: String): String {
         return mStreams.serve(path, LoopbackHttpFixture.AUDIO_WAV, STREAM_BODY)
-    }
-
-    /**
-     * Grants the permission the add and edit dialogs ask for when they resume, so that the request
-     * does not put a system dialog over the Activity this journey is reading. Picking an image for
-     * a station is not what is being tested, and the dialogs never reach the picker here.
-     */
-    private fun grantImageReadPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            return
-        }
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        instrumentation.uiAutomation.grantRuntimePermission(
-            instrumentation.targetContext.packageName, permission
-        )
-        assertTrue(
-            "The image read permission could not be granted, so the dialogs will ask for it and " +
-                "put a system prompt over the Activity this journey reads",
-            PermissionChecker.isExternalStorageGranted(mContext)
-        )
     }
 
     private companion object {

@@ -14,6 +14,9 @@ internal fun makeStation(
     id: String,
     name: String = "Station $id",
     url: String = "https://example.test/$id",
+    homePage: String = "",
+    genre: String = "",
+    country: String = "",
     sortId: Int = DependencyRegistryCommon.UNKNOWN_ID,
     bitrate: Int = BIT_RATE_DEFAULT,
     isLocal: Boolean = false
@@ -21,6 +24,9 @@ internal fun makeStation(
     val station = RadioStation.makeDefaultInstance(id)
     station.name = name
     station.setVariant(bitrate, url)
+    station.homePage = homePage
+    station.genre = genre
+    station.country = country
     station.sortId = sortId
     station.isLocal = isLocal
     return station
