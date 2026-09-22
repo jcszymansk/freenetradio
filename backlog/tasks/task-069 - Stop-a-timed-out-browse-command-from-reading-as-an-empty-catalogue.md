@@ -1,11 +1,11 @@
 ---
 id: TASK-069
 title: Stop a timed-out browse command from reading as an empty catalogue
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 20:32'
-updated_date: '2026-09-22 04:46'
+updated_date: '2026-09-22 04:59'
 labels:
   - test
 milestone: m-0
@@ -53,4 +53,18 @@ AC3. assertMediaIds(first, vararg rest) makes the empty expectation a compile er
 Doubling AWAIT_MILLIS past CMD_TIMEOUT_MS fails theAwaitRunsOutBeforeACommandCanFallThroughItsOwnTimeout, so the constant cannot drift back.
 
 ./gradlew test green (:android-jvm-stubs, :common, :common-ui); the twelve browse command suites report zero failures. The one cost is MediaItemCommandTestSupportTest, which burns the full 2500 ms await on purpose; every other test in the package does under 3 ms of real work.
+
+Round 1 of the review loop found that assertAnsweredFromCacheBeforeReturning inferred inline delivery from the result count, which a coroutine that got there first would have satisfied. The listener now records the thread it was answered on instead. Every command launches its work on Dispatchers.IO, which never runs a block on the launching thread (MediaItemCountryStations's runBlocking is inside that coroutine, not on the caller), so a result arriving on the caller's own thread is something only the branch that returns before the launch can produce, and no timing enters into it. The marker flag the review suggested was not taken: set on the test thread and read from the coroutine, it races the same way the counter did.
+
+Proved with the saved-instance branch mutated to runBlocking(Dispatchers.IO), which finishes delivering before execute returns, so the count check could not have noticed and the thread check still named the wrong thread. theRestoredInstanceAssertionRejectsAnIdenticalResultDeliveredOffTheCallingThread pins the same thing without a mutation, joining the delivering thread first so the off-thread delivery has definitively won.
+
+Round 2 returned PASS with no findings.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+MediaItemCommandTestSupport waited ten seconds while a browse command gives up after five, so a command that exhausted CMD_TIMEOUT_MS still answered inside the latch with no items, the first page and no error, which is the state every empty-node test expects. The await is now MediaItemCommand.CMD_TIMEOUT_MS / 2, derived rather than a literal so the two clocks cannot drift into the wrong order, and a command that gets nowhere fails awaitResult by name; MediaItemCommandTestSupportTest covers the listener itself. assertMediaIds takes its first id as a parameter of its own, so an empty expectation no longer compiles. The five restored-instance tests assert that the result was delivered on the thread that called execute, which only the branch returning before the coroutine launch can produce, and their names now say the node is left to BrowseTree rather than delivered.
+
+Verified by mutation: a real delay past CMD_TIMEOUT_MS inside MediaItemChildCategories fails all five awaiting tests by name; moving the restored-instance delivery onto a coroutine, or onto another thread synchronously via runBlocking(Dispatchers.IO), fails exactly the five restored-instance tests and nothing else; doubling AWAIT_MILLIS fails the invariant test. ./gradlew test green, 54 browse-command tests across twelve suites. Follow-ups TASK-072 and TASK-073 filed.
+<!-- SECTION:FINAL_SUMMARY:END -->
