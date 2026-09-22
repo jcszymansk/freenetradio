@@ -1,10 +1,11 @@
 ---
 id: TASK-066
 title: 'Cover the ASX playlist parser, and decide what ENTRYREF may do'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 19:59'
-updated_date: '2026-09-22 15:48'
+updated_date: '2026-09-22 16:16'
 labels:
   - test
 milestone: m-0
@@ -25,13 +26,25 @@ Two smaller things in the same class: sNumberOfFiles is static mutable state sha
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A decision is recorded on whether an ASX ENTRYREF is followed, and through what, before any test exercises that branch
+- [x] #1 A decision is recorded on whether an ASX ENTRYREF is followed, and through what, before any test exercises that branch
 - [ ] #2 No test causes a connection to anything but loopback
 - [ ] #3 The href lookup is covered for the lower case attribute, the upper case attribute and the element value fallback
 - [ ] #4 TITLE handling and an entry without a title are covered
 - [ ] #5 The malformed-XML repair path in validateXML is covered, including input it cannot repair
 - [ ] #6 ASXPlaylistParser clears the per-class line floor in the JVM coverage report
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add a PlaylistFetcher seam to the parser package; NetUtils adapts DownloaderLayer and Context to it, and OpenRadioService receives the downloader through DependencyRegistryCommon.
+2. Make AutoDetectParser the per-parse session: it holds the fetcher, the depth and a visited set shared by every parser of one resolution. Replaces the static AbstractParser.mLastEntry and the static track counters.
+3. AbstractParser.parseEntry follows an entry only when its url has a playlist extension, otherwise keeps it as a stream. getStreamExtension and the timeout parameter go.
+4. ASX ENTRYREF follows its href through the session; no direct connection, no swallowed exception types.
+5. Fix what the tests expose in ASXPlaylistParser (validateXML repair, case handling).
+6. ASXPlaylistParserTest with a recording fetcher: href lookup, TITLE, repair path, ENTRYREF, self and two-hop cycles, depth limit. Move the ASX owner in pure-core-coverage.tsv and confirm with verifyPureCoreAttribution.
+7. Update AutoDetectParserTest and PlaylistResolutionTest for the new signatures.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
@@ -55,4 +68,10 @@ Found while reading the code for this decision. Nothing has been changed yet.
 4. **Following references needs a cycle limit.** A referenced playlist can ENTRYREF back to itself or to the playlist that referenced it. The only cycle guard is AbstractParser.mLastEntry. It is a static field that compares an entry with the one just before it, so it misses A to B to A and is shared by every parse. Following ENTRYREF needs a depth limit or a visited set held for a single parse. Cover both a self reference and a two-hop cycle.
 
 5. The static sNumberOfFiles counter and the three exception types the branch catches and only logs are already in the description. The static mLastEntry in item 4 has the same order-dependency problem and should be fixed at the same time.
+
+## Scope decisions (2026-09-22, by the project owner, at the start of implementation)
+
+1. **Every network path in the parser package goes through the downloader, in this task.** Not only ENTRYREF: the nested fetch in AutoDetectParser.parse(url, playlist) and the getStreamExtension probe too. Reason: AutoDetectParserTest.dispatchesSupportedFormatsFromStreams already dials example.com today. Its entry https://example.com/stream?format=m3u has no playlist extension (getFileExtension answers .com/stream?format=m3u), so parseEntry reaches getStreamExtension, which sends a real OkHttp GET. AC #2 cannot hold for the suite while that path exists, and TASK-068 criterion 7 is broken by it.
+2. **getStreamExtension is dropped, not replaced.** It needs the Content-Disposition header, and DownloaderLayer returns only bytes. An entry without a playlist extension is kept as a stream. If it is really a playlist, the player fails with UnrecognizedInputFormat and OpenRadioService.handleUnrecognizedInputFormatException resolves it again through extractUrlsFromPlaylist, which does see the MIME type. The probe also sent a GET to every stream url and never closed the response.
+3. **Item 1 (the missing content type): dispatch on the url extension, then sniff the content.** A fetched reference or nested playlist whose url has no playlist extension is recognised by its first bytes (#EXTM3U, [playlist], the root element <asx or <playlist). DownloaderLayer is not widened.
 <!-- SECTION:NOTES:END -->
