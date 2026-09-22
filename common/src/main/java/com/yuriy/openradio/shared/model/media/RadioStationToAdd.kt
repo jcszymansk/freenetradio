@@ -33,17 +33,4 @@ class RadioStationToAdd(
     val name: String, val url: String, val imageLocalUrl: String,
     val homePage: String, val genre: String,
     val country: String, val isAddToFav: Boolean
-) : Serializable {
-
-    override fun toString(): String {
-        return "RadioStationToAdd{" +
-                "name='" + name + '\'' +
-                ", url='" + url + '\'' +
-                ", imageLocalUrl='" + imageLocalUrl + '\'' +
-                ", homePage='" + homePage + '\'' +
-                ", genre='" + genre + '\'' +
-                ", country='" + country + '\'' +
-                ", addToFav=" + isAddToFav +
-                '}'
-    }
-}
+) : Serializable
