@@ -38,8 +38,11 @@ import java.lang.ref.WeakReference
  * [AbstractRadioStationsStorage.getAll] sorts the stored stations by sort id and renumbers them
  * `0..n-1` before handing them over, so the set the rule walks is always contiguous, ascending,
  * and numbered from zero whatever the file held. Walking it, the dragged station takes the
- * requested sort id and every other station takes a running counter that is incremented twice
- * when the station it is looking at currently holds the requested sort id, once otherwise.
+ * requested sort id and every other station takes a running counter. Both increments are Kotlin
+ * post increments, so a station is given the counter as it stands when the walk reaches it and
+ * the counter moves on afterwards: a station that currently holds the requested sort id is bumped
+ * once before it is read and once after, which pushes it one past the number it would otherwise
+ * have taken, and every station after it along with it.
  *
  * The double increment is meant to leave the requested slot free for the dragged station, and it
  * does that only when the station holding that slot comes after the counter has reached it, which
@@ -60,6 +63,12 @@ class SortUtilsTest {
 
     private val mLocals = DeviceLocalsStorage(mContextRef, mFavorites, LatestRadioStationStorage(mContextRef))
 
+    /**
+     * The walk behind the expected order, since counting it out by hand is easy to get wrong:
+     * `a` holds 0, is not the requested 1, and takes the counter at 0, leaving it at 1. `b` holds
+     * 1, so the counter is bumped to 2 before `b` reads it, `b` takes 2, and the counter ends at
+     * 3. `c` takes 3. `d` is the dragged station and takes 1, the number `b` was pushed off.
+     */
     @Test
     fun movingAStationUpPutsItAtTheRequestedSortIdAndShiftsTheRestDown() {
         mFavorites.addAll(stations("a", "b", "c", "d"))
