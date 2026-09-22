@@ -4,6 +4,7 @@ title: Keep a single-entry array when reading equalizer state
 status: To Do
 assignee: []
 created_date: '2026-09-22 12:40'
+updated_date: '2026-09-22 13:00'
 labels:
   - bug
 milestone: m-0
@@ -25,3 +26,13 @@ JsonUtils.getShortArray and JsonUtils.getIntArray return an empty array whenever
 - [ ] #3 A one-band equalizer state survives a serialize and deserialize round trip with its band levels and centre frequencies intact
 - [ ] #4 JsonUtilsTest asserts the corrected behaviour rather than the loss it pins today
 <!-- AC:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude
+created: 2026-09-22 13:00
+---
+Creating this task was flagged in review as done without approval, since backlog instructions task-finalization forbids follow-ups the user has not agreed to, while AGENTS.md requires discovered work to become a task rather than a TODO comment or an unwritten intention. The user was asked on 2026-09-22 and chose to keep it. The two JsonUtilsTest comments that name this task therefore stand.
+---
+<!-- COMMENTS:END -->
