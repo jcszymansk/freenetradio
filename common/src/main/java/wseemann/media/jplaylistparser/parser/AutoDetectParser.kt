@@ -19,143 +19,173 @@ package wseemann.media.jplaylistparser.parser
 import com.yuriy.openradio.shared.extentions.equalsIgnoreCase
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
-import com.yuriy.openradio.shared.utils.NetUtils
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
 import wseemann.media.jplaylistparser.exception.JPlaylistParserException
-import wseemann.media.jplaylistparser.mime.MediaType.Companion.parse
+import wseemann.media.jplaylistparser.mime.MediaType
 import wseemann.media.jplaylistparser.parser.asx.ASXPlaylistParser
 import wseemann.media.jplaylistparser.parser.m3u.M3UPlaylistParser
 import wseemann.media.jplaylistparser.parser.m3u8.M3U8PlaylistParser
 import wseemann.media.jplaylistparser.parser.pls.PLSPlaylistParser
 import wseemann.media.jplaylistparser.parser.xspf.XSPFPlaylistParser
 import wseemann.media.jplaylistparser.playlist.Playlist
+import java.io.BufferedInputStream
+import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.SocketTimeoutException
-import java.net.URL
-import java.net.URLDecoder
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.util.Locale
 
-class AutoDetectParser(private val mTimeout: Int) {
+/**
+ * Picks the parser for a playlist, and follows the playlists that playlist names.
+ *
+ * One instance answers one resolution. It holds the urls already followed and the depth of the
+ * reference chain, and every parser it dispatches to reports back to it, so the limits hold for the
+ * whole tree rather than for one parser. Construct a new instance for every playlist.
+ *
+ * ```
+ *   parse(url, mimeType, stream)                       depth 0, url counts as followed
+ *     │ dispatch on MIME type and extension, then content
+ *     ▼
+ *   parser ── entry with a playlist extension, or an ASX ENTRYREF
+ *     │
+ *     ▼
+ *   follow(url) ── already followed, or depth limit ──► skipped
+ *     │ fetcher.fetch(url)
+ *     ▼
+ *   child session, depth + 1 ── dispatch on extension, then content ──► parser ── …
+ * ```
+ *
+ * Nothing here opens a connection: every read beyond the stream handed to [parse] goes through
+ * [PlaylistFetcher].
+ */
+class AutoDetectParser private constructor(
+    private val mFetcher: PlaylistFetcher,
+    private val mDepth: Int,
+    private val mFollowed: MutableSet<String>
+) {
 
+    /**
+     * @param fetcher Reads every playlist that the parsed one names.
+     */
+    constructor(fetcher: PlaylistFetcher) : this(fetcher, 0, HashSet())
+
+    /**
+     * Parses a playlist that the caller has already opened.
+     *
+     * @param url Address [stream] was read from. It counts as followed, so a playlist that names
+     * itself is not read twice.
+     * @param mimeType Content type the server declared for [stream], with or without parameters.
+     * @param stream Content of the playlist.
+     * @param playlist Receives every stream the playlist resolves to.
+     * @throws JPlaylistParserException When neither the MIME type, the extension nor the content
+     * identifies a supported format.
+     */
     @Throws(IOException::class, JPlaylistParserException::class)
     fun parse(url: String, mimeType: String?, stream: InputStream, playlist: Playlist) {
-        var mimeTypeCpy = mimeType
-        if (mimeTypeCpy == null) {
-            mimeTypeCpy = AppUtils.EMPTY_STRING
-        }
-        if (mimeTypeCpy.split(";".toRegex()).toTypedArray().isNotEmpty()) {
-            mimeTypeCpy = mimeTypeCpy.split(";".toRegex()).toTypedArray()[0]
-        }
-        val m3uPlaylistParser = M3UPlaylistParser(mTimeout)
-        val m3u8PlaylistParser = M3U8PlaylistParser(mTimeout)
-        val plsPlaylistParser = PLSPlaylistParser(mTimeout)
-        val xspfPlaylistParser = XSPFPlaylistParser(mTimeout)
-        val asxPlaylistParser = ASXPlaylistParser(mTimeout)
-        var extension = getFileExtension(url)
-        val parser: Parser
-        if (extension.equalsIgnoreCase(M3UPlaylistParser.EXTENSION)
-                || m3uPlaylistParser.supportedTypes.contains(parse(mimeTypeCpy)) &&
-                extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION).not()) {
-            parser = m3uPlaylistParser
-        } else if (extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)
-                || m3uPlaylistParser.supportedTypes.contains(parse(mimeTypeCpy))) {
-            parser = m3u8PlaylistParser
-        } else if (extension.equalsIgnoreCase(PLSPlaylistParser.EXTENSION)
-                || plsPlaylistParser.supportedTypes.contains(parse(mimeTypeCpy))) {
-            parser = plsPlaylistParser
-        } else if (extension.equalsIgnoreCase(XSPFPlaylistParser.EXTENSION)
-                || xspfPlaylistParser.supportedTypes.contains(parse(mimeTypeCpy))) {
-            parser = xspfPlaylistParser
-        } else if (extension.equalsIgnoreCase(ASXPlaylistParser.EXTENSION)
-                || asxPlaylistParser.supportedTypes.contains(parse(mimeTypeCpy))) {
-            parser = asxPlaylistParser
-        } else {
-            extension = getStreamExtension(url)
-            parser = if (extension.equalsIgnoreCase(M3UPlaylistParser.EXTENSION)
-                    && extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION).not()) {
-                m3uPlaylistParser
-            } else if (extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)) {
-                m3u8PlaylistParser
-            } else if (extension.equalsIgnoreCase(PLSPlaylistParser.EXTENSION)) {
-                plsPlaylistParser
-            } else if (extension.equalsIgnoreCase(XSPFPlaylistParser.EXTENSION)) {
-                xspfPlaylistParser
-            } else if (extension.equalsIgnoreCase(ASXPlaylistParser.EXTENSION)) {
-                asxPlaylistParser
-            } else {
-                throw JPlaylistParserException("Unsupported format:$url")
-            }
-        }
-        parser.parse(url, stream, playlist)
+        mFollowed.add(url)
+        val declaredType = MediaType.parse(mimeType.orEmpty().substringBefore(';'))
+        val content = BufferedInputStream(stream)
+        val parser = parserFor(getFileExtension(url), declaredType)
+            ?: parserForContent(peek(content))
+            ?: throw JPlaylistParserException("Unsupported format:$url")
+        AppLogger.d("$TAG parsing $url (type '$mimeType') with ${parser.javaClass.simpleName}")
+        parser.parse(url, content, playlist)
     }
 
-    @Throws(IOException::class, JPlaylistParserException::class)
-    fun parse(url: String, playlist: Playlist) {
-        val m3uPlaylistParser = M3UPlaylistParser(mTimeout)
-        val m3u8PlaylistParser = M3U8PlaylistParser(mTimeout)
-        val plsPlaylistParser = PLSPlaylistParser(mTimeout)
-        val xspfPlaylistParser = XSPFPlaylistParser(mTimeout)
-        val asxPlaylistParser = ASXPlaylistParser(mTimeout)
-        var extension = getFileExtension(url)
-        val parser: Parser
-        if (extension.equalsIgnoreCase(M3UPlaylistParser.EXTENSION)
-                && !extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)) {
-            parser = m3uPlaylistParser
-        } else if (extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)) {
-            parser = m3u8PlaylistParser
-        } else if (extension.equalsIgnoreCase(PLSPlaylistParser.EXTENSION)) {
-            parser = plsPlaylistParser
-        } else if (extension.equalsIgnoreCase(XSPFPlaylistParser.EXTENSION)) {
-            parser = xspfPlaylistParser
-        } else if (extension.equalsIgnoreCase(ASXPlaylistParser.EXTENSION)) {
-            parser = asxPlaylistParser
-        } else {
-            extension = getStreamExtension(url)
-            parser = if (extension.equalsIgnoreCase(M3UPlaylistParser.EXTENSION)
-                    && !extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)) {
-                m3uPlaylistParser
-            } else if (extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)) {
-                m3u8PlaylistParser
-            } else if (extension.equalsIgnoreCase(PLSPlaylistParser.EXTENSION)) {
-                plsPlaylistParser
-            } else if (extension.equalsIgnoreCase(XSPFPlaylistParser.EXTENSION)) {
-                xspfPlaylistParser
-            } else if (extension.equalsIgnoreCase(ASXPlaylistParser.EXTENSION)) {
-                asxPlaylistParser
-            } else {
-                throw JPlaylistParserException("Unsupported format:$url")
-            }
+    /**
+     * @return Whether [url] is dispatched on its extension alone, which is what makes an entry
+     * worth following rather than a stream.
+     */
+    internal fun isPlaylistUrl(url: String): Boolean {
+        val extension = getFileExtension(url)
+        return PLAYLIST_EXTENSIONS.any { extension.equalsIgnoreCase(it) }
+    }
+
+    /**
+     * Reads the playlist at [url] through the fetcher and adds what it names to [playlist].
+     *
+     * A url already followed in this resolution, a chain deeper than [MAX_DEPTH], content that
+     * cannot be read and content in no supported format all add nothing. Each is logged, because
+     * the caller has no way to tell them apart from an empty playlist.
+     */
+    internal fun follow(url: String, playlist: Playlist) {
+        if (url.isBlank()) {
+            AppLogger.w("$TAG not following an empty reference")
+            return
         }
-        var conn: HttpURLConnection? = null
-        var inputStream: InputStream? = null
+        if (mDepth >= MAX_DEPTH) {
+            AppLogger.w("$TAG not following $url, the reference chain is already $mDepth deep")
+            return
+        }
+        if (!mFollowed.add(url)) {
+            AppLogger.w("$TAG not following $url again, this playlist has already read it")
+            return
+        }
+        val content = mFetcher.fetch(url)
+        if (content.isEmpty()) {
+            AppLogger.w("$TAG nothing could be read from $url")
+            return
+        }
+        val child = AutoDetectParser(mFetcher, mDepth + 1, mFollowed)
+        val parser = child.parserFor(getFileExtension(url), null)
+            ?: child.parserForContent(head(content))
+        if (parser == null) {
+            AppLogger.w("$TAG $url is in no supported playlist format")
+            return
+        }
+        AppLogger.d("$TAG following $url at depth ${mDepth + 1} with ${parser.javaClass.simpleName}")
         try {
-            val urlRefetch = URL(URLDecoder.decode(url, "UTF-8"))
-            conn = urlRefetch.openConnection() as HttpURLConnection
-            conn.connectTimeout = mTimeout
-            conn.readTimeout = mTimeout
-            conn.requestMethod = NetUtils.HTTP_METHOD_GET
-            inputStream = conn.inputStream
-            parser.parse(urlRefetch.toString(), inputStream, playlist)
-        } catch (e: SocketTimeoutException) {
-            AppLogger.e("Can not parse uri:$url", e)
+            parser.parse(url, ByteArrayInputStream(content), playlist)
         } catch (e: IOException) {
-            AppLogger.e("Can not parse uri:$url", e)
-        } finally {
-            conn?.disconnect()
-            if (inputStream != null) {
-                try {
-                    inputStream.close()
-                } catch (e: IOException) {
-                    /**/
+            AppLogger.e("$TAG can not parse $url", e)
+        } catch (e: JPlaylistParserException) {
+            AppLogger.e("$TAG can not parse $url", e)
+        }
+    }
+
+    /**
+     * Keeps the precedence the parser has always had: the M3U family first, then PLS, XSPF and
+     * ASX, each matched on either its extension or its MIME type.
+     */
+    private fun parserFor(extension: String, mimeType: MediaType?): Parser? {
+        val m3u = M3UPlaylistParser(this)
+        val m3u8 = M3U8PlaylistParser(this)
+        val pls = PLSPlaylistParser(this)
+        val xspf = XSPFPlaylistParser(this)
+        val asx = ASXPlaylistParser(this)
+        return when {
+            extension.equalsIgnoreCase(M3UPlaylistParser.EXTENSION)
+                    || m3u.supportedTypes.contains(mimeType)
+                    && !extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION) -> m3u
+            extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)
+                    || m3u8.supportedTypes.contains(mimeType) -> m3u8
+            extension.equalsIgnoreCase(PLSPlaylistParser.EXTENSION)
+                    || pls.supportedTypes.contains(mimeType) -> pls
+            extension.equalsIgnoreCase(XSPFPlaylistParser.EXTENSION)
+                    || xspf.supportedTypes.contains(mimeType) -> xspf
+            extension.equalsIgnoreCase(ASXPlaylistParser.EXTENSION)
+                    || asx.supportedTypes.contains(mimeType) -> asx
+            else -> null
+        }
+    }
+
+    /**
+     * Recognises a playlist by how it starts, for a url that has no playlist extension and a
+     * response whose type is unknown. A plain M3U without its `#EXTM3U` header has no signature
+     * and is not recognised.
+     */
+    private fun parserForContent(head: String): Parser? {
+        val text = head.trimStart('﻿', ' ', '\t', '\r', '\n')
+        return when {
+            text.startsWith(M3U_SIGNATURE, ignoreCase = true) ->
+                if (text.contains(HLS_TAG_SIGNATURE, ignoreCase = true)) {
+                    M3U8PlaylistParser(this)
+                } else {
+                    M3UPlaylistParser(this)
                 }
+            text.startsWith(PLS_SIGNATURE, ignoreCase = true) -> PLSPlaylistParser(this)
+            else -> when (rootElementName(text)) {
+                ASX_ROOT_ELEMENT -> ASXPlaylistParser(this)
+                XSPF_ROOT_ELEMENT -> XSPFPlaylistParser(this)
+                else -> null
             }
         }
     }
@@ -193,63 +223,67 @@ class AutoDetectParser(private val mTimeout: Int) {
         return fileExtension
     }
 
-    fun getStreamExtension(url: String): String {
-        var result = AppUtils.EMPTY_STRING
-        val httpUrl = HttpUrl.parse(url)
-        if (httpUrl == null) {
-            return result
-        }
-        val client = OkHttpClient.Builder()
-                .followRedirects(true)
-                .connectTimeout(mTimeout.toLong(), TimeUnit.MILLISECONDS)
-                .readTimeout(mTimeout.toLong(), TimeUnit.MILLISECONDS)
-                .build()
-
-        val request = Request.Builder().url(url).build()
-        val latch = CountDownLatch(1)
-        AppLogger.d("StreamExtension:$url")
-        client.newCall(request).enqueue(
-                object : Callback {
-
-                    override fun onFailure(call: Call, e: IOException) {
-                        // Ignore
-                        latch.countDown()
-                    }
-
-                    override fun onResponse(call: Call, response: Response) {
-                        AppLogger.d("StreamExtension:response:${response.headers()}")
-                        val content = response.header("content-disposition", AppUtils.EMPTY_STRING)
-                        result = getFileExtension(getFileExtFromHeaderParam(content))
-//                        if (result.isEmpty()) {
-//                            content = response.header("Content-Type", "")
-//                            if (content.isNullOrEmpty()) {
-//                                latch.countDown()
-//                                return
-//                            }
-//                            if (content.toLowerCase(Locale.ROOT) == "audio/mpeg") {
-//                                result = M3UPlaylistParser.EXTENSION
-//                            }
-//                        }
-                        latch.countDown()
-                    }
-                }
-        )
-        latch.await((mTimeout + 1000).toLong(), TimeUnit.MILLISECONDS)
-        AppLogger.d("Stream ext:$result")
-        return result
-    }
-
     companion object {
 
-        fun getFileExtFromHeaderParam(headerParam: String?): String {
-            if (headerParam.isNullOrEmpty()) {
-                return AppUtils.EMPTY_STRING
+        private const val TAG = "AutoDetectParser"
+
+        /**
+         * Longest chain of playlists naming playlists that one resolution follows. The followed
+         * set already stops every cycle; this stops a server that answers each read with a
+         * reference to a new address.
+         */
+        const val MAX_DEPTH = 5
+
+        /**
+         * How much of a playlist is read to recognise its format. It is also what is read from a
+         * top level stream that turns out to be audio before it is rejected.
+         */
+        private const val SNIFF_LENGTH = 1024
+
+        private const val M3U_SIGNATURE = "#EXTM3U"
+        private const val HLS_TAG_SIGNATURE = "#EXT-X-"
+        private const val PLS_SIGNATURE = "[playlist]"
+        private const val ASX_ROOT_ELEMENT = "ASX"
+        private const val XSPF_ROOT_ELEMENT = "PLAYLIST"
+
+        private val PLAYLIST_EXTENSIONS = listOf(
+            M3UPlaylistParser.EXTENSION,
+            M3U8PlaylistParser.EXTENSION,
+            PLSPlaylistParser.EXTENSION,
+            XSPFPlaylistParser.EXTENSION,
+            ASXPlaylistParser.EXTENSION
+        )
+
+        /**
+         * The name of the first element, past an XML declaration, comments, a doctype and
+         * whitespace.
+         */
+        private val ROOT_ELEMENT = Regex(
+            "^(?:<\\?.*?\\?>|<!--.*?-->|<!DOCTYPE[^>]*>|\\s)*<([A-Za-z][\\w.:-]*)",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+        )
+
+        private fun rootElementName(text: String): String? {
+            return ROOT_ELEMENT.find(text)?.groupValues?.get(1)?.uppercase(Locale.ROOT)
+        }
+
+        private fun head(content: ByteArray): String {
+            return String(content, 0, minOf(content.size, SNIFF_LENGTH), Charsets.UTF_8)
+        }
+
+        private fun peek(stream: BufferedInputStream): String {
+            stream.mark(SNIFF_LENGTH)
+            val buffer = ByteArray(SNIFF_LENGTH)
+            var length = 0
+            while (length < SNIFF_LENGTH) {
+                val read = stream.read(buffer, length, SNIFF_LENGTH - length)
+                if (read < 0) {
+                    break
+                }
+                length += read
             }
-            val data = headerParam.split("filename=")
-            if (data.size == 2) {
-                return data[1]
-            }
-            return AppUtils.EMPTY_STRING
+            stream.reset()
+            return String(buffer, 0, length, Charsets.UTF_8)
         }
     }
 }

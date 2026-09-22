@@ -39,7 +39,7 @@ class AutoDetectParserTest {
 
     @Test
     fun testFileExtension() {
-        val parser = AutoDetectParser(0)
+        val parser = AutoDetectParser(NO_READS)
         var url = "http://s06.hktoolbar.com/radio-HTTP/cr2-hd.3gp/chunklist.m3u8?nimblesessionid=41472102"
         var ext = parser.getFileExtension(url)
         MatcherAssert.assertThat(ext, Is.`is`(M3U8PlaylistParser.EXTENSION))
@@ -51,21 +51,6 @@ class AutoDetectParserTest {
         url = "http://s06.hktoolbar.com/radio-HTTP/cr2-hd.3gp/chunklist.pls?nimblesessionid=41472102"
         ext = parser.getFileExtension(url)
         MatcherAssert.assertThat(ext, Is.`is`(PLSPlaylistParser.EXTENSION))
-    }
-
-    @Test
-    fun testExtractFileNameFromHeader() {
-        val param1 = "attachment; filename=playlist_9068.pls"
-        MatcherAssert.assertThat(
-                AutoDetectParser.getFileExtFromHeaderParam(param1),
-                Is.`is`("playlist_9068.pls")
-        )
-
-        val param2 = "filename=playlist_9068.pls"
-        MatcherAssert.assertThat(
-                AutoDetectParser.getFileExtFromHeaderParam(param2),
-                Is.`is`("playlist_9068.pls")
-        )
     }
 
     @Test
@@ -105,7 +90,7 @@ class AutoDetectParserTest {
 
         fixtures.forEach { fixture ->
             val playlist = Playlist()
-            AutoDetectParser(1000).parse(
+            AutoDetectParser(NO_READS).parse(
                 "https://example.com/playlist${fixture.extension}",
                 if (fixture.extension == ".asx") "video/x-ms-asf" else null,
                 ByteArrayInputStream(fixture.content.toByteArray()),
@@ -151,7 +136,7 @@ class AutoDetectParserTest {
 
         fixtures.forEach { fixture ->
             val playlist = Playlist()
-            AutoDetectParser(0).parse(
+            AutoDetectParser(NO_READS).parse(
                 "not-a-url",
                 "${fixture.mimeType}; charset=UTF-8",
                 ByteArrayInputStream(fixture.content.toByteArray()),
@@ -166,7 +151,7 @@ class AutoDetectParserTest {
     fun extensionsAreCaseInsensitive() {
         val playlist = Playlist()
 
-        AutoDetectParser(0).parse(
+        AutoDetectParser(NO_READS).parse(
             "https://example.com/playlist.PLS",
             null,
             ByteArrayInputStream(
@@ -182,7 +167,7 @@ class AutoDetectParserTest {
     fun malformedPlaylistProducesNoEntries() {
         val playlist = Playlist()
 
-        AutoDetectParser(0).parse(
+        AutoDetectParser(NO_READS).parse(
             "https://example.com/playlist.pls",
             null,
             ByteArrayInputStream("not a playlist".toByteArray()),
@@ -195,12 +180,22 @@ class AutoDetectParserTest {
     @Test
     fun unsupportedFormatIsRejectedWithoutNetworking() {
         assertThrows(JPlaylistParserException::class.java) {
-            AutoDetectParser(0).parse(
+            AutoDetectParser(NO_READS).parse(
                 "not-a-url",
                 "application/octet-stream",
                 ByteArrayInputStream(byteArrayOf()),
                 Playlist()
             )
         }
+    }
+
+    private companion object {
+
+        /**
+         * None of these fixtures names another playlist, so any read is a regression: before the
+         * parsers read through a fetcher, an entry without a playlist extension was probed with a
+         * real request.
+         */
+        val NO_READS = PlaylistFetcher { url -> throw AssertionError("unexpected read of $url") }
     }
 }

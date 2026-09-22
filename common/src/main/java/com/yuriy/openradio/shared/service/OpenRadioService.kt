@@ -53,6 +53,7 @@ import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommandDependencies
+import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
 import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
@@ -136,6 +137,7 @@ class OpenRadioService : MediaLibraryService() {
     private var mCurrentParentId = AppUtils.EMPTY_STRING
     private var mIsRestoreState = false
     private lateinit var mPresenter: OpenRadioServicePresenter
+    private lateinit var mDownloader: DownloaderLayer
     private val mSleepTimerListener = SleepTimerListenerImpl()
 
     private val mBrowseTree: BrowseTree by lazy {
@@ -167,8 +169,13 @@ class OpenRadioService : MediaLibraryService() {
         )
     }
 
-    fun configureWith(presenter: OpenRadioServicePresenter) {
+    /**
+     * @param downloader Reads every playlist that a station's playlist names, see
+     * [NetUtils.extractUrlsFromPlaylist].
+     */
+    fun configureWith(presenter: OpenRadioServicePresenter, downloader: DownloaderLayer) {
         mPresenter = presenter
+        mDownloader = downloader
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -303,7 +310,7 @@ class OpenRadioService : MediaLibraryService() {
                     AppLogger.e("HandleUnrecognizedInputFormatException with empty URL")
                     return@withTimeout
                 }
-                val urls = NetUtils.extractUrlsFromPlaylist(applicationContext, playlistUrl)
+                val urls = NetUtils.extractUrlsFromPlaylist(applicationContext, mDownloader, playlistUrl)
                 mUiScope.launch {
                     // Silently clear last references and try to restart:
                     handlePlayListUrlsExtracted(urls)

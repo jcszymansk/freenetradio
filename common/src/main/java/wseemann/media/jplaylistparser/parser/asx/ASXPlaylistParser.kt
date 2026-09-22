@@ -17,13 +17,9 @@
 package wseemann.media.jplaylistparser.parser.asx
 
 import com.yuriy.openradio.shared.utils.AppLogger
-import com.yuriy.openradio.shared.utils.AppUtils
-import com.yuriy.openradio.shared.utils.NetUtils
 import org.jdom2.Document
 import org.jdom2.Element
 import org.jdom2.JDOMException
-import org.jdom2.input.JDOMParseException
-import org.jdom2.input.SAXBuilder
 import wseemann.media.jplaylistparser.mime.MediaType
 import wseemann.media.jplaylistparser.mime.MediaType.Companion.video
 import wseemann.media.jplaylistparser.parser.AbstractParser
@@ -32,174 +28,122 @@ import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.IOException
 import java.io.InputStream
-import java.io.Reader
 import java.io.StringReader
-import java.net.HttpURLConnection
-import java.net.MalformedURLException
-import java.net.SocketTimeoutException
-import java.net.URL
 import java.util.Locale
 
-class ASXPlaylistParser(timeout: Int) : AbstractParser(timeout) {
+/**
+ * Reads an ASX playlist: each `ENTRY` becomes a stream named by its first `REF`, and each
+ * `ENTRYREF` is followed as another playlist.
+ *
+ * ASX is XML only in shape. Element names are case insensitive and real files mix the cases of an
+ * element's start and end tags, and they carry bare ampersands in urls. Both are mended before the
+ * document is read, see [readDocument].
+ */
+class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
-    /**
-     * Retrieves the files listed in a .asx file
-     *
-     * @throws IOException
-     */
-    @Throws(IOException::class)
-    private fun parsePlaylist(stream: InputStream, playlist: Playlist) {
-        val xml = StringBuilder()
-        stream.bufferedReader().forEachLine {
-            xml.append(it)
-        }
-        parseXML(xml.toString(), playlist)
-    }
-
-    @Throws(JDOMException::class, IOException::class)
-    private fun validateXML(xml: String, builder: SAXBuilder): String {
-        var xmlCpy = xml
-        var reader: Reader
-        var i = 0
-        xmlCpy = xmlCpy.replace("&".toRegex(), "&amp;")
-        while (i < 5) {
-            reader = StringReader(xmlCpy)
-            try {
-                builder.build(reader)
-                break
-            } catch (e: JDOMParseException) {
-                val message = e.message
-                xmlCpy = if (message!!.matches("^.*.The element type.*.must be terminated by the matching end-tag.*".toRegex())) {
-                    val tag = message.substring(message.lastIndexOf("type") + 6, message.lastIndexOf("must") - 2)
-                    xmlCpy.replace("(?i)</" + tag + ">".toRegex(), "</$tag>")
-                } else {
-                    break
-                }
-                i++
-            }
-        }
-        return xmlCpy
-    }
-
-    private fun parseXML(xml: String, playlist: Playlist) {
-        var xmlCpy = xml
-        val builder = SAXBuilder()
-        val reader: Reader
-        val doc: Document
-        val root: Element
-        try {
-            xmlCpy = validateXML(xmlCpy, builder)
-            reader = StringReader(xmlCpy)
-            doc = builder.build(reader)
-            root = doc.rootElement
-            val children = castList(Element::class.java, root.children)
-            for (i in children.indices) {
-                val tag = children[i].name
-                if (tag != null && tag.equals(ENTRY_ELEMENT)) {
-                    val children2 = castList(Element::class.java, children[i].children)
-                    buildPlaylistEntry(children2, playlist)
-                } else if (tag != null && tag.equals(ENTRYREF_ELEMENT)) {
-                    var url: URL
-                    var conn: HttpURLConnection? = null
-                    var inputStream: InputStream? = null
-                    try {
-                        var href = children[i].getAttributeValue(HREF_ATTRIBUTE)
-                        if (href == null) {
-                            href = children[i].getAttributeValue(HREF_ATTRIBUTE.uppercase(Locale.ROOT))
-                        }
-                        if (href == null) {
-                            href = children[i].value
-                        }
-                        url = URL(href)
-                        conn = url.openConnection() as HttpURLConnection
-                        conn.connectTimeout = AppUtils.TIME_OUT
-                        conn.readTimeout = AppUtils.TIME_OUT
-                        conn.requestMethod = NetUtils.HTTP_METHOD_GET
-                        val contentType = conn.contentType
-                        inputStream = conn.inputStream
-                        val parser = AutoDetectParser(AppUtils.TIME_OUT)
-                        parser.parse(url.toString(), contentType, inputStream, playlist)
-                    } catch (e: MalformedURLException) {
-                        AppLogger.e("ASX parse exception", e)
-                    } catch (e: SocketTimeoutException) {
-                        AppLogger.e("ASX parse exception", e)
-                    } catch (e: IOException) {
-                        AppLogger.e("ASX parse exception", e)
-                    } finally {
-                        conn?.disconnect()
-                        if (inputStream != null) {
-                            try {
-                                inputStream.close()
-                            } catch (e: IOException) {
-                                /* Ignore */
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: JDOMException) {
-            AppLogger.e("ASX parse exception", e)
-        } catch (e: IOException) {
-            AppLogger.e("ASX parse exception", e)
-        } catch (e: Exception) {
-            AppLogger.e("ASX parse exception", e)
-        }
-    }
-
-    private fun buildPlaylistEntry(children: List<Element>, playlist: Playlist) {
-        val playlistEntry = PlaylistEntry()
-        for (i in children.indices) {
-            when (val name = children[i].name.uppercase(Locale.getDefault())) {
-                REF_ELEMENT -> {
-                    var href = children[i].getAttributeValue(HREF_ATTRIBUTE)
-                    if (href == null) {
-                        href = children[i].getAttributeValue(HREF_ATTRIBUTE.uppercase(Locale.ROOT))
-                    }
-                    if (href == null) {
-                        href = children[i].value
-                    }
-                    // TODO: add trim?
-                    playlistEntry[PlaylistEntry.URI] = href
-                }
-                TITLE_ELEMENT -> {
-                    val title = children[i].value
-                    if (title != null) {
-                        playlistEntry[PlaylistEntry.PLAYLIST_METADATA] = title
-                    }
-                }
-                else -> {
-                    AppLogger.w("ASX build playlist entry with unhandled element '$name'")
-                }
-            }
-        }
-        sNumberOfFiles += 1
-        playlistEntry[PlaylistEntry.TRACK] = sNumberOfFiles.toString()
-        parseEntry(playlistEntry, playlist)
-    }
-
-    private fun <T> castList(castClass: Class<out T>, c: List<*>): List<T> {
-        val list = ArrayList<T>(c.size)
-        for (o in c) {
-            castClass.cast(o)?.let { list.add(it) }
-        }
-        return list
-    }
+    private var mNumberOfFiles = 0
 
     override val supportedTypes: Set<MediaType?>
         get() = setOf(video("x-ms-asf"))
 
     @Throws(IOException::class)
     override fun parse(uri: String, stream: InputStream, playlist: Playlist) {
-        parsePlaylist(stream, playlist)
+        val document = readDocument(stream.bufferedReader().readText()) ?: return
+        for (child in document.rootElement.children) {
+            when (child.name.uppercase(Locale.ROOT)) {
+                ENTRY_ELEMENT -> buildPlaylistEntry(child, playlist)
+                ENTRYREF_ELEMENT -> follow(hrefOf(child), playlist)
+                else -> AppLogger.d("$TAG skipping element '${child.name}' of $uri")
+            }
+        }
+    }
+
+    /**
+     * Parses [xml] as it is, and once more with every tag name upper cased when that fails.
+     *
+     * The second attempt is what mends an element whose end tag differs from its start tag only
+     * in case. It is not the first, so a well formed document keeps its text exactly, CDATA
+     * included. Input still malformed after it, such as an element that is never closed, yields
+     * no document.
+     *
+     * @return The document, or null when [xml] cannot be read as one.
+     */
+    private fun readDocument(xml: String): Document? {
+        val escaped = xml.replace(BARE_AMPERSAND, "&amp;")
+        val builder = newXmlBuilder()
+        val firstFailure = try {
+            return builder.build(StringReader(escaped))
+        } catch (e: JDOMException) {
+            e
+        }
+        AppLogger.d("$TAG retrying with upper cased tag names after: ${firstFailure.message}")
+        return try {
+            builder.build(StringReader(upperCaseTagNames(escaped)))
+        } catch (e: JDOMException) {
+            AppLogger.e("$TAG can not parse playlist", e)
+            null
+        }
+    }
+
+    /**
+     * Adds the stream an `ENTRY` names. Later `REF`s are the fallbacks ASX defines for a player
+     * that cannot open the first, and only the first is kept. An entry with no `REF` names nothing
+     * and is dropped.
+     */
+    private fun buildPlaylistEntry(entry: Element, playlist: Playlist) {
+        val playlistEntry = PlaylistEntry()
+        var hasRef = false
+        for (child in entry.children) {
+            when (val name = child.name.uppercase(Locale.ROOT)) {
+                REF_ELEMENT -> if (!hasRef) {
+                    playlistEntry[PlaylistEntry.URI] = hrefOf(child)
+                    hasRef = true
+                }
+                TITLE_ELEMENT -> playlistEntry[PlaylistEntry.PLAYLIST_METADATA] = child.value.trim()
+                else -> AppLogger.d("$TAG skipping entry element '$name'")
+            }
+        }
+        if (!hasRef) {
+            AppLogger.w("$TAG dropping an entry without a REF")
+            return
+        }
+        mNumberOfFiles += 1
+        playlistEntry[PlaylistEntry.TRACK] = mNumberOfFiles.toString()
+        parseEntry(playlistEntry, playlist)
+    }
+
+    /**
+     * The address a `REF` or `ENTRYREF` names: its `href` attribute in any case, or failing that
+     * the element's text.
+     */
+    private fun hrefOf(element: Element): String {
+        val attribute = element.attributes.firstOrNull {
+            it.name.equals(HREF_ATTRIBUTE, ignoreCase = true)
+        }
+        return (attribute?.value ?: element.value).trim()
     }
 
     companion object {
         const val EXTENSION = ".asx"
+        private const val TAG = "ASXPlaylistParser"
         private const val ENTRY_ELEMENT = "ENTRY"
         private const val ENTRYREF_ELEMENT = "ENTRYREF"
         private const val REF_ELEMENT = "REF"
         private const val TITLE_ELEMENT = "TITLE"
-        private var sNumberOfFiles = 0
         private const val HREF_ATTRIBUTE = "href"
+
+        /**
+         * An ampersand that does not start one of the references XML predefines. Custom entity
+         * references are escaped too, so no entity a downloaded playlist declares is expanded.
+         */
+        private val BARE_AMPERSAND = Regex("&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)")
+
+        private val TAG_NAME = Regex("<(/?)([A-Za-z][\\w.:-]*)")
+
+        private fun upperCaseTagNames(xml: String): String {
+            return TAG_NAME.replace(xml) {
+                "<" + it.groupValues[1] + it.groupValues[2].uppercase(Locale.ROOT)
+            }
+        }
     }
 }

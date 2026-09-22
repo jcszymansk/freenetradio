@@ -21,6 +21,7 @@ import wseemann.media.jplaylistparser.exception.JPlaylistParserException
 import wseemann.media.jplaylistparser.mime.MediaType
 import wseemann.media.jplaylistparser.mime.MediaType.Companion.audio
 import wseemann.media.jplaylistparser.parser.AbstractParser
+import wseemann.media.jplaylistparser.parser.AutoDetectParser
 import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.IOException
@@ -28,7 +29,7 @@ import java.io.InputStream
 import java.net.URI
 import java.net.URISyntaxException
 
-class M3U8PlaylistParser(timeout: Int) : AbstractParser(timeout) {
+class M3U8PlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
     private var mNumberOfFiles = 0
     private var processingEntry = false

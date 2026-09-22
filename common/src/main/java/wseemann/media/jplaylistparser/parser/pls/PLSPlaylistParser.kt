@@ -19,13 +19,14 @@ import com.yuriy.openradio.shared.utils.AppUtils
 import wseemann.media.jplaylistparser.mime.MediaType
 import wseemann.media.jplaylistparser.mime.MediaType.Companion.audio
 import wseemann.media.jplaylistparser.parser.AbstractParser
+import wseemann.media.jplaylistparser.parser.AutoDetectParser
 import wseemann.media.jplaylistparser.parser.m3u8.M3U8PlaylistParser
 import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.IOException
 import java.io.InputStream
 
-class PLSPlaylistParser(timeout: Int) : AbstractParser(timeout) {
+class PLSPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
     private var mNumberOfFiles = 0
     private var mProcessingEntry = false

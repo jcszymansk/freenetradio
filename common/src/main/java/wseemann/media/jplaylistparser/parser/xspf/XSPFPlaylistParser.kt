@@ -20,9 +20,9 @@ import com.yuriy.openradio.shared.utils.AppLogger
 import org.jdom2.Document
 import org.jdom2.Element
 import org.jdom2.JDOMException
-import org.jdom2.input.SAXBuilder
 import wseemann.media.jplaylistparser.mime.MediaType
 import wseemann.media.jplaylistparser.parser.AbstractParser
+import wseemann.media.jplaylistparser.parser.AutoDetectParser
 import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.IOException
@@ -30,7 +30,10 @@ import java.io.InputStream
 import java.io.Reader
 import java.io.StringReader
 
-class XSPFPlaylistParser(timeout: Int) : AbstractParser(timeout) {
+class XSPFPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
+
+    private var mNumberOfFiles = 0
+
     /**
      * Retrieves the files listed in a .asx file
      *
@@ -46,7 +49,7 @@ class XSPFPlaylistParser(timeout: Int) : AbstractParser(timeout) {
     }
 
     private fun parseXML(xml: String, playlist: Playlist) {
-        val builder = SAXBuilder()
+        val builder = newXmlBuilder()
         val reader: Reader
         val doc: Document
         val root: Element
@@ -92,8 +95,8 @@ class XSPFPlaylistParser(timeout: Int) : AbstractParser(timeout) {
                 }
             }
         }
-        sNumberOfFiles += 1
-        playlistEntry[PlaylistEntry.TRACK] = sNumberOfFiles.toString()
+        mNumberOfFiles += 1
+        playlistEntry[PlaylistEntry.TRACK] = mNumberOfFiles.toString()
         parseEntry(playlistEntry, playlist)
     }
 
@@ -119,6 +122,5 @@ class XSPFPlaylistParser(timeout: Int) : AbstractParser(timeout) {
         private const val TITLE_ELEMENT = "TITLE"
         private const val TRACK_ELEMENT = "TRACK"
         private const val TRACKLIST_ELEMENT = "TRACKLIST"
-        private var sNumberOfFiles = 0
     }
 }

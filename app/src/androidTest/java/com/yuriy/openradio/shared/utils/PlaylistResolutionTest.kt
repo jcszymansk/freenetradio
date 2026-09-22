@@ -20,6 +20,8 @@ import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.shared.model.net.DirectUrlResolver
+import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -119,7 +121,7 @@ class PlaylistResolutionTest {
     }
 
     private fun resolve(url: String): Array<String> {
-        return NetUtils.extractUrlsFromPlaylist(mContext, url)
+        return NetUtils.extractUrlsFromPlaylist(mContext, HTTPDownloaderImpl(DirectUrlResolver()), url)
     }
 
     private fun pls(vararg urls: String): String {
