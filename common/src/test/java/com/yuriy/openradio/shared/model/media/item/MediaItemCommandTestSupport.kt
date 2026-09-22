@@ -253,7 +253,7 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
 
         const val RESULT_MISSING = "Command did not deliver a result"
 
-        const val ERROR_MISSING = "Command did not report an error"
+        private const val ERROR_MISSING = "Command did not report an error"
 
         private const val UPDATE_PLAYBACK_STATE = "updatePlaybackState"
 
