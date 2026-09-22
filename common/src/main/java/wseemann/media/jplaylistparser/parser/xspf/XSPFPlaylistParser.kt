@@ -109,7 +109,7 @@ class XSPFPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
     }
 
     override val supportedTypes: Set<MediaType?>
-        get() = setOf(MediaType.video("application/xspf+xml"))
+        get() = setOf(MediaType.parse("application/xspf+xml"))
 
     @Throws(IOException::class)
     override fun parse(uri: String, stream: InputStream, playlist: Playlist) {

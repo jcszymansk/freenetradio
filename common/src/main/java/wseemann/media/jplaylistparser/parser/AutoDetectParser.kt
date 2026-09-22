@@ -153,16 +153,16 @@ class AutoDetectParser private constructor(
         val asx = ASXPlaylistParser(this)
         return when {
             extension.equalsIgnoreCase(M3UPlaylistParser.EXTENSION)
-                    || m3u.supportedTypes.contains(mimeType)
+                    || m3u.accepts(mimeType)
                     && !extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION) -> m3u
             extension.equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)
-                    || m3u8.supportedTypes.contains(mimeType) -> m3u8
+                    || m3u8.accepts(mimeType) -> m3u8
             extension.equalsIgnoreCase(PLSPlaylistParser.EXTENSION)
-                    || pls.supportedTypes.contains(mimeType) -> pls
+                    || pls.accepts(mimeType) -> pls
             extension.equalsIgnoreCase(XSPFPlaylistParser.EXTENSION)
-                    || xspf.supportedTypes.contains(mimeType) -> xspf
+                    || xspf.accepts(mimeType) -> xspf
             extension.equalsIgnoreCase(ASXPlaylistParser.EXTENSION)
-                    || asx.supportedTypes.contains(mimeType) -> asx
+                    || asx.accepts(mimeType) -> asx
             else -> null
         }
     }
@@ -262,6 +262,14 @@ class AutoDetectParser private constructor(
             "^(?:<\\?.*?\\?>|<!--.*?-->|<!DOCTYPE[^>]*>|\\s)*<([A-Za-z][\\w.:-]*)",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
         )
+
+        /**
+         * A missing or unparseable type matches nothing. A parser whose own type failed to parse
+         * would otherwise claim every response that declared none.
+         */
+        private fun Parser.accepts(mimeType: MediaType?): Boolean {
+            return mimeType != null && supportedTypes.contains(mimeType)
+        }
 
         private fun rootElementName(text: String): String? {
             return ROOT_ELEMENT.find(text)?.groupValues?.get(1)?.uppercase(Locale.ROOT)

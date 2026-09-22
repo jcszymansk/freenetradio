@@ -48,7 +48,7 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
     @Throws(IOException::class)
     override fun parse(uri: String, stream: InputStream, playlist: Playlist) {
-        val document = readDocument(stream.bufferedReader().readText()) ?: return
+        val document = readDocument(stream.bufferedReader().readText().trimStart(*LEADING_NOISE)) ?: return
         for (child in document.rootElement.children) {
             when (child.name.uppercase(Locale.ROOT)) {
                 ENTRY_ELEMENT -> buildPlaylistEntry(child, playlist)
@@ -69,7 +69,7 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
      * @return The document, or null when [xml] cannot be read as one.
      */
     private fun readDocument(xml: String): Document? {
-        val escaped = xml.replace(BARE_AMPERSAND, "&amp;")
+        val escaped = escapeBareAmpersands(xml)
         val builder = newXmlBuilder()
         val firstFailure = try {
             return builder.build(StringReader(escaped))
@@ -133,10 +133,33 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
         private const val HREF_ATTRIBUTE = "href"
 
         /**
+         * What real files put before the root element and XML allows nowhere before a declaration:
+         * a byte order mark, which a reader decodes as a character, and whitespace.
+         */
+        private val LEADING_NOISE = charArrayOf('\uFEFF', ' ', '\t', '\r', '\n')
+
+        /**
          * An ampersand that does not start one of the references XML predefines. Custom entity
          * references are escaped too, so no entity a downloaded playlist declares is expanded.
          */
         private val BARE_AMPERSAND = Regex("&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)")
+
+        /**
+         * CDATA is text to the XML parser already, so an ampersand inside it is left alone.
+         */
+        private val CDATA_SECTION = Regex("<!\\[CDATA\\[.*?]]>", RegexOption.DOT_MATCHES_ALL)
+
+        private fun escapeBareAmpersands(xml: String): String {
+            val escaped = StringBuilder(xml.length)
+            var start = 0
+            for (section in CDATA_SECTION.findAll(xml)) {
+                escaped.append(xml.substring(start, section.range.first).replace(BARE_AMPERSAND, "&amp;"))
+                escaped.append(section.value)
+                start = section.range.last + 1
+            }
+            escaped.append(xml.substring(start).replace(BARE_AMPERSAND, "&amp;"))
+            return escaped.toString()
+        }
 
         private val TAG_NAME = Regex("<(/?)([A-Za-z][\\w.:-]*)")
 
