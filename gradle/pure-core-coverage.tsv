@@ -54,7 +54,7 @@ com/yuriy/openradio/shared/model/translation/EqualizerJsonStateSerializer	com.yu
 com/yuriy/openradio/shared/model/translation/EqualizerStateJsonDeserializer	com.yuriy.openradio.shared.model.translation.EqualizerSerializationTest	:common
 com/yuriy/openradio/shared/model/translation/MediaIdBuilderDefault	com.yuriy.openradio.shared.model.parser.ParserLayerMappingTest	:common
 com/yuriy/openradio/shared/model/storage/cache/api/InMemoryApiCache	com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCacheTest	:common
-com/yuriy/openradio/shared/model/storage/StorageManagerLayerImpl	NONE	-
+com/yuriy/openradio/shared/model/storage/StorageManagerLayerImpl	com.yuriy.openradio.shared.model.storage.StorageManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/net/DirectUrlResolver	com.yuriy.openradio.shared.model.net.ConnectionUrlResolverTest	:common
 com/yuriy/openradio/shared/model/net/UrlLayerRadioBrowserImpl	com.yuriy.openradio.shared.model.net.UrlLayerTest	:common
 com/yuriy/openradio/shared/model/net/UrlLayerWebRadioImpl	com.yuriy.openradio.shared.model.net.UrlLayerTest	:common

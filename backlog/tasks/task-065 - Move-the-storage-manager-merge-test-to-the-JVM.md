@@ -1,9 +1,11 @@
 ---
 id: TASK-065
 title: Move the storage manager merge test to the JVM
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 19:11'
+updated_date: '2026-09-22 07:39'
 labels:
   - test
 milestone: m-0
@@ -30,3 +32,15 @@ The storages genuinely are instrumented subjects and the coverage they have shou
 - [ ] #4 StorageManagerLayerImpl has an owning test in gradle/pure-core-coverage.tsv that verifyPureCoreAttribution confirms
 - [ ] #5 The storage-level behaviour the instrumented test covers is still covered somewhere
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add common/src/test/java/com/yuriy/openradio/shared/model/storage/StorageManagerLayerImplTest.kt, driving a real FavoritesStorage/DeviceLocalsStorage pair over the existing preferencesContext fake. The path is what ownerSourceFile in gradle/pure-core-coverage.gradle expects for an owner named StorageManagerLayerImplTest in :common.
+2. Cover the merge rule: disjoint sets, overlap with identical content, overlap where the incoming station sorts after the stored ones, overlap where it sorts before, an empty incoming payload, an empty existing store, and input that deserializes to nothing. Both storages, and the independence of one from the other.
+3. Assert the sort ids the merge itself writes by reading a station back with AbstractRadioStationsStorage.get, not through getAll, which renumbers on read and would pass even if merge stopped renumbering.
+4. Build the incoming payload with a donor storage's getAllAsString rather than restating the private delimiters of AbstractRadioStationsStorage in a second source set, so the test feeds the layer exactly what FileStoreManager writes to a file.
+5. Delete app/src/androidTest/.../StorageManagerLayerTest.kt. FavoritesStorage, DeviceLocalsStorage and AbstractRadioStationsStorage keep their own instrumented suites, which is where the storage level behaviour lives.
+6. Flip line 57 of gradle/pure-core-coverage.tsv from NONE/- to the new owner and :common.
+7. Verify: ./gradlew test, localCoverageReport, verifyPureCoreCoverage, verifyPureCoreAttribution, and :app:assembleDebugAndroidTest to prove the androidTest source set still compiles without the deleted file.
+<!-- SECTION:PLAN:END -->
