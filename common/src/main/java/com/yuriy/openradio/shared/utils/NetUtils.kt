@@ -20,6 +20,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.util.Pair
 import com.yuriy.openradio.R
+import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import wseemann.media.jplaylistparser.parser.AutoDetectParser
 import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
@@ -33,11 +34,20 @@ import java.net.MalformedURLException
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
+import java.util.concurrent.ExecutionException
 
 object NetUtils {
 
     const val HTTP_METHOD_GET = "GET"
     const val HTTP_METHOD_POST = "POST"
+
+    /**
+     * A playlist is a handful of urls, and the biggest ones seen in the wild are a few hundred
+     * lines. The address of a playlist a playlist names comes from downloaded content, though, and
+     * it can answer with a live stream instead, which never ends. Anything past this is not a
+     * playlist.
+     */
+    private const val PLAYLIST_MAX_BYTES = 1024 * 1024
 
     private val CLASS_NAME = NetUtils::class.java.simpleName
     private const val USER_AGENT_PARAMETER_KEY = "User-Agent"
@@ -177,12 +187,24 @@ object NetUtils {
         return result.toString()
     }
 
-    fun extractUrlsFromPlaylist(context: Context, playlistUrl: String): Array<String> {
+    /**
+     * Resolves a station url that turned out to be a playlist into the streams it names.
+     *
+     * The station url itself is opened here, because its declared content type is part of how its
+     * format is recognised. Every playlist it names in turn is read through [downloader].
+     *
+     * @param downloader Reads the playlists that [playlistUrl] names.
+     * @return The stream urls, none when the playlist names none, or one empty string when
+     * [playlistUrl] cannot be opened.
+     */
+    fun extractUrlsFromPlaylist(
+        context: Context, downloader: DownloaderLayer, playlistUrl: String
+    ): Array<String> {
         val connection =
             getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET) ?: return Array(1) { AppUtils.EMPTY_STRING }
         var inputStream: InputStream? = null
         var result = Array(1) { AppUtils.EMPTY_STRING }
-        val parser = AutoDetectParser(AppUtils.TIME_OUT)
+        val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url) }
         val playlist = Playlist()
         val contentType = connection.contentType
         try {
@@ -209,6 +231,24 @@ object NetUtils {
             }
         }
         return result
+    }
+
+    /**
+     * Adapts [downloader] to the parsers' [wseemann.media.jplaylistparser.parser.PlaylistFetcher],
+     * which answers a failed read with no content.
+     */
+    private fun fetchPlaylist(context: Context, downloader: DownloaderLayer, url: String): ByteArray {
+        AppLogger.d("$CLASS_NAME reading playlist $url")
+        return try {
+            downloader.downloadDataFromUri(context, Uri.parse(url), maxBytes = PLAYLIST_MAX_BYTES)
+        } catch (exception: ExecutionException) {
+            AppLogger.e("$CLASS_NAME can not read playlist $url", exception)
+            ByteArray(0)
+        } catch (exception: InterruptedException) {
+            Thread.currentThread().interrupt()
+            AppLogger.e("$CLASS_NAME interrupted while reading playlist $url", exception)
+            ByteArray(0)
+        }
     }
 
     /**

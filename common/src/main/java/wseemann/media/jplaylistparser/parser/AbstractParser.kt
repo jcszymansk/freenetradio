@@ -16,29 +16,47 @@
 
 package wseemann.media.jplaylistparser.parser
 
-import wseemann.media.jplaylistparser.exception.JPlaylistParserException
+import org.jdom2.input.SAXBuilder
+import org.xml.sax.InputSource
 import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
-import java.io.IOException
+import java.io.StringReader
 
-abstract class AbstractParser(private val mTimeout: Int) : Parser {
+/**
+ * @param mSession The resolution this parser takes part in; every playlist it names is followed
+ * through it.
+ */
+abstract class AbstractParser(private val mSession: AutoDetectParser) : Parser {
 
+    /**
+     * Adds [playlistEntry] to [playlist] as a stream, or, when its url has a playlist extension,
+     * adds what that playlist names instead.
+     */
     protected fun parseEntry(playlistEntry: PlaylistEntry, playlist: Playlist) {
-        val parser = AutoDetectParser(mTimeout)
-        try {
-            if (mLastEntry != null && mLastEntry == playlistEntry) {
-                throw RuntimeException("Cycle detected for $playlistEntry")
-            }
-            mLastEntry = playlistEntry
-            parser.parse(playlistEntry[PlaylistEntry.URI], playlist)
-        } catch (e: IOException) {
-            playlist.add(playlistEntry)
-        } catch (e: JPlaylistParserException) {
+        val uri = playlistEntry[PlaylistEntry.URI]
+        if (mSession.isPlaylistUrl(uri)) {
+            mSession.follow(uri, playlist)
+        } else {
             playlist.add(playlistEntry)
         }
     }
 
-    companion object {
-        private var mLastEntry: PlaylistEntry? = null
+    /**
+     * Adds what the playlist at [url] names to [playlist], whatever its extension. For a reference
+     * the playlist format declares to be a playlist, such as an ASX `ENTRYREF`.
+     */
+    protected fun follow(url: String, playlist: Playlist) {
+        mSession.follow(url, playlist)
+    }
+
+    /**
+     * A builder for playlist XML that never reads an external DTD or entity. The SAX parser would
+     * otherwise open the address a downloaded playlist declares, which is a connection
+     * [PlaylistFetcher] never sees.
+     */
+    protected fun newXmlBuilder(): SAXBuilder {
+        val builder = SAXBuilder()
+        builder.setEntityResolver { _, _ -> InputSource(StringReader("")) }
+        return builder
     }
 }

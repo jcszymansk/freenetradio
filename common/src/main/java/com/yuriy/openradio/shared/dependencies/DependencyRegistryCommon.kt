@@ -30,6 +30,7 @@ import com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImpl
 import com.yuriy.openradio.shared.model.net.ConnectionUrlResolver
 import com.yuriy.openradio.shared.model.net.DirectUrlResolver
 import com.yuriy.openradio.shared.model.net.DnsMirrorUrlResolver
+import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.net.NetworkLayerImpl
@@ -83,6 +84,7 @@ object DependencyRegistryCommon {
     private lateinit var sRadioStationManagerLayer: RadioStationManagerLayer
     private lateinit var sImagesPersistenceLayer: ImagesPersistenceLayer
     private lateinit var sOpenRadioServicePresenter: OpenRadioServicePresenterImpl
+    private lateinit var sDownloader: DownloaderLayer
     private lateinit var sSleepTimerModel: SleepTimerModel
     private lateinit var sSourcesLayer: SourcesLayer
 
@@ -133,6 +135,7 @@ object DependencyRegistryCommon {
         val parser = getParserLayer(source, countriesCache)
         val urlLayer = getUrlLayer(source)
         val downloader = HTTPDownloaderImpl(getUrlResolver(source))
+        sDownloader = downloader
         val apiCachePersistent = PersistentApiCache(context, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         val apiCacheInMemory = InMemoryApiCache()
         val modelLayer = ModelLayerImpl(
@@ -195,7 +198,7 @@ object DependencyRegistryCommon {
     }
 
     fun inject(service: OpenRadioService) {
-        service.configureWith(sOpenRadioServicePresenter)
+        service.configureWith(sOpenRadioServicePresenter, sDownloader)
     }
 
     fun injectSleepTimerModel(dependency: SleepTimerModelDependency) {

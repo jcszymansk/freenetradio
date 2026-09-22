@@ -17,9 +17,14 @@
 package com.yuriy.openradio.shared.utils
 
 import android.content.Context
+import android.net.Uri
+import androidx.core.util.Pair
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.shared.model.net.DirectUrlResolver
+import com.yuriy.openradio.shared.model.net.DownloaderLayer
+import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -27,6 +32,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * What [NetUtils.extractUrlsFromPlaylist] answers, which is what
@@ -118,8 +124,83 @@ class PlaylistResolutionTest {
         assertArrayEquals(arrayOf(""), resolve("file:///does/not/matter.pls"))
     }
 
-    private fun resolve(url: String): Array<String> {
-        return NetUtils.extractUrlsFromPlaylist(mContext, url)
+    /**
+     * An ASX `ENTRYREF` is the one reference a playlist makes that is a playlist whatever its url
+     * says. The referenced url here has no extension, so it is recognised by its content, and it is
+     * read through the downloader handed in rather than by the parser.
+     */
+    @Test
+    fun anAsxEntryRefIsFollowedThroughTheDownloader() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val referenced = mServer.serve(
+            "/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY><REF href=\"$stream\"/></ENTRY></ASX>"
+        )
+        val playlist = mServer.serve(
+            "/station.asx", VIDEO_ASF, "<ASX version=\"3.0\"><ENTRYREF href=\"$referenced\"/></ASX>"
+        )
+        val downloader = RecordingDownloader(HTTPDownloaderImpl(DirectUrlResolver()))
+
+        assertArrayEquals(arrayOf(stream), resolve(playlist, downloader))
+        assertEquals(listOf(referenced), downloader.reads)
+        assertEquals(listOf("/station.asx", "/referenced"), mServer.requestedPaths())
+    }
+
+    /**
+     * A url that names a playlist can answer with a live stream, which never ends. The read is
+     * bounded so that the process does not grow until it dies; a response over the limit is
+     * refused whole, because half a playlist is not a shorter playlist.
+     */
+    @Test
+    fun aReferencedPlaylistLongerThanTheLimitIsRefused() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val underTheLimit = mServer.serve(
+            "/short", LoopbackHttpFixture.TEXT_PLAIN, paddedAsx(stream, PADDING_UNDER_LIMIT)
+        )
+        val overTheLimit = mServer.serve(
+            "/endless", LoopbackHttpFixture.TEXT_PLAIN, paddedAsx(stream, PADDING_OVER_LIMIT)
+        )
+
+        assertArrayEquals(arrayOf(stream), resolve(entryRefTo(underTheLimit, "/short.asx")))
+        assertEquals(0, resolve(entryRefTo(overTheLimit, "/long.asx")).size)
+    }
+
+    private fun entryRefTo(reference: String, path: String): String {
+        return mServer.serve(path, VIDEO_ASF, "<ASX version=\"3.0\"><ENTRYREF href=\"$reference\"/></ASX>")
+    }
+
+    /**
+     * A playlist that names [stream] and is [padding] comments long. The padding sits inside the
+     * root element, so the only thing separating the two fixtures is their size.
+     */
+    private fun paddedAsx(stream: String, padding: Int): String {
+        return "<ASX version=\"3.0\"><ENTRY><REF href=\"$stream\"/></ENTRY>" +
+                "<!-- padding -->".repeat(padding) + "</ASX>"
+    }
+
+    private fun resolve(
+        url: String,
+        downloader: DownloaderLayer = HTTPDownloaderImpl(DirectUrlResolver())
+    ): Array<String> {
+        return NetUtils.extractUrlsFromPlaylist(mContext, downloader, url)
+    }
+
+    /**
+     * Passes every read on to [mDelegate] and records the url it was asked for.
+     */
+    private class RecordingDownloader(private val mDelegate: DownloaderLayer) : DownloaderLayer {
+
+        val reads = CopyOnWriteArrayList<String>()
+
+        override fun downloadDataFromUri(
+            context: Context,
+            uri: Uri,
+            parameters: List<Pair<String, String>>,
+            contentTypeFilter: String?,
+            maxBytes: Int
+        ): ByteArray {
+            reads.add(uri.toString())
+            return mDelegate.downloadDataFromUri(context, uri, parameters, contentTypeFilter, maxBytes)
+        }
     }
 
     private fun pls(vararg urls: String): String {
@@ -138,5 +219,14 @@ class PlaylistResolutionTest {
     private companion object {
 
         const val AUDIO_MPEG = "audio/mpeg"
+
+        const val VIDEO_ASF = "video/x-ms-asf"
+
+        /**
+         * Comments of 16 bytes each, either side of the megabyte `NetUtils` allows a playlist.
+         */
+        const val PADDING_UNDER_LIMIT = 10_000
+
+        const val PADDING_OVER_LIMIT = 100_000
     }
 }
