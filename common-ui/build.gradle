@@ -37,4 +37,5 @@ dependencies {
     implementation "androidx.constraintlayout:constraintlayout:$constraintlayoutAndroidXVersion"
     implementation "androidx.fragment:fragment-ktx:$fragmentKtxVersion"
     testImplementation group: "junit", name: "junit", version: "$junitVersion"
+    testRuntimeOnly project(":android-jvm-stubs")
 }

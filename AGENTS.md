@@ -87,10 +87,12 @@ OkHttp is pinned to 3.12.x and `androidx.media` to 1.6.0 — do not bump either 
   Media3 binder behavior, or lifecycle is genuinely the subject.
 - `unitTests.returnDefaultValues = true` is set in every module, so accidental Android framework calls silently
   return defaults instead of failing. Where a JVM test needs a framework value type to actually work, implement it
-  in `:android-jvm-stubs` — `android.net.Uri`, `android.os.Bundle`, `android.webkit.MimeTypeMap` and the resource
-  lookups of `android.content.Context` live there. That module is wired as `testRuntimeOnly`, so tests still
-  compile against the real Android API and only the implementation is swapped at run time; putting the same
-  class in a test source set instead makes the Kotlin compiler reject every use of the type it duplicates.
+  in `:android-jvm-stubs` — `android.net.Uri`, `android.os.Bundle`, `android.webkit.MimeTypeMap`, the resource
+  lookups of `android.content.Context` and the `android.database.Observable` that every `RecyclerView.Adapter`
+  notification walks live there. That module is wired as `testRuntimeOnly` in `:common` and `:common-ui`, so
+  tests still compile against the real Android API and only the implementation is swapped at run time; putting
+  the same class in a test source set instead makes the Kotlin compiler reject every use of the type it
+  duplicates.
   Stubs carry their own tests: a stub that lies is worse than no stub.
 - Each test owns and clears the preferences, files, and databases it touches.
 

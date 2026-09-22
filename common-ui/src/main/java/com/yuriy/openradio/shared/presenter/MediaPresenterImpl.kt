@@ -167,8 +167,7 @@ class MediaPresenterImpl(
         mActivity = activity
         mMainLayoutView = mainLayout
         mListener = listener
-        mListView = listView
-        mAdapter = adapter
+        attachList(listView, adapter)
         mCurrentRadioStationView = currentRadioStationView
         mSleepTimerModel.addSleepTimerListener(mTimerListener)
         val layoutManager = LinearLayoutManager(activity)
@@ -192,6 +191,21 @@ class MediaPresenterImpl(
             ImagesStore.AUTHORITY_URI, true,
             mContentObserver
         )
+    }
+
+    /**
+     * Binds the list and the adapter that renders its rows.
+     *
+     * Split out of [init] because everything else [init] does (the media browser connection, the
+     * broadcast receivers, the layout manager) needs an Activity, while the children-loaded path
+     * needs only these two references and tolerates a null list.
+     *
+     * @param listView List that renders the loaded children, or null when there is none.
+     * @param adapter Adapter that holds the loaded children.
+     */
+    internal fun attachList(listView: RecyclerView?, adapter: MediaItemsAdapter) {
+        mListView = listView
+        mAdapter = adapter
     }
 
     private fun itemsCount(): Int {
