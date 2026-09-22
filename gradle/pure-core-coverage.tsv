@@ -71,6 +71,6 @@ wseemann/media/jplaylistparser/parser/AbstractParser	wseemann.media.jplaylistpar
 wseemann/media/jplaylistparser/parser/m3u/M3UPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/m3u8/M3U8PlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/pls/PLSPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
-wseemann/media/jplaylistparser/parser/asx/ASXPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
+wseemann/media/jplaylistparser/parser/asx/ASXPlaylistParser	wseemann.media.jplaylistparser.parser.asx.ASXPlaylistParserTest	:common
 wseemann/media/jplaylistparser/parser/xspf/XSPFPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/mime/MediaType	wseemann.media.jplaylistparser.mime.MediaTypeTest	:common

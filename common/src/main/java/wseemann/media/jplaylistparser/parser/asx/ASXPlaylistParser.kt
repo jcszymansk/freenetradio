@@ -87,8 +87,8 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
     /**
      * Adds the stream an `ENTRY` names. Later `REF`s are the fallbacks ASX defines for a player
-     * that cannot open the first, and only the first is kept. An entry with no `REF` names nothing
-     * and is dropped.
+     * that cannot open the first, and only the first with an address is kept. An entry with no
+     * such `REF` names nothing and is dropped.
      */
     private fun buildPlaylistEntry(entry: Element, playlist: Playlist) {
         val playlistEntry = PlaylistEntry()
@@ -96,8 +96,13 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
         for (child in entry.children) {
             when (val name = child.name.uppercase(Locale.ROOT)) {
                 REF_ELEMENT -> if (!hasRef) {
-                    playlistEntry[PlaylistEntry.URI] = hrefOf(child)
-                    hasRef = true
+                    val href = hrefOf(child)
+                    if (href.isEmpty()) {
+                        AppLogger.w("$TAG skipping a REF without an address")
+                    } else {
+                        playlistEntry[PlaylistEntry.URI] = href
+                        hasRef = true
+                    }
                 }
                 TITLE_ELEMENT -> playlistEntry[PlaylistEntry.PLAYLIST_METADATA] = child.value.trim()
                 else -> AppLogger.d("$TAG skipping entry element '$name'")
@@ -113,14 +118,14 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
     }
 
     /**
-     * The address a `REF` or `ENTRYREF` names: its `href` attribute in any case, or failing that
-     * the element's text.
+     * The address a `REF` or `ENTRYREF` names: its `href` attribute in any case, or when that is
+     * missing or blank the element's text. Empty when it names neither.
      */
     private fun hrefOf(element: Element): String {
         val attribute = element.attributes.firstOrNull {
             it.name.equals(HREF_ATTRIBUTE, ignoreCase = true)
         }
-        return (attribute?.value ?: element.value).trim()
+        return attribute?.value?.trim()?.takeIf { it.isNotEmpty() } ?: element.value.trim()
     }
 
     companion object {
