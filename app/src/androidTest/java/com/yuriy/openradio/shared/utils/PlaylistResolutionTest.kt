@@ -17,10 +17,13 @@
 package com.yuriy.openradio.shared.utils
 
 import android.content.Context
+import android.net.Uri
+import androidx.core.util.Pair
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.net.DirectUrlResolver
+import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import org.junit.After
@@ -29,6 +32,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * What [NetUtils.extractUrlsFromPlaylist] answers, which is what
@@ -120,8 +124,50 @@ class PlaylistResolutionTest {
         assertArrayEquals(arrayOf(""), resolve("file:///does/not/matter.pls"))
     }
 
-    private fun resolve(url: String): Array<String> {
-        return NetUtils.extractUrlsFromPlaylist(mContext, HTTPDownloaderImpl(DirectUrlResolver()), url)
+    /**
+     * An ASX `ENTRYREF` is the one reference a playlist makes that is a playlist whatever its url
+     * says. The referenced url here has no extension, so it is recognised by its content, and it is
+     * read through the downloader handed in rather than by the parser.
+     */
+    @Test
+    fun anAsxEntryRefIsFollowedThroughTheDownloader() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val referenced = mServer.serve(
+            "/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY><REF href=\"$stream\"/></ENTRY></ASX>"
+        )
+        val playlist = mServer.serve(
+            "/station.asx", VIDEO_ASF, "<ASX version=\"3.0\"><ENTRYREF href=\"$referenced\"/></ASX>"
+        )
+        val downloader = RecordingDownloader(HTTPDownloaderImpl(DirectUrlResolver()))
+
+        assertArrayEquals(arrayOf(stream), resolve(playlist, downloader))
+        assertEquals(listOf(referenced), downloader.reads)
+        assertEquals(listOf("/station.asx", "/referenced"), mServer.requestedPaths())
+    }
+
+    private fun resolve(
+        url: String,
+        downloader: DownloaderLayer = HTTPDownloaderImpl(DirectUrlResolver())
+    ): Array<String> {
+        return NetUtils.extractUrlsFromPlaylist(mContext, downloader, url)
+    }
+
+    /**
+     * Passes every read on to [mDelegate] and records the url it was asked for.
+     */
+    private class RecordingDownloader(private val mDelegate: DownloaderLayer) : DownloaderLayer {
+
+        val reads = CopyOnWriteArrayList<String>()
+
+        override fun downloadDataFromUri(
+            context: Context,
+            uri: Uri,
+            parameters: List<Pair<String, String>>,
+            contentTypeFilter: String?
+        ): ByteArray {
+            reads.add(uri.toString())
+            return mDelegate.downloadDataFromUri(context, uri, parameters, contentTypeFilter)
+        }
     }
 
     private fun pls(vararg urls: String): String {
@@ -140,5 +186,7 @@ class PlaylistResolutionTest {
     private companion object {
 
         const val AUDIO_MPEG = "audio/mpeg"
+
+        const val VIDEO_ASF = "video/x-ms-asf"
     }
 }

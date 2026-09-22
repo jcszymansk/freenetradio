@@ -140,6 +140,14 @@ The project embeds William Seemann's JavaPlaylistParser with support for:
 - XSPF
 
 This resolves station URLs that point to playlists rather than directly to audio streams.
+`NetUtils.extractUrlsFromPlaylist` opens the station URL itself, because the content type it
+declares is part of how the format is recognised. Every playlist that one names in turn (an ASX
+`ENTRYREF`, or an entry whose URL has a playlist extension) is read through the service's
+`DownloaderLayer` behind the parsers' `PlaylistFetcher`; the parsers open no connection of their
+own and load no external XML entity. One `AutoDetectParser` per resolution remembers the URLs it
+has followed and stops a chain at `AutoDetectParser.MAX_DEPTH`. A fetched playlist is dispatched
+on its extension and then on its first bytes, and an entry without a playlist extension is kept as
+a stream.
 
 ## Playback
 
