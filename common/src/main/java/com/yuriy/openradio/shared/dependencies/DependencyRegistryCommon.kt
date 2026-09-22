@@ -62,6 +62,7 @@ import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.OpenRadioServicePresenterImpl
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.AppLogger
+import com.yuriy.openradio.shared.utils.NetUtils
 import com.yuriy.openradio.shared.utils.RadioStationValidatorImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -153,7 +154,9 @@ object DependencyRegistryCommon {
         sImagesPersistenceLayer = ImagesPersistenceLayerImpl(context, downloader, imagesDatabase)
 
         sRadioStationManagerLayer = RadioStationManagerLayerImpl(
-            RadioStationValidatorImpl(CoroutineScope(Dispatchers.Main), CoroutineScope(Dispatchers.IO)),
+            RadioStationValidatorImpl(
+                CoroutineScope(Dispatchers.Main), CoroutineScope(Dispatchers.IO), NetUtils::checkResource
+            ),
             sDeviceLocalsStorage, sFavoritesStorage, sImagesPersistenceLayer
         )
         sLocationStorage = LocationStorage(contextRef)
