@@ -82,6 +82,12 @@ class RadioStationValidatorImpl(
         private val CLASS_NAME = RadioStationValidatorImpl::class.java.simpleName
         private val PROBEABLE_PROTOCOLS = setOf("http", "https")
 
+        /** What [URL.getPort] answers when the url names no port and the scheme's own applies. */
+        private const val DEFAULT_PORT = -1
+
+        /** [URL] parses any port up to 99999, but a connection can only be made to these. */
+        private val CONNECTABLE_PORTS = 1..65535
+
         /**
          * Whether [url] is one the production probe could open at all.
          *
@@ -90,7 +96,9 @@ class RadioStationValidatorImpl(
          */
         private fun isHttpUrl(url: String): Boolean {
             val parsed = runCatching { URL(url) }.getOrNull() ?: return false
-            return parsed.protocol in PROBEABLE_PROTOCOLS && parsed.host.isNotEmpty()
+            return parsed.protocol in PROBEABLE_PROTOCOLS
+                    && parsed.host.isNotEmpty()
+                    && (parsed.port == DEFAULT_PORT || parsed.port in CONNECTABLE_PORTS)
         }
     }
 }

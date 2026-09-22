@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-21 17:46'
-updated_date: '2026-09-22 19:41'
+updated_date: '2026-09-22 19:50'
 labels:
   - test
 milestone: m-0
@@ -41,4 +41,6 @@ RadioStationValidatorImpl has no test anywhere. Every test that touches validati
 <!-- SECTION:NOTES:BEGIN -->
 AC #3: the validator now rejects before probing any stream url the production probe could not open at all: one java.net.URL cannot parse, whose protocol is not http or https, or that has no host. NetUtils.checkResource parses with the same URL class and opens an HttpURLConnection, so the set of accepted candidates is unchanged; such a url used to fail as 'stream is invalid' after a network attempt and now fails as 'url is invalid' without one. The journeys type loopback http urls and are unaffected.
 With the probe injected the validator passes rules 2 to 5 of the pure-core membership rule, so it joined gradle/pure-core-coverage.tsv with RadioStationValidatorImplTest as owner, confirmed by verifyPureCoreAttribution.
+
+The pre-probe check also rejects a port outside 1..65535 (java.net.URL parses up to 99999 and 0; neither can be connected to). It stays syntactic: anything that needs a resolver or a connection to decide is left to the probe.
 <!-- SECTION:NOTES:END -->

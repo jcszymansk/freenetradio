@@ -74,7 +74,10 @@ class RadioStationValidatorImplTest {
             "ftp://127.0.0.1:1/stream",
             "file:///sdcard/stream.mp3",
             "http:///stream",
-            "http://"
+            "http://",
+            "http://127.0.0.1:0/stream",
+            "http://127.0.0.1:65536/stream",
+            "http://127.0.0.1:99999/stream"
         )
         for (url in unusable) {
             mEvents.clear()
@@ -92,7 +95,9 @@ class RadioStationValidatorImplTest {
         val usable = listOf(
             "https://127.0.0.1:1/stream",
             "HTTPS://127.0.0.1:1/stream",
-            "Http://127.0.0.1:1/stream"
+            "Http://127.0.0.1:1/stream",
+            "http://127.0.0.1/stream",
+            "http://127.0.0.1:65535/stream"
         )
         for (url in usable) {
             mEvents.clear()
