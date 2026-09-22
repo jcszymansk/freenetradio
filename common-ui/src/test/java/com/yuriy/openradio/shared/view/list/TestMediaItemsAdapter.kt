@@ -30,7 +30,7 @@ internal class TestMediaItemsAdapter : MediaItemsAdapter() {
      * Media ids of the rows currently held, in list order.
      */
     fun mediaIds(): List<String> {
-        return (0 until itemCount).map { getItem(it)?.mediaId ?: NO_MEDIA_ID }
+        return (0 until itemCount).map { checkNotNull(getItem(it)) { "No row at $it of $itemCount" }.mediaId }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MediaItemViewHolder {
@@ -40,12 +40,6 @@ internal class TestMediaItemsAdapter : MediaItemsAdapter() {
     override fun onBindViewHolder(holder: MediaItemViewHolder, position: Int) = Unit
 
     companion object {
-
-        /**
-         * Stands in for a row whose media id is absent, so a hole shows up in an assertion
-         * instead of shortening the list.
-         */
-        const val NO_MEDIA_ID = "<no media id>"
 
         fun mediaItem(mediaId: String): MediaItem {
             return MediaItem.Builder().setMediaId(mediaId).build()
