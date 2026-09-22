@@ -1,11 +1,11 @@
 ---
 id: TASK-065
 title: Move the storage manager merge test to the JVM
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 19:11'
-updated_date: '2026-09-22 07:39'
+updated_date: '2026-09-22 07:52'
 labels:
   - test
 milestone: m-0
@@ -26,11 +26,11 @@ The storages genuinely are instrumented subjects and the coverage they have shou
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The merge rule is covered on the JVM: overlap between the two sets, disjoint sets, an empty incoming set and an empty existing set
-- [ ] #2 Sort ids come out contiguous from zero and in the order the sort ids implied
-- [ ] #3 StorageManagerLayerImpl clears the per-class line floor in the JVM coverage report
-- [ ] #4 StorageManagerLayerImpl has an owning test in gradle/pure-core-coverage.tsv that verifyPureCoreAttribution confirms
-- [ ] #5 The storage-level behaviour the instrumented test covers is still covered somewhere
+- [x] #1 The merge rule is covered on the JVM: overlap between the two sets, disjoint sets, an empty incoming set and an empty existing set
+- [x] #2 Sort ids come out contiguous from zero and in the order the sort ids implied
+- [x] #3 StorageManagerLayerImpl clears the per-class line floor in the JVM coverage report
+- [x] #4 StorageManagerLayerImpl has an owning test in gradle/pure-core-coverage.tsv that verifyPureCoreAttribution confirms
+- [x] #5 The storage-level behaviour the instrumented test covers is still covered somewhere
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -44,3 +44,23 @@ The storages genuinely are instrumented subjects and the coverage they have shou
 6. Flip line 57 of gradle/pure-core-coverage.tsv from NONE/- to the new owner and :common.
 7. Verify: ./gradlew test, localCoverageReport, verifyPureCoreCoverage, verifyPureCoreAttribution, and :app:assembleDebugAndroidTest to prove the androidTest source set still compiles without the deleted file.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+The payload each merge test feeds the layer is built by exporting a donor storage through getAllAsString, not by restating the private delimiters of AbstractRadioStationsStorage in a second source set. That is what FileStoreManager writes to a data file, and it keeps the test from drifting away from the marshalling it depends on. The instrumented AbstractRadioStationsStorageTest still owns the hand written malformed input, because the demarshaller's own rules are the storage's subject, not the layer's.
+
+Sort ids are asserted by reading stations back one at a time through AbstractRadioStationsStorage.get. getAll renumbers from zero on the way out, so an assertion made through it reports contiguous sort ids even when the merge writes none: deleting the renumbering loop from StorageManagerLayerImpl.merge leaves every getAll based assertion green and fails only disjointSetsInterleaveBySortIdAndComeOutNumberedFromZero, which is how that test was checked.
+
+The station builder is the existing one in the :common test source set (MediaItemCommandTestSupport.station) rather than a second copy. It already guarantees the non empty media stream that getAll requires.
+
+verifyPureCoreAttribution still fails overall on RadioStationManagerLayerImplTest and AutoDetectParserTest. Both are pre-existing and named in doc/testing-roadmap.md; this task's owner is line [21/29] of that run.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The merge rule moved to common/src/test/java/com/yuriy/openradio/shared/model/storage/StorageManagerLayerImplTest.kt: 13 JVM tests driving a real FavoritesStorage and DeviceLocalsStorage over the in memory preferences of preferencesContext. They cover overlap between the two sets in both conflict directions, disjoint sets, an empty incoming payload, input that deserializes to nothing, an empty existing store, the local flag surviving a merge, the two collections staying independent, and the export import round trip for each. The instrumented StorageManagerLayerTest is deleted and gradle/pure-core-coverage.tsv line 57 now names the new owner.
+
+Verified with ./gradlew test (whole JVM suite green), ./gradlew localCoverageReport (StorageManagerLayerImpl 24/24 lines and 6/6 branches, up from 0%, so it no longer appears under the 60% per-class floor in verifyPureCoreCoverage), ./gradlew verifyPureCoreAttribution ([21/29] StorageManagerLayerImplTest 1 owned class ok; the run's two remaining failures are the pre-existing RadioStationManagerLayerImplTest and AutoDetectParserTest), ./gradlew :app:assembleDebugAndroidTest, and ./gradlew :app:connectedDebugAndroidTest for the storage package on an offline emulator: 77 tests across 8 classes, all passing, with FileStoreManagerTest still driving StorageManagerLayerImpl over real preferences and a real file.
+<!-- SECTION:FINAL_SUMMARY:END -->
