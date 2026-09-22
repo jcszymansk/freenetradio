@@ -196,8 +196,8 @@ class MediaPresenterImpl(
     /**
      * Binds the list and the adapter that renders its rows.
      *
-     * Split out of [init] because everything else [init] does - the media browser connection, the
-     * broadcast receivers, the layout manager - needs an Activity, while the children-loaded path
+     * Split out of [init] because everything else [init] does (the media browser connection, the
+     * broadcast receivers, the layout manager) needs an Activity, while the children-loaded path
      * needs only these two references and tolerates a null list.
      *
      * @param listView List that renders the loaded children, or null when there is none.

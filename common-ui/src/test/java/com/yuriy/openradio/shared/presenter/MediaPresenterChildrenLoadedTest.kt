@@ -77,14 +77,15 @@ class MediaPresenterChildrenLoadedTest {
     }
 
     @Test
-    fun endOfListPageLeavesTheLoadedRowsAlone() {
+    fun endOfListPageLeavesTheLoadedRowsAndTheirNodeAlone() {
         mPresenter.handleChildrenLoaded(COUNTRY_STATIONS, listOf(mediaItem("a"), mediaItem("b")), false)
 
         mPresenter.handleChildrenLoaded(
-            COUNTRY_STATIONS, listOf(MediaItemBuilder.buildMediaItemListEnded()), true
+            MediaId.MEDIA_ID_COUNTRIES_LIST, listOf(MediaItemBuilder.buildMediaItemListEnded()), true
         )
 
         assertEquals(listOf("a", "b"), mAdapter.mediaIds())
+        assertEquals(COUNTRY_STATIONS, mAdapter.parentId)
     }
 
     private companion object {
