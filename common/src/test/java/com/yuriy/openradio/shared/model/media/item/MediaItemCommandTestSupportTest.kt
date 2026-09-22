@@ -89,9 +89,36 @@ class MediaItemCommandTestSupportTest {
             listener.assertAnsweredFromCacheBeforeReturning()
         }
 
-        assertTrue(
-            "The failure does not say that nothing was delivered: ${failure.message}",
-            failure.message?.startsWith("A restored instance did not answer before execute returned") == true
-        )
+        assertTrue(NOT_INLINE, failure.message?.contains(ANSWERED_ELSEWHERE) == true)
+    }
+
+    /**
+     * The delivery a restored instance has to be told apart from is an identical empty result sent
+     * later by the command's coroutine. Another thread stands in for that coroutine, and it is
+     * joined before the assertion runs, so the rejection is about where the result came from and
+     * not about which of the two got there first.
+     */
+    @Test
+    fun theRestoredInstanceAssertionRejectsAnIdenticalResultDeliveredOffTheCallingThread() {
+        val listener = RecordingCommandListener()
+
+        val deliverer = Thread { listener.onResult() }
+        deliverer.start()
+        deliverer.join()
+
+        assertEquals(1, listener.results)
+        assertTrue(listener.items.isEmpty())
+        val failure = assertThrows(AssertionError::class.java) {
+            listener.assertAnsweredFromCacheBeforeReturning()
+        }
+
+        assertTrue(NOT_INLINE, failure.message?.contains(ANSWERED_ELSEWHERE) == true)
+    }
+
+    private companion object {
+
+        const val ANSWERED_ELSEWHERE = "A restored instance did not answer on the thread that called execute"
+
+        const val NOT_INLINE = "The failure does not say the result did not arrive inline"
     }
 }

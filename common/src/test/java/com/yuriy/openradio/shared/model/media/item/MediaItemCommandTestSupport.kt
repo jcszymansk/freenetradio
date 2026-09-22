@@ -42,6 +42,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 
 /**
@@ -164,6 +165,15 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
     var error: String? = null
         private set
 
+    /**
+     * The thread the result was delivered on, or null while nothing has been delivered. Every
+     * command that does its work launches it on [Dispatchers.IO], which always dispatches, so this
+     * is the caller's own thread only when the command answered inline.
+     */
+    @Volatile
+    var resultThread: Thread? = null
+        private set
+
     val mediaIds: List<String>
         get() = items.map { it.mediaId }
 
@@ -189,6 +199,7 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
         this.items = items
         this.radioStations = radioStations
         this.pageNumber = pageNumber
+        resultThread = Thread.currentThread()
         results++
         mResultLatch.countDown()
     }
@@ -223,17 +234,30 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
 
     /**
      * Asserts the contract of a browse command restored onto a catalogue that is already in
-     * [com.yuriy.openradio.shared.model.media.BrowseTree]: it answers on the calling thread,
-     * before `execute` returns and before it reaches its coroutine, and the empty result it leaves
-     * behind is what makes `OpenRadioService.callWhenSourceReady` serve the node from the tree
-     * rather than from the provider.
+     * [com.yuriy.openradio.shared.model.media.BrowseTree]: it answers inline, before `execute`
+     * returns and before it reaches its coroutine, and the empty result it leaves behind is what
+     * makes `OpenRadioService.callWhenSourceReady` serve the node from the tree rather than from
+     * the provider.
      *
-     * The delivery that has already happened is the whole claim. An empty result on its own is bit
-     * for bit what a command that never ran delivers, so it is worth asserting only together with
-     * the moment it arrived, which is why this has to be called before any await.
+     * That the result was delivered inline is the whole claim. An empty result on its own is bit
+     * for bit what a command that never ran delivers, and so is one a coroutine delivers later.
+     *
+     * The inline delivery is read off the thread rather than off a counter or a flag, because both
+     * of those would only be asserting that a coroutine had not got there yet - true most of the
+     * time and therefore a guard that decides races rather than settling them. The thread cannot
+     * race: every command that does its work launches it on [Dispatchers.IO], which never runs a
+     * block on the thread that launched it, so the caller's own thread delivering the result is
+     * something only the branch that returns before the launch can produce. Call this from the
+     * thread that called `execute`.
      */
     fun assertAnsweredFromCacheBeforeReturning() {
-        assertEquals("A restored instance did not answer before execute returned", 1, results)
+        assertSame(
+            "A restored instance did not answer on the thread that called execute, so it did not " +
+                "answer before execute returned",
+            Thread.currentThread(),
+            resultThread
+        )
+        assertEquals("A restored instance answered more than once", 1, results)
         assertEquals("A restored instance built media items of its own", emptyList<String>(), mediaIds)
         assertEquals("A restored instance carried radio stations of its own", emptySet<RadioStation>(), radioStations)
         assertEquals("A restored instance did not answer for the first page", UrlLayer.FIRST_PAGE_INDEX, pageNumber)
