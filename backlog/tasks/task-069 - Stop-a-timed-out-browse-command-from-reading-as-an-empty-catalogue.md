@@ -1,9 +1,11 @@
 ---
 id: TASK-069
 title: Stop a timed-out browse command from reading as an empty catalogue
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-09-21 20:32'
+updated_date: '2026-09-22 04:59'
 labels:
   - test
 milestone: m-0
@@ -21,7 +23,48 @@ Five restored-instance tests are the remaining live instance, and the counters d
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A command that exhausts CMD_TIMEOUT_MS fails the test that awaits its result, rather than delivering an empty one inside the await
-- [ ] #2 The five restored-instance tests assert the cached node they are named for, not only that nothing was delivered
-- [ ] #3 assertMediaIds rejects an empty expectation, which today degenerates to comparing two empty lists
+- [x] #1 A command that exhausts CMD_TIMEOUT_MS fails the test that awaits its result, rather than delivering an empty one inside the await
+- [x] #2 The five restored-instance tests assert the cached node they are named for, not only that nothing was delivered
+- [x] #3 assertMediaIds rejects an empty expectation, which today degenerates to comparing two empty lists
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Bind RecordingCommandListener's await deadline to MediaItemCommand.CMD_TIMEOUT_MS (half of it) so a command that has not answered by then fails awaitResult/awaitError by name instead of passing as an empty result.
+2. Give RecordingCommandListener an assertion for the restored-instance contract: the result is already delivered when execute() returns (the early return happens before the coroutine launches), and it carries no items, no stations, and the first page index.
+3. Rewrite the five restored-instance tests around that assertion and rename them so the name matches the claim - the command leaves the node to BrowseTree, it does not deliver it.
+4. Make assertMediaIds(first, vararg rest) so an empty expectation does not compile.
+5. Cover the harness itself in MediaItemCommandTestSupportTest: the await is shorter than the command timeout, and a command that does not answer in time fails awaitResult by name.
+6. Run ./gradlew test.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified by mutating production code and watching the right tests fail.
+
+AC1. Gave MediaItemChildCategories a delay(CMD_TIMEOUT_MS * 2) inside its withTimeoutOrNull, which is a real suspension point, so the command genuinely exhausted its timeout and fell through to the empty onResult(). All five awaiting tests in MediaItemChildCategoriesTest failed with 'Command did not deliver a result', anEmptyFirstPageIsDeliveredWithoutAnError among them - under the old ten second await that command would have answered inside the latch and the test would have gone on to assert an empty node. MediaItemCommandTestSupportTest pins the same thing from the other side: the await is shorter than CMD_TIMEOUT_MS, and a command that answers only after the await fails awaitResult by name rather than being recorded.
+
+AC2. Replacing the synchronous 'deliverResult(dependencies); return' in the restored-instance branch with a coroutine that delivers the identical empty result failed exactly the five restored-instance tests and nothing else, in MediaItemAllCategories, MediaItemPopularStations, MediaItemChildCategories, MediaItemCountryStations and MediaItemSearchFromService. The old assertions could not tell the two apart. MediaItemCountryStations also had a country fixture added so all five presenters now hold data the command declined to ask for.
+
+AC3. assertMediaIds(first, vararg rest) makes the empty expectation a compile error. All 23 call sites pass at least one id and none uses a spread, so nothing else moved.
+
+Doubling AWAIT_MILLIS past CMD_TIMEOUT_MS fails theAwaitRunsOutBeforeACommandCanFallThroughItsOwnTimeout, so the constant cannot drift back.
+
+./gradlew test green (:android-jvm-stubs, :common, :common-ui); the twelve browse command suites report zero failures. The one cost is MediaItemCommandTestSupportTest, which burns the full 2500 ms await on purpose; every other test in the package does under 3 ms of real work.
+
+Round 1 of the review loop found that assertAnsweredFromCacheBeforeReturning inferred inline delivery from the result count, which a coroutine that got there first would have satisfied. The listener now records the thread it was answered on instead. Every command launches its work on Dispatchers.IO, which never runs a block on the launching thread (MediaItemCountryStations's runBlocking is inside that coroutine, not on the caller), so a result arriving on the caller's own thread is something only the branch that returns before the launch can produce, and no timing enters into it. The marker flag the review suggested was not taken: set on the test thread and read from the coroutine, it races the same way the counter did.
+
+Proved with the saved-instance branch mutated to runBlocking(Dispatchers.IO), which finishes delivering before execute returns, so the count check could not have noticed and the thread check still named the wrong thread. theRestoredInstanceAssertionRejectsAnIdenticalResultDeliveredOffTheCallingThread pins the same thing without a mutation, joining the delivering thread first so the off-thread delivery has definitively won.
+
+Round 2 returned PASS with no findings.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+MediaItemCommandTestSupport waited ten seconds while a browse command gives up after five, so a command that exhausted CMD_TIMEOUT_MS still answered inside the latch with no items, the first page and no error, which is the state every empty-node test expects. The await is now MediaItemCommand.CMD_TIMEOUT_MS / 2, derived rather than a literal so the two clocks cannot drift into the wrong order, and a command that gets nowhere fails awaitResult by name; MediaItemCommandTestSupportTest covers the listener itself. assertMediaIds takes its first id as a parameter of its own, so an empty expectation no longer compiles. The five restored-instance tests assert that the result was delivered on the thread that called execute, which only the branch returning before the coroutine launch can produce, and their names now say the node is left to BrowseTree rather than delivered.
+
+Verified by mutation: a real delay past CMD_TIMEOUT_MS inside MediaItemChildCategories fails all five awaiting tests by name; moving the restored-instance delivery onto a coroutine, or onto another thread synchronously via runBlocking(Dispatchers.IO), fails exactly the five restored-instance tests and nothing else; doubling AWAIT_MILLIS fails the invariant test. ./gradlew test green, 54 browse-command tests across twelve suites. Follow-ups TASK-072 and TASK-073 filed.
+<!-- SECTION:FINAL_SUMMARY:END -->

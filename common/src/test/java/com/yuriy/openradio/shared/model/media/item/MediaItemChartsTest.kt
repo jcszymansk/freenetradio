@@ -114,8 +114,12 @@ class MediaItemChartsTest {
         assertEquals(STRING_RESOURCE, listener.error)
     }
 
+    /**
+     * The presenter is given a station it would happily hand over, so the chart arriving empty is
+     * a decision the command made rather than an absence of data.
+     */
     @Test
-    fun aRestoredInstanceDeliversTheCachedChartWithoutAskingTheProvider() {
+    fun aRestoredInstanceLeavesTheChartToTheCacheWithoutAskingTheProvider() {
         val presenter = RecordingPresenter(mPopularStations = stations("first"))
         val listener = RecordingCommandListener()
 
@@ -129,8 +133,7 @@ class MediaItemChartsTest {
             )
         )
 
-        listener.awaitResult()
-        assertTrue(listener.items.isEmpty())
+        listener.assertAnsweredFromCacheBeforeReturning()
         assertEquals(0, presenter.popularStationsRequests)
         listener.assertNoError()
     }
