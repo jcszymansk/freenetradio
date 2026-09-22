@@ -65,7 +65,7 @@ com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openr
 com/yuriy/openradio/shared/service/player/PlaybackErrorClassifier	com.yuriy.openradio.shared.service.player.PlaybackErrorClassifierTest	:common
 com/yuriy/openradio/shared/service/location/Country	com.yuriy.openradio.shared.model.parser.ParserLayerMappingTest	:common
 com/yuriy/openradio/shared/utils/JsonUtils	NONE	-
-com/yuriy/openradio/shared/utils/SortUtils	NONE	-
+com/yuriy/openradio/shared/utils/SortUtils	com.yuriy.openradio.shared.utils.SortUtilsTest	:common
 wseemann/media/jplaylistparser/parser/AutoDetectParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/AbstractParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/m3u/M3UPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
