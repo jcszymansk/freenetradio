@@ -1,9 +1,11 @@
 ---
 id: TASK-064
 title: Cover station reordering in SortUtils
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 19:11'
+updated_date: '2026-09-22 08:31'
 labels:
   - test
 milestone: m-0
@@ -31,3 +33,14 @@ It takes the concrete FavoritesStorage and DeviceLocalsStorage, so a JVM test ne
 - [ ] #5 An empty category and a media id that matches no station are covered
 - [ ] #6 The tests run on the JVM against a preferences fake and reach no device
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Read SortUtils.resortIds and everything it depends on: AbstractRadioStationsStorage.getAll renumbers the set to 0..n-1 before resortIds ever sees it, and returns a TreeSet ordered by sortId, so the walk order is fixed.
+2. Add common/src/test/java/com/yuriy/openradio/shared/utils/SortUtilsTest.kt driven by the existing preferencesContext() fake and the station() helper, with real FavoritesStorage and DeviceLocalsStorage over it.
+3. Read the result back with getAllFromString(getAllAsString()), not getAll(), because getAll renumbers on the way out and would hide the sort ids the rule actually wrote.
+4. Pin: an upward drag, a downward drag, the station that already holds the requested sort id, a media id that matches nothing, an empty category, a foreign category, and the fact that a sparse set is compacted first.
+5. Record whatever the double increment turns out to do; if it is a defect, open a follow up task rather than changing SortUtils here.
+6. Run ./gradlew :common:testDebugUnitTest and the full ./gradlew test.
+<!-- SECTION:PLAN:END -->
