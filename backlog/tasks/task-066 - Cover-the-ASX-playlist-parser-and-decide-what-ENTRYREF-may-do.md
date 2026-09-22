@@ -1,11 +1,11 @@
 ---
 id: TASK-066
 title: 'Cover the ASX playlist parser, and decide what ENTRYREF may do'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 19:59'
-updated_date: '2026-09-22 16:16'
+updated_date: '2026-09-22 18:32'
 labels:
   - test
 milestone: m-0
@@ -27,11 +27,11 @@ Two smaller things in the same class: sNumberOfFiles is static mutable state sha
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 A decision is recorded on whether an ASX ENTRYREF is followed, and through what, before any test exercises that branch
-- [ ] #2 No test causes a connection to anything but loopback
-- [ ] #3 The href lookup is covered for the lower case attribute, the upper case attribute and the element value fallback
-- [ ] #4 TITLE handling and an entry without a title are covered
-- [ ] #5 The malformed-XML repair path in validateXML is covered, including input it cannot repair
-- [ ] #6 ASXPlaylistParser clears the per-class line floor in the JVM coverage report
+- [x] #2 No test causes a connection to anything but loopback
+- [x] #3 The href lookup is covered for the lower case attribute, the upper case attribute and the element value fallback
+- [x] #4 TITLE handling and an entry without a title are covered
+- [x] #5 The malformed-XML repair path in validateXML is covered, including input it cannot repair
+- [x] #6 ASXPlaylistParser clears the per-class line floor in the JVM coverage report
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -74,4 +74,20 @@ Found while reading the code for this decision. Nothing has been changed yet.
 1. **Every network path in the parser package goes through the downloader, in this task.** Not only ENTRYREF: the nested fetch in AutoDetectParser.parse(url, playlist) and the getStreamExtension probe too. Reason: AutoDetectParserTest.dispatchesSupportedFormatsFromStreams already dials example.com today. Its entry https://example.com/stream?format=m3u has no playlist extension (getFileExtension answers .com/stream?format=m3u), so parseEntry reaches getStreamExtension, which sends a real OkHttp GET. AC #2 cannot hold for the suite while that path exists, and TASK-068 criterion 7 is broken by it.
 2. **getStreamExtension is dropped, not replaced.** It needs the Content-Disposition header, and DownloaderLayer returns only bytes. An entry without a playlist extension is kept as a stream. If it is really a playlist, the player fails with UnrecognizedInputFormat and OpenRadioService.handleUnrecognizedInputFormatException resolves it again through extractUrlsFromPlaylist, which does see the MIME type. The probe also sent a GET to every stream url and never closed the response.
 3. **Item 1 (the missing content type): dispatch on the url extension, then sniff the content.** A fetched reference or nested playlist whose url has no playlist extension is recognised by its first bytes (#EXTM3U, [playlist], the root element <asx or <playlist). DownloaderLayer is not widened.
+
+## Verification of the criteria
+
+- **#2** Three kinds of evidence. The parser package has no network API left (no openConnection, OkHttp, HttpURLConnection, Socket or InetAddress under common/src/main/java/wseemann). AutoDetectParserTest drives every fixture with a PlaylistFetcher that throws on any read, so an attempted read fails the test rather than going out. And the whole JVM suite passes inside a network namespace with no interface but a loopback nothing binds (320 tests, unshare -rn, --offline). The instrumented suite runs with wifi and data disabled against LoopbackHttpFixture only, 197/197.
+- **#3** ASXPlaylistParserTest.refAddressIsFoundInHrefAttributeOfAnyCaseOrInElementText covers href, HREF, Href, the element text fallback, padding around both, and the attribute winning over text. aRefWithoutAnAddressGivesWayToTheNextOne and anEmptyHrefFallsBackToTheElementText cover the blank cases found in review.
+- **#4** titleIsTrimmedAndReadBeforeOrAfterTheRef, entryWithoutTitleHasEmptyMetadata, cdataTitleWithBareAmpersandIsKeptExactly, cdataSurvivesTheRepairOfAMismatchedEndTag.
+- **#5** The repair is no longer validateXML. That method could not work: its replacement pattern was built as "(?i)</" + tag + ">".toRegex(), which Kotlin evaluates as a string concatenation, so replace() looked for the literal text "(?i)</TAG>" and never matched, and it keyed off Xerces error message text that Android's expat parser does not produce. readDocument parses the input as it is and, on failure, once more with tag names upper cased, which mends the real defect (an end tag differing from its start tag only in case) on any SAX parser. Covered by endTagsThatDifferFromTheirStartTagsOnlyInCaseAreRepaired; input it cannot repair by entryThatIsNeverClosedYieldsNoEntries and contentThatIsNotXmlYieldsNoEntries.
+- **#6** verifyPureCoreCoverage passes with ASXPlaylistParser at 47/47 lines and 33/36 branches, from 51/97 and 17/42. verifyPureCoreAttribution confirms ASXPlaylistParserTest carries the class alone.
+
+Follow-ups filed: TASK-081 (.m3u8 entries are followed by every parser but PLS), TASK-082 (ENTRY inside REPEAT is dropped), TASK-083 (the track number nothing reads). TASK-080 was filed and then done here, because the round 1 review ruled the unbounded read a defect of this change.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+ASX ENTRYREF is followed through DownloaderLayer, and so is every other read the parser package used to make on its own: the nested playlist fetch and the getStreamExtension probe, which was dialing example.com from the existing test suite. AutoDetectParser is now the per-resolution session that owns the fetcher, the followed-url set and the depth limit, replacing the static cycle guard and static counters. A fetched playlist is recognised by extension then by content, and a playlist read is bounded at 1 MiB. ASXPlaylistParserTest (40 tests) covers href lookup, titles, the malformed-XML repair and what it cannot repair, ENTRYREF with its failures, self and two-hop cycles and the depth limit; PlaylistResolutionTest pins the ENTRYREF path over loopback. ASXPlaylistParser went from 51/97 lines and 17/42 branches to 47/47 and 33/36. Verified by ./gradlew test (320 tests, also inside a network namespace with no interface), verifyPureCoreCoverage, verifyPureCoreAttribution and the full instrumented suite (197/197, networking disabled).
+<!-- SECTION:FINAL_SUMMARY:END -->
