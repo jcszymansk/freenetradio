@@ -56,8 +56,8 @@ com/yuriy/openradio/shared/model/translation/MediaIdBuilderDefault	com.yuriy.ope
 com/yuriy/openradio/shared/model/storage/cache/api/InMemoryApiCache	com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCacheTest	:common
 com/yuriy/openradio/shared/model/storage/StorageManagerLayerImpl	NONE	-
 com/yuriy/openradio/shared/model/net/DirectUrlResolver	com.yuriy.openradio.shared.model.net.ConnectionUrlResolverTest	:common
-com/yuriy/openradio/shared/model/net/UrlLayerRadioBrowserImpl	NONE	-
-com/yuriy/openradio/shared/model/net/UrlLayerWebRadioImpl	NONE	-
+com/yuriy/openradio/shared/model/net/UrlLayerRadioBrowserImpl	com.yuriy.openradio.shared.model.net.UrlLayerTest	:common
+com/yuriy/openradio/shared/model/net/UrlLayerWebRadioImpl	com.yuriy.openradio.shared.model.net.UrlLayerTest	:common
 com/yuriy/openradio/shared/model/filter/FilterImpl	com.yuriy.openradio.shared.model.filter.FilterImplTest	:common
 com/yuriy/openradio/shared/model/timer/SleepTimerImpl	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/model/timer/CoroutineTimerTask	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
