@@ -1,11 +1,11 @@
 ---
 id: TASK-052
 title: Make the instrumented suite offline guarantee structural
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 17:44'
-updated_date: '2026-09-23 04:43'
+updated_date: '2026-09-23 05:12'
 labels:
   - test
 milestone: m-0
@@ -22,10 +22,10 @@ The suite is safe today because the operator runs adb shell svc wifi disable bef
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every instrumented test class that reaches the service or the network asserts the device is offline before its cases run
-- [ ] #2 A run started with networking enabled fails loudly instead of quietly fetching
-- [ ] #3 No test fixture names a host that a resolver would look up
-- [ ] #4 app/src/androidTest/resources/undetected_streams.txt is removed
+- [x] #1 Every instrumented test class that reaches the service or the network asserts the device is offline before its cases run
+- [x] #2 A run started with networking enabled fails loudly instead of quietly fetching
+- [x] #3 No test fixture names a host that a resolver would look up
+- [x] #4 app/src/androidTest/resources/undetected_streams.txt is removed
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -39,3 +39,17 @@ The suite is safe today because the operator runs adb shell svc wifi disable bef
 6. Delete app/src/androidTest/resources/undetected_streams.txt.
 7. Run JVM tests, compile and run the instrumented suite offline, and prove a networked run fails loudly.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+The guard lives in the runner rather than in each class: OfflineTestRunner (the testInstrumentationRunner) always installs OfflineDeviceRunnerBuilder first in the runnerBuilder list, and on a device with an active network that builder replaces every test class with a single failing deviceIsOffline case, so no test body runs. A test class is whatever JUnit's default builders would run: @RunWith, a static suite(), a junit.framework.Test, or @Test methods declared or inherited. This covers criterion 1 for every class, present and future, instead of the eight named ones, and holds however the run is launched. JourneyProfile's private check is gone.
+Fixture urls in androidTest now use UNREACHABLE_ORIGIN (http://127.0.0.1:9): an address literal needs no DNS, loopback never leaves the device, and port 9 is privileged so the connection is refused. This replaced stream.invalid, example.test, radio.example and x.test, and the real hosts in AbstractRadioStationsStorageTest.DIRBLE_EXPORT, whose paths and record shape are kept. OpenRadioServiceRecoveryTest still sees media_stream_network_failed from a refused connection. JVM tests name hosts only as parse data and route every fetch through fakes (audited), so they are outside this task.
+Validation: connectedDebugAndroidTest offline, 209 tests, 0 failures. With wifi enabled, every class reported deviceIsOffline as a failure and nothing else ran. ./gradlew test passes.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Made the offline promise part of the test APK: OfflineTestRunner installs OfflineDeviceRunnerBuilder, which fails every test class without running it when the device has a network. Pointed every instrumented fixture url at a refused loopback port instead of resolvable names, and deleted undetected_streams.txt. Verified offline (206 pass) and online (all 27 classes fail with the operator instruction).
+<!-- SECTION:FINAL_SUMMARY:END -->
