@@ -22,11 +22,15 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.journey.ColdLaunchJourneyTest
 import com.yuriy.openradio.shared.service.OpenRadioServiceBrowseTest
 import com.yuriy.openradio.shared.service.ServiceBrowser
+import junit.framework.TestCase
+import junit.framework.TestSuite
+import junit.framework.Test as JUnit3Test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.Description
 import org.junit.runner.RunWith
@@ -34,6 +38,7 @@ import org.junit.runner.Runner
 import org.junit.runner.notification.Failure
 import org.junit.runner.notification.RunListener
 import org.junit.runner.notification.RunNotifier
+import org.junit.runners.Suite
 
 /**
  * The guard that keeps the instrumented suite offline, and the runner that installs it.
@@ -69,6 +74,27 @@ open class OfflineDeviceRunnerBuilderTest {
         val runner = onlineBuilder().runnerForClass(InheritsTests::class.java)
 
         assertNotNull("A class whose tests come from its superclass ran online", runner)
+    }
+
+    @Test
+    fun anOnlineDeviceFailsAJUnit3TestCase() {
+        val runner = onlineBuilder().runnerForClass(JUnit3Case::class.java)
+
+        assertNotNull("A JUnit 3 TestCase, whose test methods carry no annotation, ran online", runner)
+    }
+
+    @Test
+    fun anOnlineDeviceFailsAClassBuiltFromASuiteMethod() {
+        val runner = onlineBuilder().runnerForClass(SuiteMethodOnly::class.java)
+
+        assertNotNull("A class offering a static suite() ran online", runner)
+    }
+
+    @Test
+    fun anOnlineDeviceFailsAClassThatNamesItsOwnRunner() {
+        val runner = onlineBuilder().runnerForClass(NamesItsRunner::class.java)
+
+        assertNotNull("A class with a runner of its own and no @Test methods ran online", runner)
     }
 
     @Test
@@ -192,11 +218,55 @@ open class OfflineDeviceRunnerBuilderTest {
         }
     }
 
-    /**
-     * Declares no test of its own. Abstract, so the test loader skips it instead of running the
-     * inherited cases a second time.
+    /*
+     * The fixtures below are abstract because the test loader skips abstract classes. The builder
+     * does not, so each one reaches it as a class of its format would, without ever being run.
      */
-    abstract class InheritsTests : OfflineDeviceRunnerBuilderTest()
+
+    /**
+     * Carries a JUnit 4 test and no runner annotation, so only the @Test method marks it.
+     */
+    abstract class TestsWithoutRunner {
+
+        @Test
+        fun inheritedCase() {
+            fail("A fixture case ran")
+        }
+    }
+
+    /**
+     * Declares no test of its own and names no runner.
+     */
+    abstract class InheritsTests : TestsWithoutRunner()
+
+    /**
+     * A JUnit 3 case: its test method is found by name, not by annotation.
+     */
+    abstract class JUnit3Case : TestCase() {
+
+        fun testCase() {
+            fail("A fixture case ran")
+        }
+    }
+
+    /**
+     * A JUnit 3 suite method on a class that is neither a TestCase nor annotated.
+     */
+    abstract class SuiteMethodOnly {
+
+        companion object {
+
+            @JvmStatic
+            fun suite(): JUnit3Test = TestSuite()
+        }
+    }
+
+    /**
+     * A runner of its own and no @Test method.
+     */
+    @RunWith(Suite::class)
+    @Suite.SuiteClasses()
+    abstract class NamesItsRunner
 
     private companion object {
 

@@ -17,8 +17,11 @@
 package com.yuriy.openradio.testing
 
 import androidx.test.platform.app.InstrumentationRegistry
+import java.lang.reflect.Modifier
+import junit.framework.Test as JUnit3Test
 import org.junit.Test
 import org.junit.runner.Description
+import org.junit.runner.RunWith
 import org.junit.runner.Runner
 import org.junit.runner.notification.Failure
 import org.junit.runner.notification.RunNotifier
@@ -61,10 +64,25 @@ class OfflineDeviceRunnerBuilder internal constructor(
         return DeviceOnlineRunner(testClass, onlineMessage(network))
     }
 
+    /**
+     * Mirrors what JUnit's default builders are willing to run, so that no format the runner
+     * supports slips past: a class naming its own runner, a JUnit 3 `suite()` method, a JUnit 3
+     * `TestCase` or any other `junit.framework.Test`, and a class with JUnit 4 `@Test` methods,
+     * declared or inherited.
+     */
     private fun declaresTests(testClass: Class<*>): Boolean {
-        return generateSequence(testClass) { it.superclass }
-            .flatMap { it.declaredMethods.asSequence() }
-            .any { it.isAnnotationPresent(Test::class.java) }
+        return testClass.isAnnotationPresent(RunWith::class.java) ||
+            hasSuiteMethod(testClass) ||
+            JUnit3Test::class.java.isAssignableFrom(testClass) ||
+            generateSequence(testClass) { it.superclass }
+                .flatMap { it.declaredMethods.asSequence() }
+                .any { it.isAnnotationPresent(Test::class.java) }
+    }
+
+    private fun hasSuiteMethod(testClass: Class<*>): Boolean {
+        return testClass.methods.any {
+            it.name == SUITE_METHOD && it.parameterTypes.isEmpty() && Modifier.isStatic(it.modifiers)
+        }
     }
 
     /**
@@ -89,6 +107,11 @@ class OfflineDeviceRunnerBuilder internal constructor(
          * The name the failure is reported under, standing in for every case of the class.
          */
         const val CASE_NAME = "deviceIsOffline"
+
+        /**
+         * The static method JUnit 3 builds a suite from.
+         */
+        const val SUITE_METHOD = "suite"
 
         fun onlineMessage(network: String): String {
             return "The instrumented suite has to run with networking disabled, and the device " +
