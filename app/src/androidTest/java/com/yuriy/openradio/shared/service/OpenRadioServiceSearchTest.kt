@@ -25,6 +25,7 @@ import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -186,8 +187,8 @@ class OpenRadioServiceSearchTest {
               "countrycode": "PL",
               "bitrate": 128,
               "lastcheckok": 1,
-              "url": "https://radio.example/stream",
-              "url_resolved": "https://radio.example/resolved"
+              "url": "$UNREACHABLE_ORIGIN/stream",
+              "url_resolved": "$UNREACHABLE_ORIGIN/resolved"
             }]
         """.trimIndent()
     }

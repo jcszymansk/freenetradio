@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.media.isInvalid
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -91,16 +92,16 @@ class DeviceLocalsStorageTest {
         mStorage.add(makeStation("local-1", name = "Before", isLocal = true))
 
         val updated = mStorage.update(
-            "local-1", "After", "https://example.test/after",
-            "https://example.test/after.png", "https://example.test/home", "Jazz", "PL", false
+            "local-1", "After", "$UNREACHABLE_ORIGIN/after",
+            "$UNREACHABLE_ORIGIN/after.png", "$UNREACHABLE_ORIGIN/home", "Jazz", "PL", false
         )
 
         assertTrue(updated)
         val loaded = mStorage["local-1"]
         assertEquals("After", loaded.name)
-        assertEquals("https://example.test/after", loaded.getStreamUrlFixed())
-        assertEquals("https://example.test/after.png", loaded.imageUrl)
-        assertEquals("https://example.test/home", loaded.homePage)
+        assertEquals("$UNREACHABLE_ORIGIN/after", loaded.getStreamUrlFixed())
+        assertEquals("$UNREACHABLE_ORIGIN/after.png", loaded.imageUrl)
+        assertEquals("$UNREACHABLE_ORIGIN/home", loaded.homePage)
         assertEquals("Jazz", loaded.genre)
         assertEquals("PL", loaded.country)
     }
@@ -109,7 +110,7 @@ class DeviceLocalsStorageTest {
     fun updateReplacesNullOptionalsWithEmptyValues() {
         mStorage.add(makeStation("local-1", isLocal = true))
 
-        mStorage.update("local-1", "Name", "https://example.test/x", null, null, null, null, false)
+        mStorage.update("local-1", "Name", "$UNREACHABLE_ORIGIN/x", null, null, null, null, false)
 
         val loaded = mStorage["local-1"]
         assertEquals("", loaded.imageUrl)
@@ -123,7 +124,7 @@ class DeviceLocalsStorageTest {
         mStorage.add(makeStation("local-1", name = "Before", isLocal = true))
 
         val updated = mStorage.update(
-            "local-2", "After", "https://example.test/after", null, null, null, null, false
+            "local-2", "After", "$UNREACHABLE_ORIGIN/after", null, null, null, null, false
         )
 
         assertFalse(updated)
@@ -135,7 +136,7 @@ class DeviceLocalsStorageTest {
         mStorage.add(makeStation("local-1", isLocal = true))
 
         mStorage.update(
-            "local-1", "After", "https://example.test/after", null, null, null, null, true
+            "local-1", "After", "$UNREACHABLE_ORIGIN/after", null, null, null, null, true
         )
 
         val favorites = mFavorites.getAll()
@@ -150,7 +151,7 @@ class DeviceLocalsStorageTest {
         mFavorites.add(makeStation("local-1", isLocal = true))
 
         mStorage.update(
-            "local-1", "After", "https://example.test/after", null, null, null, null, false
+            "local-1", "After", "$UNREACHABLE_ORIGIN/after", null, null, null, null, false
         )
 
         assertTrue(mFavorites.getAll().isEmpty())
@@ -163,7 +164,7 @@ class DeviceLocalsStorageTest {
         mLatest.add(makeStation("local-1", name = "Before", isLocal = true))
 
         mStorage.update(
-            "local-1", "After", "https://example.test/after", null, null, null, null, false
+            "local-1", "After", "$UNREACHABLE_ORIGIN/after", null, null, null, null, false
         )
 
         assertEquals("After", mLatest.get().name)
@@ -176,7 +177,7 @@ class DeviceLocalsStorageTest {
         mLatest.add(makeStation("other-2", name = "Other", isLocal = true))
 
         mStorage.update(
-            "local-1", "After", "https://example.test/after", null, null, null, null, false
+            "local-1", "After", "$UNREACHABLE_ORIGIN/after", null, null, null, null, false
         )
 
         assertEquals("Other", mLatest.get().name)

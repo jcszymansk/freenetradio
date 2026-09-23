@@ -23,6 +23,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -155,10 +156,10 @@ class OpenRadioServiceRecoveryTest {
     }
 
     /**
-     * With the device's networking disabled, a host outside the loopback address cannot be
-     * resolved, which is the same failure a stream hits when the signal goes. The player has to
-     * say so rather than report a broken stream, because that is the difference between a station
-     * worth retrying and one that is gone.
+     * A stream whose connection cannot be made fails the way one does when the signal goes: with
+     * a connection failure rather than a response. The player has to say so rather than report a
+     * broken stream, because that is the difference between a station worth retrying and one that
+     * is gone.
      */
     @Test
     fun aStreamOnAnUnreachableHostIsReportedAsALostNetwork() {
@@ -240,11 +241,7 @@ class OpenRadioServiceRecoveryTest {
 
         const val EMPTY_PLS = "[playlist]\nNumberOfEntries=0\nVersion=2\n"
 
-        /**
-         * A host in a reserved top-level domain, so it cannot resolve even if the device is put
-         * back on a network by mistake.
-         */
-        const val UNREACHABLE_STREAM = "http://stream.invalid/live.mp3"
+        const val UNREACHABLE_STREAM = "$UNREACHABLE_ORIGIN/live.mp3"
 
         /**
          * Comfortably longer than `OpenRadioService.API_CALL_TIMEOUT_MS`, which bounds the

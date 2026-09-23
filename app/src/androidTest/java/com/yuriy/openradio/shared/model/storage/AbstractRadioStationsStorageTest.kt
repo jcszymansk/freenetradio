@@ -22,6 +22,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.media.isInvalid
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -74,7 +75,7 @@ class AbstractRadioStationsStorageTest {
         val num = 10
         val list = TreeSet<RadioStation>()
         for (i in 0..num) {
-            list.add(makeStation("id-$i", url = "https://example.test/stream-$i", sortId = i))
+            list.add(makeStation("id-$i", url = "$UNREACHABLE_ORIGIN/stream-$i", sortId = i))
         }
 
         mStorage.addAll(list)
@@ -124,7 +125,7 @@ class AbstractRadioStationsStorageTest {
     @Test
     fun demarshallingSkipsRecordsWithoutAnIdentifier() {
         val value = marshall(
-            entry("blank", "{\"Name\":\"No id\",\"StreamUrl\":\"https://example.test/x\"}"),
+            entry("blank", "{\"Name\":\"No id\",\"StreamUrl\":\"$UNREACHABLE_ORIGIN/x\"}"),
             entry(makeStation("good", sortId = 1))
         )
 
@@ -141,7 +142,7 @@ class AbstractRadioStationsStorageTest {
 
         assertEquals(setOf("a", "b"), restored.map { it.id }.toSet())
         assertEquals(
-            "https://example.test/a", restored.first { it.id == "a" }.getStreamUrlFixed()
+            "$UNREACHABLE_ORIGIN/a", restored.first { it.id == "a" }.getStreamUrlFixed()
         )
     }
 

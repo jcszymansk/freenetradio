@@ -3,6 +3,7 @@ package com.yuriy.openradio.shared.model.storage.cache.api
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -142,9 +143,9 @@ class PersistentApiCacheTest {
 
     private companion object {
 
-        const val KEY = "https://example.test/api/stations"
+        const val KEY = "$UNREACHABLE_ORIGIN/api/stations"
 
-        const val OTHER_KEY = "https://example.test/api/countries"
+        const val OTHER_KEY = "$UNREACHABLE_ORIGIN/api/countries"
 
         const val PAYLOAD = "[{\"name\":\"first\"}]"
 

@@ -32,6 +32,7 @@ import com.yuriy.openradio.shared.model.storage.makeStation
 import com.yuriy.openradio.shared.permission.grantImageReadPermission
 import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppUtils
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -203,8 +204,8 @@ class EditStationDialogTest {
 
         const val STATION_NAME = "Edited Station Fixture"
 
-        const val STREAM_URL = "https://example.test/stream.mp3"
+        const val STREAM_URL = "$UNREACHABLE_ORIGIN/stream.mp3"
 
-        const val HOME_PAGE = "https://example.test/home"
+        const val HOME_PAGE = "$UNREACHABLE_ORIGIN/home"
     }
 }
