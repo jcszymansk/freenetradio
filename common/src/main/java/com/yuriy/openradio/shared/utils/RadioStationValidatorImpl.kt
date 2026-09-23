@@ -20,17 +20,25 @@ import android.content.Context
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.net.URL
 
 /**
  * Validator that reaches the stream and the home page over the network to decide whether a
  * candidate Radio Station is usable.
  *
+ * A candidate without a name, or whose stream url the probe could never open, fails at once,
+ * before anything is probed. Otherwise the stream is probed first and an unreachable one fails
+ * the candidate. The home page is optional: an empty one is not probed at all, and an
+ * unreachable one warns ahead of the success.
+ *
  * @param mUiScope Scope the answers are delivered on.
  * @param mScope   Scope the network probes run on.
+ * @param mProbe   Answers whether a url can be opened.
  */
 class RadioStationValidatorImpl(
     private val mUiScope: CoroutineScope,
-    private val mScope: CoroutineScope
+    private val mScope: CoroutineScope,
+    private val mProbe: ResourceProbe
 ) : RadioStationValidator {
 
     override fun validate(
@@ -40,25 +48,85 @@ class RadioStationValidatorImpl(
         onFailure: (msg: String) -> Unit
     ) {
         if (rsToAdd.name.isEmpty()) {
+            AppLogger.w("$CLASS_NAME candidate has no name")
             onFailure("Radio Station's name is invalid")
             return
         }
         val url = rsToAdd.url
-        if (url.isEmpty()) {
+        if (!isHttpUrl(url)) {
+            AppLogger.w("$CLASS_NAME candidate '${rsToAdd.name}' has no usable stream url: '$url'")
             onFailure("Radio Station's url is invalid")
             return
         }
 
         mScope.launch {
-            if (!NetUtils.checkResource(context, url)) {
+            AppLogger.d("$CLASS_NAME probing stream $url")
+            if (!mProbe.isReachable(context, url)) {
+                AppLogger.w("$CLASS_NAME stream $url is unreachable")
                 mUiScope.launch { onFailure("Radio Station's stream is invalid") }
                 return@launch
             }
             val homePage = rsToAdd.homePage
-            if (homePage.isNotEmpty() && !NetUtils.checkResource(context, homePage)) {
+            if (homePage.isEmpty()) {
+                AppLogger.d("$CLASS_NAME candidate '${rsToAdd.name}' has no home page to probe")
+            } else if (!mProbe.isReachable(context, homePage)) {
+                AppLogger.w("$CLASS_NAME home page $homePage is unreachable")
                 mUiScope.launch { onWarning("Radio Station's home page is invalid") }
             }
+            AppLogger.d("$CLASS_NAME candidate '${rsToAdd.name}' validated")
             mUiScope.launch { onSuccess("Radio Station validated successfully") }
         }
+    }
+
+    /**
+     * Whether [url] is one the production probe could open at all.
+     *
+     * [NetUtils.checkResource] parses with [URL] and opens an HTTP connection, so anything this
+     * rejects would fail there too, only after a trip to the network.
+     *
+     * It must reject nothing the probe could open. That is why it is not a strict RFC 3986
+     * parse: a path with a space fails [URL.toURI], yet the probe sends it and a server may
+     * answer 200, and turning such a station away would be a regression, not validation.
+     */
+    private fun isHttpUrl(url: String): Boolean {
+        val parsed = runCatching { URL(url) }.getOrNull() ?: return false
+        return parsed.protocol in PROBEABLE_PROTOCOLS
+                && isConnectableHost(parsed.host)
+                && (parsed.port == DEFAULT_PORT || parsed.port in CONNECTABLE_PORTS)
+    }
+
+    /**
+     * Whether [host] names something a connection could be made to.
+     *
+     * [URL] passes a host through with characters no host can carry, and the probe would
+     * only find out from a failed name lookup. The rule is the one OkHttp applies before
+     * connecting, since OkHttp is what serves Android's HttpURLConnection. Underscores and
+     * non-ASCII letters pass, as they do there. A bracketed IPv6 literal has already been
+     * checked by [URL] itself. The JDK's [URL] also refuses control characters in a host, so no
+     * JVM test reaches that half of the rule. Android's own [URL] makes no such promise.
+     */
+    private fun isConnectableHost(host: String): Boolean {
+        if (host.isEmpty()) {
+            return false
+        }
+        if (host.startsWith(IPV6_LITERAL_START)) {
+            return true
+        }
+        return host.none { it == ' ' || it.isISOControl() || it in HOST_FORBIDDEN_CHARACTERS }
+    }
+
+    companion object {
+        private val CLASS_NAME = RadioStationValidatorImpl::class.java.simpleName
+        private val PROBEABLE_PROTOCOLS = setOf("http", "https")
+
+        /** What [URL.getPort] answers when the url names no port and the scheme's own applies. */
+        private const val DEFAULT_PORT = -1
+
+        /** [URL] parses any port up to 99999, but a connection can only be made to these. */
+        private val CONNECTABLE_PORTS = 1..65535
+
+        /** Characters OkHttp refuses in a host, beside the controls and the space. */
+        private const val HOST_FORBIDDEN_CHARACTERS = "#%/:?@[\\]"
+        private const val IPV6_LITERAL_START = '['
     }
 }
