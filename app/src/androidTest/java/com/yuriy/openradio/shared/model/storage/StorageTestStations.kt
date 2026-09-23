@@ -5,6 +5,7 @@ import com.yuriy.openradio.shared.model.media.MediaStream.Companion.BIT_RATE_DEF
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.setVariant
 import com.yuriy.openradio.shared.model.translation.RadioStationJsonSerializer
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 
 /**
  * Builders shared by the persistence tests. Every station carries a non empty media stream because
@@ -13,7 +14,7 @@ import com.yuriy.openradio.shared.model.translation.RadioStationJsonSerializer
 internal fun makeStation(
     id: String,
     name: String = "Station $id",
-    url: String = "https://example.test/$id",
+    url: String = "$UNREACHABLE_ORIGIN/$id",
     homePage: String = "",
     genre: String = "",
     country: String = "",

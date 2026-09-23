@@ -41,6 +41,12 @@ adb shell pm clear com.github.jcszymansk.freenetradio   # skip if the app is not
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
+The test APK runs under `OfflineTestRunner`, which fails every test class without running it when
+the device reports a network, so forgetting the first line costs a red run rather than traffic.
+A url an instrumented fixture hands to the app points at `UNREACHABLE_ORIGIN` or a
+`LoopbackHttpFixture`, never at a host name: a reserved name such as `.invalid` still sends a DNS
+query off the device.
+
 Gradle installs over whatever is on the device and keeps its data, so the clear is not optional
 housekeeping. The active station provider is read once per process by `ImagesProvider.onCreate`,
 which Android runs before the Application and before the instrumentation, so a device where

@@ -17,7 +17,6 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
-import android.net.ConnectivityManager
 import androidx.media3.common.util.UnstableApi
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.isInvalid
@@ -29,7 +28,6 @@ import com.yuriy.openradio.shared.service.ServiceStorages
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.service.location.LocationService
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 
 /**
@@ -50,10 +48,11 @@ internal class JourneyProfile(private val mContext: Context) {
     private val mAppData = AppDataReset(mContext)
 
     /**
-     * Brings the device to a fresh install, connected to the service and known to be offline.
+     * Brings the device to a fresh install, connected to the service. That the device is offline
+     * is not this profile's to check: `OfflineDeviceRunnerBuilder` refuses to run any class on a
+     * networked device.
      */
     fun start() {
-        assertTheDeviceIsOffline()
         storages.clear()
         browser.connect()
         clearApplicationData()
@@ -66,11 +65,9 @@ internal class JourneyProfile(private val mContext: Context) {
     /**
      * Undoes as much of [start] as it got through.
      *
-     * The tree is only worth dropping if this profile ever reached it, and asking is not
-     * defensiveness: [start] asserts the device is offline before it connects anything, so the
-     * plainest way to run this suite wrongly is also the one that leaves the browser unconnected
-     * here. Refreshing regardless would answer that operator with "Browser is not connected"
-     * instead of with the message telling them to disable networking.
+     * The tree is only worth dropping if this profile ever reached it. [start] can fail before it
+     * connects, and refreshing regardless would bury that failure under "Browser is not
+     * connected".
      */
     fun finish() {
         storages.clear()
@@ -174,24 +171,6 @@ internal class JourneyProfile(private val mContext: Context) {
         return BrowseRow(
             MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
             mContext.getString(com.yuriy.openradio.R.string.local_radio_stations_list_title)
-        )
-    }
-
-    /**
-     * A journey only says anything about offline behavior if the device really is offline, and
-     * that is a property of how the suite was started rather than of anything it can set. This is
-     * the same question `NetworkLayerImpl` asks before it lets a fetch go ahead, so a null answer
-     * here is the app's own definition of having no connection.
-     */
-    @Suppress("DEPRECATION")
-    private fun assertTheDeviceIsOffline() {
-        val manager = mContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val networkInfo = manager.activeNetworkInfo
-        assertNull(
-            "This journey has to run with networking disabled, and the device reports " +
-                "$networkInfo. Run `adb shell svc wifi disable && adb shell svc data disable` " +
-                "before the suite.",
-            networkInfo
         )
     }
 

@@ -26,6 +26,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.storage.makeStation
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -140,7 +141,7 @@ class OpenRadioServiceCommandTest {
         assertTrue(
             "The local station could not be edited",
             mStorages.locals.update(
-                station.id, "After edit", "https://example.test/edited",
+                station.id, "After edit", "$UNREACHABLE_ORIGIN/edited",
                 null, null, null, null, false
             )
         )

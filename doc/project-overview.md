@@ -278,7 +278,6 @@ The repository contains:
 
 - Four JVM unit-test files under `common/src/test`
 - Nine Android instrumentation-test files under `app/src/androidTest`
-- The stream-detection fixture `undetected_streams.txt`
 
 Coverage includes playlist detection, station serialization, media-ID helpers, storage, equalizer serialization, network utilities, and the image provider. There are no Android Auto-specific tests.
 

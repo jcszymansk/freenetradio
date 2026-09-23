@@ -34,6 +34,7 @@ import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.shared.model.storage.images.Image
 import com.yuriy.openradio.shared.model.storage.images.ImagesDatabase
 import com.yuriy.openradio.shared.model.storage.makeStation
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -619,9 +620,9 @@ class OpenRadioServiceBrowseTest {
          */
         const val UNKNOWN_PARENT_ID = "__NOT_A_NODE__"
 
-        const val CACHE_KEY = "https://radio.example/clear-data-probe"
+        const val CACHE_KEY = "$UNREACHABLE_ORIGIN/clear-data-probe"
 
-        const val CACHE_VALUE = """[{"stationuuid":"probe","name":"Probe","url":"https://x.test"}]"""
+        const val CACHE_VALUE = """[{"stationuuid":"probe","name":"Probe","url":"$UNREACHABLE_ORIGIN"}]"""
 
         const val CLEAR_PROBE_STATION_ID = "clear-data-probe"
 
@@ -663,7 +664,7 @@ class OpenRadioServiceBrowseTest {
         private fun stationsResponse(vararg ids: String): String {
             return ids.joinToString(separator = ",", prefix = "[", postfix = "]") {
                 """{"stationuuid":"$it","name":"Station $it","bitrate":128,""" +
-                    """"url":"https://radio.example/$it","url_resolved":"https://radio.example/$it"}"""
+                    """"url":"$UNREACHABLE_ORIGIN/$it","url_resolved":"$UNREACHABLE_ORIGIN/$it"}"""
             }
         }
 

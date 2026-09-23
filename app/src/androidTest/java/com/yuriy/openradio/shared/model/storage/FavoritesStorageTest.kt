@@ -7,6 +7,7 @@ import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.media.isInvalid
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -125,14 +126,14 @@ class FavoritesStorageTest {
 
     @Test
     fun aStoredStationIsLookedUpByItsMediaId() {
-        mStorage.add(makeStation("1", name = "Looked up", url = "https://example.test/looked-up"))
+        mStorage.add(makeStation("1", name = "Looked up", url = "$UNREACHABLE_ORIGIN/looked-up"))
 
         val loaded = newStorage().get("1")
 
         assertFalse(loaded.isInvalid())
         assertEquals("1", loaded.id)
         assertEquals("Looked up", loaded.name)
-        assertEquals("https://example.test/looked-up", loaded.getStreamUrlFixed())
+        assertEquals("$UNREACHABLE_ORIGIN/looked-up", loaded.getStreamUrlFixed())
     }
 
     @Test

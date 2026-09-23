@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.media.isInvalid
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -48,13 +49,13 @@ class LatestRadioStationStorageTest {
 
     @Test
     fun theSavedStationIsReloadedByANewInstance() {
-        mStorage.add(makeStation("1", name = "Latest", url = "https://example.test/latest"))
+        mStorage.add(makeStation("1", name = "Latest", url = "$UNREACHABLE_ORIGIN/latest"))
 
         val loaded = newStorage().get()
 
         assertEquals("1", loaded.id)
         assertEquals("Latest", loaded.name)
-        assertEquals("https://example.test/latest", loaded.getStreamUrlFixed())
+        assertEquals("$UNREACHABLE_ORIGIN/latest", loaded.getStreamUrlFixed())
     }
 
     @Test

@@ -33,6 +33,7 @@ import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.utils.AppUtils
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -105,7 +106,7 @@ class MediaResourcesManagerTest {
 
         val station = RadioStation.makeDefaultInstance(localsStorage.getId())
         station.name = "Regression station"
-        station.setVariant(BIT_RATE_DEFAULT, "https://example.test/stream")
+        station.setVariant(BIT_RATE_DEFAULT, "$UNREACHABLE_ORIGIN/stream")
         station.isLocal = true
         localsStorage.add(station)
 
@@ -267,8 +268,8 @@ class MediaResourcesManagerTest {
               "countrycode": "PL",
               "bitrate": 128,
               "lastcheckok": 1,
-              "url": "https://radio.example/stream",
-              "url_resolved": "https://radio.example/resolved"
+              "url": "$UNREACHABLE_ORIGIN/stream",
+              "url_resolved": "$UNREACHABLE_ORIGIN/resolved"
             }]
         """.trimIndent()
     }

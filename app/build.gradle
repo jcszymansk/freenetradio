@@ -16,7 +16,7 @@ android {
         multiDexEnabled true
         vectorDrawables.useSupportLibrary = true
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner "com.yuriy.openradio.testing.OfflineTestRunner"
     }
 
     buildTypes {
