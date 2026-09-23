@@ -1,11 +1,11 @@
 ---
 id: TASK-060
 title: Cover RadioStationValidatorImpl rules directly
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 17:46'
-updated_date: '2026-09-22 20:37'
+updated_date: '2026-09-23 04:15'
 labels:
   - test
 milestone: m-0
@@ -22,10 +22,10 @@ RadioStationValidatorImpl has no test anywhere. Every test that touches validati
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 An empty home page is not probed and produces no warning
-- [ ] #2 A non-empty but unreachable home page produces a warning and not a failure
-- [ ] #3 An empty or invalid stream url is reported as a failure before any probe runs
-- [ ] #4 The tests run on the JVM and reach no network
+- [x] #1 An empty home page is not probed and produces no warning
+- [x] #2 A non-empty but unreachable home page produces a warning and not a failure
+- [x] #3 An empty or invalid stream url is reported as a failure before any probe runs
+- [x] #4 The tests run on the JVM and reach no network
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -34,6 +34,8 @@ RadioStationValidatorImpl has no test anywhere. Every test that touches validati
 1. Inject the url probe into RadioStationValidatorImpl as a ResourceProbe fun interface; production wires NetUtils::checkResource in DependencyRegistryCommon.
 2. Add RadioStationValidatorImplTest on the JVM with a recording probe and queued dispatchers, asserting the full ordered event sequence per rule.
 3. Mutation-check the guards, then add the class to gradle/pure-core-coverage.tsv once verifyPureCoreAttribution confirms the owner.
+
+4. Per review: before probing, reject a stream url the probe could never open (java.net.URL parse, http/https, connectable host per OkHttp's rule, port 1..65535), and pin that RFC-lenient but openable urls still reach the probe.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -48,3 +50,9 @@ Deliberately not a strict RFC 3986 parse (URL.toURI): a JDK probe sent http://12
 
 The pre-probe check also rejects a host with a space, a control character or one of #%/:?@[\], which is the rule OkHttp applies before connecting; underscores and non-ASCII hosts still pass. The url helpers are members of the class, not of its companion, so the pure-core gate measures them.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+RadioStationValidatorImpl takes its url probe as a ResourceProbe; the registry wires NetUtils::checkResource. RadioStationValidatorImplTest (13 JVM cases, recording probe, queued dispatchers) covers the whole flow: an empty home page is not probed and does not warn, an unreachable home page warns before success and never fails, and an unreachable stream fails without the home page being probed. Invalid candidates fail before anything is queued for probing: no name, an empty url, or a url the probe could never open (bad syntax, a scheme other than http(s), a bad host, or a port outside 1..65535). The answers arrive on the UI scope. Adding strict RFC 3986 checks was considered and rejected, because a JDK probe got 200 for a path containing a space. The class joined the pure-core set with this test as owner. Verified: ./gradlew test, verifyPureCoreCoverage (96.4% line, 89.5% branch), verifyPureCoreAttribution, :app:assembleDebugAndroidTest, and mutation checks on every guard. The control-character branch alone cannot be reached on the JVM, as the notes explain. Codex review loop passed in round 5.
+<!-- SECTION:FINAL_SUMMARY:END -->
