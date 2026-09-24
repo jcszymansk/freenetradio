@@ -35,6 +35,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
+import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.isInvalid
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -120,13 +122,15 @@ internal class ServiceBrowser {
         onMain { addListener(mPlayerEvents) }
         if (canABrowseStartPlayback()) {
             val favoriteButtons = customLayout()
+            val stored = storedStation()
             release()
             throw AssertionError(
-                "The service holds an active station and an empty queue, so the first page-0 " +
-                    "browse would download new stations and start playing them. A class that " +
-                    "ran before this one left it that way. A class that parks through " +
+                "The service looks to hold an active station and has an empty queue, so the " +
+                    "first page-0 browse would download new stations and start playing them. A " +
+                    "class that ran before this one left it that way. A class that parks through " +
                     "LocalStationsFixture fails its own teardown when it cannot park, so look " +
-                    "for that failure first. Custom layout $favoriteButtons"
+                    "for that failure first. Stored station ${stored.id}, custom layout " +
+                    "$favoriteButtons"
             )
         }
     }
@@ -135,21 +139,42 @@ internal class ServiceBrowser {
      * @return whether a page-0 browse would make the service build a playlist and start playing.
      *
      * That takes an empty queue and an active station. The active station is private to the
-     * service, so it is read off the session's custom layout: the service sets its favorite button
-     * whenever it adopts an active station, in `onCreate` and on playback, and never clears the
-     * layout, while nothing ever makes the active station invalid again. An empty layout therefore
-     * means no active station.
+     * service, so it is read off two things that each follow from it, and that each have one
+     * other cause the other one rules out:
      *
-     * The converse does not hold, because the favorite commands set the layout on their own, so a
-     * `true` here can be a service that is not actually armed. That is the side to err on: a
-     * refusal the caller did not need costs one red run, and the other side costs a stream.
+     * ```
+     *                         favorite button set   station stored
+     *   active station             always            always, once
+     *   favorite command            yes                  no
+     *   station stored directly     no                   yes
+     * ```
+     *
+     * The service sets its favorite button whenever it adopts an active station, in `onCreate` and
+     * on playback, and never clears the layout; the favorite commands set it too, whatever is
+     * playing. It adopts a station either by reading the stored one in `onCreate` or by playing
+     * one, and playing one stores it; a test writing the store itself is the other way to get a
+     * stored station.
+     *
+     * "Once" is the gap. The store can be emptied while the service keeps the station it adopted,
+     * and every teardown here does that, after parking. A service whose queue and store were both
+     * emptied after it adopted a station is therefore passed. Leaving that behind takes a class
+     * that empties both itself, or a teardown whose [LocalStationsFixture.parkThePlayer] failed
+     * first and said so.
      */
     fun canABrowseStartPlayback(): Boolean {
-        return mediaItemCount() == 0 && customLayout().isNotEmpty()
+        return mediaItemCount() == 0 && customLayout().isNotEmpty() && storedStation().isInvalid().not()
     }
 
     private fun customLayout(): List<CommandButton> {
         return read { customLayout }
+    }
+
+    /**
+     * The station the registry's storage answers with, which is the instance the service reads,
+     * cache included. A storage built here would read the file and miss that cache.
+     */
+    private fun storedStation(): RadioStation {
+        return ServiceStorages(mInstrumentation.targetContext).latest.get()
     }
 
     fun release() {

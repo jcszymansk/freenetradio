@@ -75,7 +75,9 @@ class OpenRadioServiceCommandTest {
     fun tearDown() {
         mStations.parkThePlayer()
         mStorages.clear()
-        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        if (mBrowser.isConnected()) {
+            mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        }
         mBrowser.release()
         mAudio.delete()
     }

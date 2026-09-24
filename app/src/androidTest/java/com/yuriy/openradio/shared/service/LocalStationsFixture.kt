@@ -115,12 +115,13 @@ internal class LocalStationsFixture(
         if (item == null) {
             if (mBrowser.canABrowseStartPlayback()) {
                 throw AssertionError(
-                    "Could not park the player. Its queue is empty and the service holds an " +
-                        "active station, so the next page-0 browse would download new stations " +
-                        "and play them, and this fixture seeded nothing to put back in the queue."
+                    "Could not park the player. Its queue is empty and the service looks to " +
+                        "hold an active station, so the next page-0 browse would download new " +
+                        "stations and play them, and this fixture seeded nothing to put back in " +
+                        "the queue."
                 )
             }
-            Log.i(TAG, "Left the queue empty: the service holds no active station")
+            Log.i(TAG, "Left the queue empty: the service looks to hold no active station")
             return
         }
         mBrowser.setMediaItem(item)

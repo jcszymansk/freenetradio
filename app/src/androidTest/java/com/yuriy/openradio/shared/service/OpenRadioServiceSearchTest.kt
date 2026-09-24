@@ -94,7 +94,9 @@ class OpenRadioServiceSearchTest {
     fun tearDown() {
         mCache.clear()
         mStorages.clear()
-        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        if (mBrowser.isConnected()) {
+            mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        }
         mBrowser.release()
     }
 

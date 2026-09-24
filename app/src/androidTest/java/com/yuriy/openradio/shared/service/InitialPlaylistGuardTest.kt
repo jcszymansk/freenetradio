@@ -20,7 +20,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.yuriy.openradio.shared.model.media.isInvalid
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -88,16 +87,9 @@ class InitialPlaylistGuardTest {
         other.release()
     }
 
-    /**
-     * The stored station is cleared first because the guard must not depend on it: a service that
-     * is already running keeps the station it adopted whatever the store says, and a guard that
-     * read the store would pass this service.
-     */
     @Test
     fun connectRefusesAnActiveStationWithAnEmptyQueue() {
         armTheService()
-        mStorages.latest.clear()
-        assertTrue(mStorages.freshLatest().get().isInvalid())
 
         val other = ServiceBrowser()
         val refusal = assertThrows(AssertionError::class.java) { other.connect() }

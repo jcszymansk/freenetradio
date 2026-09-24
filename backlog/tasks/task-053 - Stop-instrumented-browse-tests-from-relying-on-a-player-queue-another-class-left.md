@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-21 17:45'
-updated_date: '2026-09-24 05:24'
+updated_date: '2026-09-24 05:56'
 labels:
   - test
 milestone: m-0
@@ -28,3 +28,23 @@ OpenRadioService calls maybeCreateInitialPlaylist on any page-0 browse. With an 
 - [ ] #2 parkThePlayer reports when it cannot park instead of returning silently
 - [ ] #3 The invariant holds when a class runs alone and when it runs after any other class
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Make ServiceBrowser.connect refuse a service a page-0 browse would start playing (empty queue plus an active station), so every class that connects through it asserts the precondition structurally.
+2. Make parkThePlayer fail when it cannot put a queue back into such a service, and log the harmless early returns.
+3. Assert the same precondition in the classes that reach the service without a ServiceBrowser (MediaResourcesManagerTest, AddStationDialogTest, EditStationDialogTest).
+4. Cover both guards with InitialPlaylistGuardTest, which builds the armed state on purpose.
+5. Verify the full suite, every service-reaching class alone, and a mixed ordering.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+The service's active station is private. The guard reads two signals that each follow from it: the session custom layout (the favorite button, set on onCreate adoption and playback, never cleared) and the registry latest-station store. Layout alone was tried first and false-fired: favorite commands set the layout with no active station, which failed OpenRadioServiceCommandTest when run alone. The store alone misses a running service whose store was cleared after adoption. Requiring both closes each one's false positive; the remaining blind spot is a service whose queue and store were both emptied after adoption, which only a class emptying both itself or a teardown whose parkThePlayer already failed can leave.
+
+Scope: AC1 names six classes, but MediaResourcesManagerTest, AddStationDialogTest and EditStationDialogTest also browse page 0 (an Activity's own browser browses the root on connect), so they assert the precondition too. The assertion is 'queue not empty, or no active station' rather than 'queue not empty', because a class run alone in a fresh process has an empty queue and must still pass (AC3).
+
+The five service classes skip their teardown CMD_UPDATE_TREE when the browser is not connected, because on-device the unguarded call's 'Browser is not connected' was the failure reported in place of the setup refusal.
+<!-- SECTION:NOTES:END -->
