@@ -32,6 +32,7 @@ import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.shared.service.OpenRadioService
+import com.yuriy.openradio.shared.service.ServiceBrowser
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +75,7 @@ class MediaResourcesManagerTest {
         sleepTimerStorage = SleepTimerStorage(contextRef)
         apiCache = PersistentApiCache(context, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         clearState()
+        ServiceBrowser.assertABrowseCannotStartPlayback()
     }
 
     @After

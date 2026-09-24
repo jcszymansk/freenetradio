@@ -87,6 +87,21 @@ internal class ServiceBrowser {
 
     private val mPlayerEvents = PlayerEvents()
 
+    /**
+     * Connects to the service, and refuses to hand over one that the caller's first browse would
+     * start playing.
+     *
+     * Every class that reaches the service browses page 0 of something straight after connecting,
+     * and a page-0 browse is what posts `maybeCreateInitialPlaylist`. When the service holds an
+     * active station and the player's queue is empty, that path downloads the provider's new
+     * stations and plays whatever comes back, which is the one way this suite could put internet
+     * audio through the speakers. The service outlives every test class, so whether it is in that
+     * state is decided by whichever class ran before, and asking here is what turns an accident of
+     * ordering into a checked precondition.
+     *
+     * A refused connection is released before the refusal is thrown, so a teardown asking
+     * [isConnected] sees nothing to undo and the refusal stays the failure that is reported.
+     */
     fun connect() {
         val context = mInstrumentation.targetContext
         val holder = AtomicReference<ListenableFuture<MediaBrowser>>()
@@ -102,6 +117,38 @@ internal class ServiceBrowser {
         }
         mBrowser = holder.get().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         onMain { addListener(mPlayerEvents) }
+        if (canABrowseStartPlayback()) {
+            val activeStationId = activeStationId()
+            release()
+            throw AssertionError(
+                "The service holds active station $activeStationId and an empty queue, so the " +
+                    "first page-0 browse would download new stations and start playing them. A " +
+                    "class that ran before this one left it that way. A class that parks through " +
+                    "LocalStationsFixture fails its own teardown when it cannot park, so look " +
+                    "for that failure first."
+            )
+        }
+    }
+
+    /**
+     * @return whether a page-0 browse would make the service build a playlist and start playing,
+     *   which takes an empty queue and an active station. The service publishes the active
+     *   station's id in its session extras for exactly this question.
+     */
+    fun canABrowseStartPlayback(): Boolean {
+        return mediaItemCount() == 0 && holdsAnActiveStation()
+    }
+
+    /**
+     * @return the id the service publishes for its active station, which it has to hold one for.
+     */
+    fun activeStationId(): String {
+        return read { sessionExtras.getString(OpenRadioService.EXTRA_ACTIVE_STATION_ID) }
+            ?: throw AssertionError("The service publishes no active station")
+    }
+
+    private fun holdsAnActiveStation(): Boolean {
+        return read { sessionExtras.containsKey(OpenRadioService.EXTRA_ACTIVE_STATION_ID) }
     }
 
     fun release() {
@@ -431,6 +478,18 @@ internal class ServiceBrowser {
     companion object {
 
         const val TIMEOUT_SECONDS = 15L
+
+        /**
+         * The [connect] precondition, for a class that reaches the service through something
+         * other than a [ServiceBrowser]: an Activity, whose own browser browses the root as soon
+         * as it connects, or a `MediaResourcesManager` under test. Call it before that first
+         * connection.
+         */
+        fun assertABrowseCannotStartPlayback() {
+            val browser = ServiceBrowser()
+            browser.connect()
+            browser.release()
+        }
 
         /**
          * What a media item transition reports when the queue has run out of items.

@@ -131,7 +131,9 @@ class OpenRadioServiceBrowseTest {
     fun tearDown() {
         mStorages.clear()
         PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME).clear()
-        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        if (mBrowser.isConnected()) {
+            mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        }
         mBrowser.release()
     }
 

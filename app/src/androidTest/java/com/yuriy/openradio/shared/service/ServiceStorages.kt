@@ -62,8 +62,10 @@ internal class ServiceStorages(context: Context) {
      * Clearing the latest station matters beyond its own tests. The service reads it in `onCreate`
      * and keeps it as the active station; once it has one, a root browse posts
      * `maybeCreateInitialPlaylist`, which asks the provider for new stations. With no stored
-     * station `setActiveRS` rejects the invalid instance and that path stays shut. Its cached copy
-     * survives the wipe, which is TASK-027; nothing here ever stores one, so it stays invalid.
+     * station `setActiveRS` rejects the invalid instance and that path stays shut. The wipe drops
+     * the registry instance's cached copy along with the file, so a service created after it reads
+     * nothing. A service already running keeps the station it adopted, whatever is stored; that is
+     * what [ServiceBrowser.connect] checks for.
      */
     fun clear() {
         for (station in favorites.getAll()) {
@@ -93,7 +95,7 @@ internal class ServiceStorages(context: Context) {
 
     /**
      * A latest-station storage that has not cached a station yet, so `get` reads the file. The
-     * long-lived instances never re-read it once they have one, which is TASK-027.
+     * long-lived instances never re-read it once they have one.
      */
     fun freshLatest(): LatestRadioStationStorage {
         return LatestRadioStationStorage(mContextRef)
