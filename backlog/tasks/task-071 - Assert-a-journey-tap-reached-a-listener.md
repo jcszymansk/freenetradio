@@ -1,11 +1,11 @@
 ---
 id: TASK-071
 title: Assert a journey tap reached a listener
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 20:32'
-updated_date: '2026-09-24 09:17'
+updated_date: '2026-09-24 09:20'
 labels:
   - test
 milestone: m-0
@@ -25,8 +25,8 @@ NowPlayingView.assertStaysDown has no callers anywhere in app, common or common-
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A tap that no listener consumed fails the journey that made it, separately from a row that was never rendered
-- [ ] #2 NowPlayingView.assertStaysDown is deleted
+- [x] #1 A tap that no listener consumed fails the journey that made it, separately from a row that was never rendered
+- [x] #2 NowPlayingView.assertStaysDown is deleted
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -45,3 +45,9 @@ Audit of every androidTest performClick site: all row, bar and dialog targets us
 Sabotage runs (reverted): removing the foreground setOnClickListener in MobileMediaItemsAdapter failed all three offline gate cases with 'carries no click listener'; removing mAdapter?.listener assignment in MediaPresenterImpl failed all three with 'the adapter holds none'.
 Full :app:connectedDebugAndroidTest: 216 tests, BUILD SUCCESSFUL, networking disabled, app data cleared.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+BrowseListView.clickInRow now fails when performClick finds no click listener, separately from the no-rendered-row failure, and for row and settings taps also when the adapter holds no MediaItemsAdapter.Listener. NowPlayingView.tap and tapFavorite get the same performClick check. NowPlayingView.assertStaysDown is deleted. Verified by removing the row's setOnClickListener, then the adapter listener assignment: both made all three offline gate cases fail with the new messages. The full connectedDebugAndroidTest run passed (216 tests), and the codex review passed.
+<!-- SECTION:FINAL_SUMMARY:END -->
