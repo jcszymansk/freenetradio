@@ -105,4 +105,24 @@ class MediaItemLocalsListTest {
             presenter.deviceLocalsRequests
         )
     }
+
+    /**
+     * Unlike the provider nodes, the locals list is never left to the browse tree cache: a station
+     * added or edited on the device has to show up the next time the list is opened, restored or
+     * not, the same way the favorites list does.
+     */
+    @Test
+    fun aSavedInstanceStillReloadsTheLocals() {
+        val presenter = RecordingPresenter(mDeviceLocals = stations("first"))
+        val listener = RecordingCommandListener()
+
+        MediaItemLocalsList().execute(
+            listener.playbackStateListener,
+            dependencies(presenter, listener, isSavedInstance = true)
+        )
+
+        listener.awaitResult().assertMediaIds("first")
+        assertEquals(1, presenter.deviceLocalsRequests)
+        listener.assertNoError()
+    }
 }

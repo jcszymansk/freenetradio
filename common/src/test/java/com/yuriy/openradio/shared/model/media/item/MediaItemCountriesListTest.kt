@@ -93,5 +93,11 @@ class MediaItemCountriesListTest {
         assertEquals(1, listener.results)
         assertEquals(1, listener.errors)
         assertEquals(STRING_RESOURCE, listener.error)
+        assertEquals(
+            "The command did not ask the provider for the countries exactly once, so the error " +
+                "above says nothing about an empty country list",
+            1,
+            presenter.countriesRequests
+        )
     }
 }

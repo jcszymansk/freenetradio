@@ -1,9 +1,11 @@
 ---
 id: TASK-073
 title: Close the browse tests that a command skipping the provider would still pass
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-22 04:44'
+updated_date: '2026-09-24 04:53'
 labels:
   - test
 milestone: m-0
@@ -33,3 +35,13 @@ Note that assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber) proves no
 - [ ] #2 The restored-instance branch of MediaItemNewStations is covered the way the other six commands are
 - [ ] #3 MediaItemLocalsList has a test that fails if it starts answering a restored instance from the cache
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Pin the provider request in each of the five empty-node tests (categoriesRequests, countriesRequests, popularStationsRequests, newStationsRequests, categoryRequests with both pages), with a failure message saying why the empty result alone proves nothing.
+2. Add a MediaItemNewStations restored-instance test mirroring the popular chart one: presenter holds a station, assertAnsweredFromCacheBeforeReturning, zero newStationsRequests, no error.
+3. Add a MediaItemLocalsList saved-instance test mirroring aSavedInstanceStillReloadsTheFavorites, also pinning deviceLocalsRequests == 1.
+4. Verify by mutation (subagent): make each command skip the provider or answer a restored instance from the cache, confirm the matching test fails, restore.
+5. Run ./gradlew :common:testDebugUnitTest.
+<!-- SECTION:PLAN:END -->

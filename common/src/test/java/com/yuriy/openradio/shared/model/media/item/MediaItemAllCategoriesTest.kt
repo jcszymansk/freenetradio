@@ -75,6 +75,12 @@ class MediaItemAllCategoriesTest {
         assertEquals(1, listener.results)
         assertEquals(1, listener.errors)
         assertEquals(STRING_RESOURCE, listener.error)
+        assertEquals(
+            "The command did not ask the provider for the categories exactly once, so the error " +
+                "above says nothing about an empty catalogue",
+            1,
+            presenter.categoriesRequests
+        )
     }
 
     /**
