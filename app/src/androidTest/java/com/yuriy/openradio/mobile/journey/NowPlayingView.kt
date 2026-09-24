@@ -69,19 +69,6 @@ internal class NowPlayingView(private val mScenario: ActivityScenario<MainActivi
     }
 
     /**
-     * Asserts the bar is down and stays down, which is what a phone that is playing nothing
-     * shows. It is watched rather than read once, because a bar that is about to come up has not
-     * come up yet.
-     */
-    fun assertStaysDown(reason: String) {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(SETTLE_SECONDS)
-        while (System.nanoTime() < deadline) {
-            assertTrue("$reason " + describe(), !isVisible())
-            Thread.sleep(POLL_MILLIS)
-        }
-    }
-
-    /**
      * Clicks the bar, which is how a user pauses and resumes what they are listening to.
      */
     fun tap() {
@@ -159,11 +146,6 @@ internal class NowPlayingView(private val mScenario: ActivityScenario<MainActivi
          * metadata push that puts the bar up.
          */
         const val BAR_TIMEOUT_SECONDS = 20L
-
-        /**
-         * How long the bar is watched before "it stayed down" is believed.
-         */
-        const val SETTLE_SECONDS = 5L
 
         const val POLL_MILLIS = 50L
     }

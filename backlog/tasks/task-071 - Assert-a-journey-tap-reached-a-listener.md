@@ -1,9 +1,11 @@
 ---
 id: TASK-071
 title: Assert a journey tap reached a listener
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 20:32'
+updated_date: '2026-09-24 09:09'
 labels:
   - test
 milestone: m-0
