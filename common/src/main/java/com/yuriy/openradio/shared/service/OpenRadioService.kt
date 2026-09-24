@@ -224,6 +224,7 @@ class OpenRadioService : MediaLibraryService() {
                 .build()
         )
 
+        publishActiveStation()
         updateFavoriteState()
     }
 
@@ -270,6 +271,25 @@ class OpenRadioService : MediaLibraryService() {
         mNoisyAudioStreamReceiver.unregister(applicationContext)
         mPresenter.stopNetworkMonitor(applicationContext)
         mPresenter.getSleepTimerModel().removeSleepTimerListener(mSleepTimerListener)
+    }
+
+    /**
+     * Tells every controller the id of the station the service holds as active, under
+     * [EXTRA_ACTIVE_STATION_ID] in the session extras. Nothing is published while it holds none.
+     *
+     * The active station decides what a page-0 browse does when the queue is empty: with one, the
+     * service builds a playlist around it and starts playing. That state is otherwise invisible
+     * from outside the service, and a controller that is about to browse may need to know it.
+     */
+    @MainThread
+    private fun publishActiveStation() {
+        if (mActiveRS.isInvalid()) {
+            return
+        }
+        AppLogger.d("$TAG publish active station ${mActiveRS.id}")
+        mSession.setSessionExtras(
+            Bundle().apply { putString(EXTRA_ACTIVE_STATION_ID, mActiveRS.id) }
+        )
     }
 
     private fun updateFavoriteState() {
@@ -540,6 +560,7 @@ class OpenRadioService : MediaLibraryService() {
                     mPresenter.setLastRadioStation(it)
                     mUiScope.launch {
                         // Update custom commands:
+                        publishActiveStation()
                         updateFavoriteState()
                     }
                 }
@@ -1095,6 +1116,11 @@ class OpenRadioService : MediaLibraryService() {
         const val CMD_MASTER_VOLUME_CHANGED =
             "com.github.jcszymansk.freenetradio.COMMAND.MASTER_VOLUME_CHANGED"
         const val CMD_UPDATE_TREE = "com.github.jcszymansk.freenetradio.COMMAND.UPDATE_TREE"
+
+        /**
+         * Session extras key holding the id of the service's active station, absent while it has none.
+         */
+        const val EXTRA_ACTIVE_STATION_ID = "com.github.jcszymansk.freenetradio.EXTRA.ACTIVE_STATION_ID"
 
         private lateinit var TAG: String
 

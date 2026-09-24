@@ -23,7 +23,6 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaBrowser
 import androidx.media3.session.MediaLibraryService.LibraryParams
@@ -35,8 +34,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
-import com.yuriy.openradio.shared.model.media.RadioStation
-import com.yuriy.openradio.shared.model.media.isInvalid
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -121,60 +118,37 @@ internal class ServiceBrowser {
         mBrowser = holder.get().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         onMain { addListener(mPlayerEvents) }
         if (canABrowseStartPlayback()) {
-            val favoriteButtons = customLayout()
-            val stored = storedStation()
+            val activeStationId = activeStationId()
             release()
             throw AssertionError(
-                "The service looks to hold an active station and has an empty queue, so the " +
+                "The service holds active station $activeStationId and an empty queue, so the " +
                     "first page-0 browse would download new stations and start playing them. A " +
                     "class that ran before this one left it that way. A class that parks through " +
                     "LocalStationsFixture fails its own teardown when it cannot park, so look " +
-                    "for that failure first. Stored station ${stored.id}, custom layout " +
-                    "$favoriteButtons"
+                    "for that failure first."
             )
         }
     }
 
     /**
-     * @return whether a page-0 browse would make the service build a playlist and start playing.
-     *
-     * That takes an empty queue and an active station. The active station is private to the
-     * service, so it is read off two things that each follow from it, and that each have one
-     * other cause the other one rules out:
-     *
-     * ```
-     *                         favorite button set   station stored
-     *   active station             always            always, once
-     *   favorite command            yes                  no
-     *   station stored directly     no                   yes
-     * ```
-     *
-     * The service sets its favorite button whenever it adopts an active station, in `onCreate` and
-     * on playback, and never clears the layout; the favorite commands set it too, whatever is
-     * playing. It adopts a station either by reading the stored one in `onCreate` or by playing
-     * one, and playing one stores it; a test writing the store itself is the other way to get a
-     * stored station.
-     *
-     * "Once" is the gap. The store can be emptied while the service keeps the station it adopted,
-     * and every teardown here does that, after parking. A service whose queue and store were both
-     * emptied after it adopted a station is therefore passed. Leaving that behind takes a class
-     * that empties both itself, or a teardown whose [LocalStationsFixture.parkThePlayer] failed
-     * first and said so.
+     * @return whether a page-0 browse would make the service build a playlist and start playing,
+     *   which takes an empty queue and an active station. The service publishes the active
+     *   station's id in its session extras for exactly this question.
      */
     fun canABrowseStartPlayback(): Boolean {
-        return mediaItemCount() == 0 && customLayout().isNotEmpty() && storedStation().isInvalid().not()
-    }
-
-    private fun customLayout(): List<CommandButton> {
-        return read { customLayout }
+        return mediaItemCount() == 0 && holdsAnActiveStation()
     }
 
     /**
-     * The station the registry's storage answers with, which is the instance the service reads,
-     * cache included. A storage built here would read the file and miss that cache.
+     * @return the id the service publishes for its active station, which it has to hold one for.
      */
-    private fun storedStation(): RadioStation {
-        return ServiceStorages(mInstrumentation.targetContext).latest.get()
+    fun activeStationId(): String {
+        return read { sessionExtras.getString(OpenRadioService.EXTRA_ACTIVE_STATION_ID) }
+            ?: throw AssertionError("The service publishes no active station")
+    }
+
+    private fun holdsAnActiveStation(): Boolean {
+        return read { sessionExtras.containsKey(OpenRadioService.EXTRA_ACTIVE_STATION_ID) }
     }
 
     fun release() {

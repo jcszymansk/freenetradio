@@ -20,6 +20,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.isInvalid
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -88,8 +90,23 @@ class InitialPlaylistGuardTest {
     }
 
     @Test
+    fun theServicePublishesTheStationItPlays() {
+        val station = playAStation()
+
+        mBrowser.awaitPlayback("the service to publish ${station.id} as its active station") {
+            mBrowser.activeStationId() == station.id
+        }
+    }
+
+    /**
+     * The stored station is cleared first because every class clears it before connecting, and a
+     * running service keeps the station it adopted whatever the store says.
+     */
+    @Test
     fun connectRefusesAnActiveStationWithAnEmptyQueue() {
         armTheService()
+        mStorages.latest.clear()
+        assertTrue(mStorages.freshLatest().get().isInvalid())
 
         val other = ServiceBrowser()
         val refusal = assertThrows(AssertionError::class.java) { other.connect() }
@@ -163,11 +180,12 @@ class InitialPlaylistGuardTest {
         }
     }
 
-    private fun playAStation() {
+    private fun playAStation(): RadioStation {
         val station = mStations.seed(mAudio.wav(WAV_NAME)).first()
         mBrowser.setMediaItem(mStations.item(station))
         mBrowser.prepareAndPlay()
         mBrowser.awaitPlaying()
+        return station
     }
 
     private companion object {

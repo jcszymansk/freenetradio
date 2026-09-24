@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-09-21 17:45'
-updated_date: '2026-09-24 05:56'
+updated_date: '2026-09-24 08:33'
 labels:
   - test
 milestone: m-0
@@ -47,4 +47,6 @@ The service's active station is private. The guard reads two signals that each f
 Scope: AC1 names six classes, but MediaResourcesManagerTest, AddStationDialogTest and EditStationDialogTest also browse page 0 (an Activity's own browser browses the root on connect), so they assert the precondition too. The assertion is 'queue not empty, or no active station' rather than 'queue not empty', because a class run alone in a fresh process has an empty queue and must still pass (AC3).
 
 The five service classes skip their teardown CMD_UPDATE_TREE when the browser is not connected, because on-device the unguarded call's 'Browser is not connected' was the failure reported in place of the setup refusal.
+
+Superseded the two-signal guard after review: every class clears the latest-station store before connecting and every teardown clears it after parking, so the store signal was always empty at connect and the connect guard could not fire across classes. With the user's approval the service now publishes its active station id in the session extras (OpenRadioService.EXTRA_ACTIVE_STATION_ID, set in onCreate and on playback), which a controller receives on connect. The guard reads that, so it is exact: no favorite-command false positive and no blind spot after a store clear. This is a production seam, added because no test-only signal could answer the question.
 <!-- SECTION:NOTES:END -->
