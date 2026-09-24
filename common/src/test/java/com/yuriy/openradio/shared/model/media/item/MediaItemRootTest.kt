@@ -155,7 +155,17 @@ class MediaItemRootTest {
             dependencies(presenter, listener)
         )
 
-        listener.awaitResult()
+        // The loops below walk whatever the root offered, so they assert only as much as it
+        // returned; pinning the entries first makes a short root fail here rather than pass there.
+        listener.awaitResult().assertMediaIds(
+            MediaId.MEDIA_ID_FAVORITES_LIST,
+            MediaId.MEDIA_ID_NEW_STATIONS,
+            MediaId.MEDIA_ID_POPULAR_STATIONS,
+            MediaId.MEDIA_ID_ALL_CATEGORIES,
+            MediaId.MEDIA_ID_COUNTRIES_LIST,
+            MediaId.MEDIA_ID_COUNTRY_STATIONS,
+            MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
+        )
         for (item in listener.items) {
             val metadata = item.mediaMetadata
             assertTrue("${item.mediaId} is not browsable", metadata.isBrowsable == true)

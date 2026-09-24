@@ -1,9 +1,11 @@
 ---
 id: TASK-070
 title: Pin the entries the phone root test walks
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 20:32'
+updated_date: '2026-09-24 17:37'
 labels:
   - test
 milestone: m-0
@@ -24,3 +26,11 @@ The phone root is built by MediaItemRoot and its expected entries are already sp
 - [ ] #1 everyRootEntryIsBrowsableAndCarriesAnIcon asserts which entries it walked before walking them
 - [ ] #2 The test fails when the root comes back short, not only when it comes back empty
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Pin the full phone root with assertMediaIds (favorites, new, popular, categories, countries, country, locals) right after awaitResult, before the loops walk listener.items.
+2. Keep the loops as the per-entry checks of browsability, type, icon and title.
+3. Prove it by mutation: drop entries from MediaItemRoot, confirm the new test fails and the old one passed.
+<!-- SECTION:PLAN:END -->
