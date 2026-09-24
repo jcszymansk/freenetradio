@@ -73,19 +73,32 @@ internal class NowPlayingView(private val mScenario: ActivityScenario<MainActivi
      */
     fun tap() {
         assertTrue("The now-playing bar is down, so there is nothing to tap. " + describe(), isVisible())
-        mScenario.onActivity { activity ->
+        val consumed = read { activity ->
             activity.findViewById<View>(R.id.current_radio_station_view).performClick()
         }
+        assertTrue(
+            "The now-playing bar carries no click listener, so the tap reached nothing. " + describe(),
+            consumed
+        )
     }
 
     /**
      * Clicks the favorite box on the bar, which marks the station that is playing.
+     *
+     * The Activity attaches the box's listener only on a metadata push that arrives while the
+     * presenter knows a current item, so a bar that is up can still carry a box nothing listens
+     * to.
      */
     fun tapFavorite() {
         assertTrue("The now-playing bar is down, so its favorite box is not on screen. " + describe(), isVisible())
-        mScenario.onActivity { activity ->
+        val consumed = read { activity ->
             activity.findViewById<CheckBox>(R.id.crs_favorite_check_view).performClick()
         }
+        assertTrue(
+            "The favorite box on the now-playing bar carries no click listener, so the tap " +
+                "reached nothing. " + describe(),
+            consumed
+        )
     }
 
     fun isVisible(): Boolean {

@@ -27,10 +27,12 @@ import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.view.list.MediaItemsAdapter
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 
 /**
  * The browse list an [ActivityScenario] is showing, read the way a user reads it.
@@ -131,7 +133,7 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      * Taps the row for [mediaId], on the view that carries the click listener a finger lands on.
      */
     fun tapRow(mediaId: String) {
-        clickInRow(mediaId, R.id.foreground_view)
+        clickInRow(mediaId, R.id.foreground_view, "foreground", forwardsToAdapter = true)
     }
 
     /**
@@ -142,7 +144,7 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      * the row either way, so its listener and everything it reaches are the real ones.
      */
     fun tapRowSettings(mediaId: String) {
-        clickInRow(mediaId, R.id.settings_btn_view)
+        clickInRow(mediaId, R.id.settings_btn_view, "settings button", forwardsToAdapter = true)
     }
 
     /**
@@ -153,7 +155,7 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      * the command. Nothing about the toggle is assembled here.
      */
     fun tapRowFavorite(mediaId: String) {
-        clickInRow(mediaId, R.id.favorite_btn_view)
+        clickInRow(mediaId, R.id.favorite_btn_view, "favorite box", forwardsToAdapter = false)
     }
 
     /**
@@ -198,9 +200,51 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
         return inRow(mediaId) { _, item -> item }
     }
 
-    private fun clickInRow(mediaId: String, viewId: Int) {
-        val clicked = inRow(mediaId) { row, _ -> row.findViewById<View>(viewId).performClick() }
-        assertNotNull("No rendered row carries the media id $mediaId. " + describe(), clicked)
+    /**
+     * Clicks the view [viewId] inside the row for [mediaId] and fails unless the click reached
+     * something that acts on it.
+     *
+     * `performClick` answers false when the view carries no click listener, and the adapter
+     * attaches every one of these through a safe call, so a bind that skipped it leaves a tap
+     * that does nothing. A journey asserting that a tap changed nothing would read that as the
+     * behaviour it pins down.
+     *
+     * The row and its settings button do not act themselves either: they hand the item to the
+     * adapter's [MediaItemsAdapter.Listener], again through a safe call, so for those
+     * [forwardsToAdapter] makes a missing adapter listener fail the same way.
+     *
+     * @param control names the view in a failure.
+     */
+    private fun clickInRow(mediaId: String, viewId: Int, control: String, forwardsToAdapter: Boolean) {
+        val adapterListens = adapterHasListener()
+        val consumed = inRow(mediaId) { row, _ -> row.findViewById<View>(viewId).performClick() }
+        assertNotNull("No rendered row carries the media id $mediaId. " + describe(), consumed)
+        assertTrue(
+            "The $control of the row $mediaId carries no click listener, so the tap reached " +
+                "nothing. " + describe(),
+            consumed == true
+        )
+        if (forwardsToAdapter) {
+            assertTrue(
+                "The $control of the row $mediaId hands its tap to the adapter's listener, and " +
+                    "the adapter holds none, so the tap reached nothing. " + describe(),
+                adapterListens
+            )
+        }
+    }
+
+    /**
+     * @return whether the browse list's adapter holds the listener its rows hand their taps to.
+     *   An Activity without a browse list answers false, which fails any tap the same way.
+     */
+    private fun adapterHasListener(): Boolean {
+        val result = AtomicBoolean(false)
+        mScenario.onActivity { activity ->
+            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
+            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            result.set(adapter.listener != null)
+        }
+        return result.get()
     }
 
     /**
