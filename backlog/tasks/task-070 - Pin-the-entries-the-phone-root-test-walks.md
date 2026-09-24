@@ -1,11 +1,11 @@
 ---
 id: TASK-070
 title: Pin the entries the phone root test walks
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 20:32'
-updated_date: '2026-09-24 17:37'
+updated_date: '2026-09-24 17:39'
 labels:
   - test
 milestone: m-0
@@ -23,8 +23,8 @@ The phone root is built by MediaItemRoot and its expected entries are already sp
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 everyRootEntryIsBrowsableAndCarriesAnIcon asserts which entries it walked before walking them
-- [ ] #2 The test fails when the root comes back short, not only when it comes back empty
+- [x] #1 everyRootEntryIsBrowsableAndCarriesAnIcon asserts which entries it walked before walking them
+- [x] #2 The test fails when the root comes back short, not only when it comes back empty
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -34,3 +34,15 @@ The phone root is built by MediaItemRoot and its expected entries are already sp
 2. Keep the loops as the per-entry checks of browsability, type, icon and title.
 3. Prove it by mutation: drop entries from MediaItemRoot, confirm the new test fails and the old one passed.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Mutation check on MediaItemRoot, one entry dropped at a time: without the local-stations entry the old test passed and the new one fails; without new-stations or favorites the new one fails too, each on the assertMediaIds list. Full JVM suite (./gradlew test) passes.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+everyRootEntryIsBrowsableAndCarriesAnIcon now pins the full ordered phone root (favorites, new, popular, categories, countries, country, locals) with assertMediaIds before the loops walk it, so a short root fails on the list instead of shrinking the loops. Verified by dropping entries from MediaItemRoot: the old test missed a missing local-stations entry, the new one fails for all three removals. ./gradlew test green.
+<!-- SECTION:FINAL_SUMMARY:END -->
