@@ -20,6 +20,7 @@ import android.content.Context
 import android.view.View
 import android.widget.EditText
 import android.widget.Spinner
+import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -30,6 +31,7 @@ import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
 import com.yuriy.openradio.shared.model.storage.makeStation
 import com.yuriy.openradio.shared.permission.grantImageReadPermission
+import com.yuriy.openradio.shared.service.ServiceBrowser
 import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
@@ -56,6 +58,7 @@ import java.lang.ref.WeakReference
  * [DeviceLocalsStorage] behind it are the only collaborators that load anything. The bundle is the
  * one `MediaPresenterImpl` builds.
  */
+@UnstableApi
 @RunWith(AndroidJUnit4::class)
 class EditStationDialogTest {
 
@@ -74,6 +77,7 @@ class EditStationDialogTest {
         mLocals = DeviceLocalsStorage(contextRef, mFavorites, LatestRadioStationStorage(contextRef))
         mLocals.clear()
         mFavorites.clear()
+        ServiceBrowser.assertABrowseCannotStartPlayback()
     }
 
     @After

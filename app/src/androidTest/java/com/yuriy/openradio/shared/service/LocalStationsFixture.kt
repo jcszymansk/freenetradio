@@ -16,6 +16,7 @@
 
 package com.yuriy.openradio.shared.service
 
+import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import com.yuriy.openradio.shared.model.media.MediaId
@@ -92,20 +93,36 @@ internal class LocalStationsFixture(
      * teardown after a setup that failed before [seed] still runs, and what is playing then is
      * whatever an earlier class left, which is exactly the state that must not reach the next one.
      * All an unseeded fixture cannot do is put a queue back, because it has no item to put there.
+     * That is harmless while the service holds no active station, and it fails the teardown when
+     * the service does, because the next class's first browse would then start the path this
+     * exists to shut. [ServiceBrowser.connect] refuses that state too, but only once the next
+     * class has started, and the class that caused it is the one that should say so.
      *
-     * A browser that was never connected is the one case where nothing can be done at all, and it
-     * has to be asked rather than assumed: reaching it would answer with "Browser is not
-     * connected" in place of whatever stopped the setup.
+     * A browser that is not connected either never connected or was refused, and in both cases
+     * this class never reached the player, so there is nothing of its own to park. That is logged
+     * rather than thrown: throwing would bury whatever stopped the setup.
      */
     fun parkThePlayer() {
         if (mBrowser.isConnected().not()) {
+            Log.i(TAG, "Not parking the player: this class never reached it")
             return
         }
         mBrowser.stop()
         if (mBrowser.mediaItemCount() != 0) {
             return
         }
-        val item = mItems.firstOrNull() ?: return
+        val item = mItems.firstOrNull()
+        if (item == null) {
+            if (mBrowser.canABrowseStartPlayback()) {
+                throw AssertionError(
+                    "Could not park the player. Its queue is empty and the service holds an " +
+                        "active station, so the next page-0 browse would download new stations " +
+                        "and play them, and this fixture seeded nothing to put back in the queue."
+                )
+            }
+            Log.i(TAG, "Left the queue empty: the service holds no active station")
+            return
+        }
         mBrowser.setMediaItem(item)
         mBrowser.awaitPlayback("the player to hold a queue again") {
             mBrowser.mediaItemCount() != 0
@@ -129,6 +146,8 @@ internal class LocalStationsFixture(
     }
 
     private companion object {
+
+        const val TAG = "LocalStationsFixture"
 
         /**
          * Well clear of the ids

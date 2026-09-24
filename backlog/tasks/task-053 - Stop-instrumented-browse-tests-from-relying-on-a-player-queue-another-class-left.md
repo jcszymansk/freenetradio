@@ -3,9 +3,11 @@ id: TASK-053
 title: >-
   Stop instrumented browse tests from relying on a player queue another class
   left
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 17:45'
+updated_date: '2026-09-24 05:24'
 labels:
   - test
 milestone: m-0

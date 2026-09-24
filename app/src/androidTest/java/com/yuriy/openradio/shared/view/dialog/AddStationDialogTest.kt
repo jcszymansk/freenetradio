@@ -1,6 +1,7 @@
 package com.yuriy.openradio.shared.view.dialog
 
 import android.os.Bundle
+import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -11,6 +12,7 @@ import com.yuriy.openradio.shared.model.media.RadioStationToAdd
 import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
 import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
 import com.yuriy.openradio.shared.service.OpenRadioService
+import com.yuriy.openradio.shared.service.ServiceBrowser
 import org.junit.After
 import org.junit.Before
 import org.junit.Assert.assertEquals
@@ -21,6 +23,7 @@ import java.lang.ref.WeakReference
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+@UnstableApi
 @RunWith(AndroidJUnit4::class)
 class AddStationDialogTest {
 
@@ -35,6 +38,7 @@ class AddStationDialogTest {
         sleepTimerStorage.clear()
         latestRadioStationStorage = LatestRadioStationStorage(contextRef)
         latestRadioStationStorage.clear()
+        ServiceBrowser.assertABrowseCannotStartPlayback()
     }
 
     @After

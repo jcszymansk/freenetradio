@@ -23,6 +23,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaBrowser
 import androidx.media3.session.MediaLibraryService.LibraryParams
@@ -87,6 +88,21 @@ internal class ServiceBrowser {
 
     private val mPlayerEvents = PlayerEvents()
 
+    /**
+     * Connects to the service, and refuses to hand over one that the caller's first browse would
+     * start playing.
+     *
+     * Every class that reaches the service browses page 0 of something straight after connecting,
+     * and a page-0 browse is what posts `maybeCreateInitialPlaylist`. When the service holds an
+     * active station and the player's queue is empty, that path downloads the provider's new
+     * stations and plays whatever comes back, which is the one way this suite could put internet
+     * audio through the speakers. The service outlives every test class, so whether it is in that
+     * state is decided by whichever class ran before, and asking here is what turns an accident of
+     * ordering into a checked precondition.
+     *
+     * A refused connection is released before the refusal is thrown, so a teardown asking
+     * [isConnected] sees nothing to undo and the refusal stays the failure that is reported.
+     */
     fun connect() {
         val context = mInstrumentation.targetContext
         val holder = AtomicReference<ListenableFuture<MediaBrowser>>()
@@ -102,6 +118,38 @@ internal class ServiceBrowser {
         }
         mBrowser = holder.get().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         onMain { addListener(mPlayerEvents) }
+        if (canABrowseStartPlayback()) {
+            val favoriteButtons = customLayout()
+            release()
+            throw AssertionError(
+                "The service holds an active station and an empty queue, so the first page-0 " +
+                    "browse would download new stations and start playing them. A class that " +
+                    "ran before this one left it that way. A class that parks through " +
+                    "LocalStationsFixture fails its own teardown when it cannot park, so look " +
+                    "for that failure first. Custom layout $favoriteButtons"
+            )
+        }
+    }
+
+    /**
+     * @return whether a page-0 browse would make the service build a playlist and start playing.
+     *
+     * That takes an empty queue and an active station. The active station is private to the
+     * service, so it is read off the session's custom layout: the service sets its favorite button
+     * whenever it adopts an active station, in `onCreate` and on playback, and never clears the
+     * layout, while nothing ever makes the active station invalid again. An empty layout therefore
+     * means no active station.
+     *
+     * The converse does not hold, because the favorite commands set the layout on their own, so a
+     * `true` here can be a service that is not actually armed. That is the side to err on: a
+     * refusal the caller did not need costs one red run, and the other side costs a stream.
+     */
+    fun canABrowseStartPlayback(): Boolean {
+        return mediaItemCount() == 0 && customLayout().isNotEmpty()
+    }
+
+    private fun customLayout(): List<CommandButton> {
+        return read { customLayout }
     }
 
     fun release() {
@@ -431,6 +479,18 @@ internal class ServiceBrowser {
     companion object {
 
         const val TIMEOUT_SECONDS = 15L
+
+        /**
+         * The [connect] precondition, for a class that reaches the service through something
+         * other than a [ServiceBrowser]: an Activity, whose own browser browses the root as soon
+         * as it connects, or a `MediaResourcesManager` under test. Call it before that first
+         * connection.
+         */
+        fun assertABrowseCannotStartPlayback() {
+            val browser = ServiceBrowser()
+            browser.connect()
+            browser.release()
+        }
 
         /**
          * What a media item transition reports when the queue has run out of items.
