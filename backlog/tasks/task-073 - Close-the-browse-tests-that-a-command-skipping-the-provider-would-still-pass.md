@@ -1,11 +1,11 @@
 ---
 id: TASK-073
 title: Close the browse tests that a command skipping the provider would still pass
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-22 04:44'
-updated_date: '2026-09-24 04:53'
+updated_date: '2026-09-24 04:58'
 labels:
   - test
 milestone: m-0
@@ -31,9 +31,9 @@ Note that assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber) proves no
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Each of the five empty-node tests asserts what the command asked the presenter for, not only the error it reported
-- [ ] #2 The restored-instance branch of MediaItemNewStations is covered the way the other six commands are
-- [ ] #3 MediaItemLocalsList has a test that fails if it starts answering a restored instance from the cache
+- [x] #1 Each of the five empty-node tests asserts what the command asked the presenter for, not only the error it reported
+- [x] #2 The restored-instance branch of MediaItemNewStations is covered the way the other six commands are
+- [x] #3 MediaItemLocalsList has a test that fails if it starts answering a restored instance from the cache
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -45,3 +45,15 @@ Note that assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber) proves no
 4. Verify by mutation (subagent): make each command skip the provider or answer a restored instance from the cache, confirm the matching test fails, restore.
 5. Run ./gradlew :common:testDebugUnitTest.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Mutation check: each of seven mutations was applied alone and then reverted. Five made a command skip its provider (categories, countries, popular, new stations, next category page), one deleted the NewStations restored-instance early return, and one added a restored-instance early return to LocalsList. Each one failed its target test, so none survived. In reachingTheEndOfTheSecondPageReportsThatNothingMoreArrived, the pageNumber == FIRST_PAGE_INDEX assertion was dropped because any empty delivery satisfies it. The categoryRequests assertion on both pages replaces it.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Each of the five empty-node tests now asserts the provider request it depends on, with a failure message that says why the error alone proves nothing. Added a restored-instance test for MediaItemNewStations and a saved-instance reload test for MediaItemLocalsList. Verified by mutation: all 7 production mutations fail their tests. ./gradlew test passes.
+<!-- SECTION:FINAL_SUMMARY:END -->
