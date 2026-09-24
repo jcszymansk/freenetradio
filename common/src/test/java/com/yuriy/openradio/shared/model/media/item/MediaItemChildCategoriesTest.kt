@@ -103,7 +103,12 @@ class MediaItemChildCategoriesTest {
         second.awaitResult().awaitError()
         assertEquals(STRING_RESOURCE, second.error)
         assertTrue(second.items.isEmpty())
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX, second.pageNumber)
+        assertEquals(
+            "The command did not ask the category for its second page, so the error above says " +
+                "nothing about a page that came back empty",
+            listOf("rock" to UrlLayer.FIRST_PAGE_INDEX, "rock" to UrlLayer.FIRST_PAGE_INDEX + 1),
+            presenter.categoryRequests
+        )
     }
 
     @Test

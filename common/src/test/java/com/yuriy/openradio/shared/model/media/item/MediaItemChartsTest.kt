@@ -82,6 +82,12 @@ class MediaItemChartsTest {
         listener.awaitResult().awaitError()
         assertTrue(listener.items.isEmpty())
         assertEquals(STRING_RESOURCE, listener.error)
+        assertEquals(
+            "The command did not ask the provider for the popular chart exactly once, so the " +
+                "error above says nothing about an empty chart",
+            1,
+            presenter.popularStationsRequests
+        )
     }
 
     @Test
@@ -112,6 +118,12 @@ class MediaItemChartsTest {
         listener.awaitResult().awaitError()
         assertTrue(listener.items.isEmpty())
         assertEquals(STRING_RESOURCE, listener.error)
+        assertEquals(
+            "The command did not ask the provider for the new stations chart exactly once, so " +
+                "the error above says nothing about an empty chart",
+            1,
+            presenter.newStationsRequests
+        )
     }
 
     /**
@@ -135,6 +147,30 @@ class MediaItemChartsTest {
 
         listener.assertAnsweredFromCacheBeforeReturning()
         assertEquals(0, presenter.popularStationsRequests)
+        listener.assertNoError()
+    }
+
+    /**
+     * The presenter is given a station it would happily hand over, so the chart arriving empty is
+     * a decision the command made rather than an absence of data.
+     */
+    @Test
+    fun aRestoredInstanceLeavesTheNewStationsToTheCacheWithoutAskingTheProvider() {
+        val presenter = RecordingPresenter(mNewStations = stations("first"))
+        val listener = RecordingCommandListener()
+
+        MediaItemNewStations().execute(
+            listener.playbackStateListener,
+            dependencies(
+                presenter,
+                listener,
+                parentId = MediaId.MEDIA_ID_NEW_STATIONS,
+                isSavedInstance = true
+            )
+        )
+
+        listener.assertAnsweredFromCacheBeforeReturning()
+        assertEquals(0, presenter.newStationsRequests)
         listener.assertNoError()
     }
 }
