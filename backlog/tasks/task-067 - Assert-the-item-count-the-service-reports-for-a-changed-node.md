@@ -1,9 +1,11 @@
 ---
 id: TASK-067
 title: Assert the item count the service reports for a changed node
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 19:59'
+updated_date: '2026-09-24 17:56'
 labels:
   - test
 milestone: m-0
@@ -25,3 +27,11 @@ The subscription tests already prove that the right parent ids are notified, so 
 - [ ] #1 A browse node refresh asserts the item count the service reports, not only that the node was notified
 - [ ] #2 The assertion fails if the count goes back to a page size
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. In OpenRadioServiceBrowseTest.subscribesAndUnsubscribesRootAndChildNodes, assert the itemCount of the ROOT and LOCALS pushes after CMD_UPDATE_TREE equals Int.MAX_VALUE, Media3's documented 'unknown' count (the service invalidates the node and cannot know its size before the rebuild).
+2. Exact equality fails for 250 (PAGE_SIZE), 1, or any other finite value.
+3. Compile the androidTest APK and run the class on an offline emulator; mutate the service to PAGE_SIZE and confirm the test goes red.
+<!-- SECTION:PLAN:END -->

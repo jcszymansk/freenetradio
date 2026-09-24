@@ -242,14 +242,18 @@ class OpenRadioServiceBrowseTest {
         // A live subscription is what turns a store change into a push, so prove one arrives.
         mBrowser.forgetNotifications()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
-        assertEquals(
-            MediaId.MEDIA_ID_ROOT,
-            mBrowser.awaitChildrenChanged(MediaId.MEDIA_ID_ROOT).parentId
-        )
-        assertEquals(
-            MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
-            mBrowser.awaitChildrenChanged(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST).parentId
-        )
+        for (node in listOf(MediaId.MEDIA_ID_ROOT, MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)) {
+            val change = mBrowser.awaitChildrenChanged(node)
+            assertEquals(node, change.parentId)
+            // The push invalidates the node before it is rebuilt, so the service cannot know its
+            // size and has to send Media3's "unknown". Media3 documents a finite count as the
+            // node's size, and a browser that trusts a page size under-fetches a larger node.
+            assertEquals(
+                "The push for $node reported a child count instead of Media3's unknown",
+                Int.MAX_VALUE,
+                change.itemCount
+            )
+        }
 
         for (node in nodes) {
             assertEquals(
