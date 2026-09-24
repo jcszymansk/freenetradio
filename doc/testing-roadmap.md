@@ -231,8 +231,9 @@ but whose test needs a device means the test is misplaced, not the rule: that is
 Automated Media3 service tests can cover the protocol shared by the phone and Android Auto, but not the complete
 projected UI. Controller classification, Desktop Head Unit and real head-unit rendering and navigation,
 steering-wheel and media-button behavior, voice search, real Bluetooth disconnection, audio interruption, and
-wired and wireless reconnection all stay manual, and their result has to be recorded for the current build
-before the Phase 7 gate can pass.
+wired reconnection all stay manual, and their result has to be recorded for the current build before the
+Phase 7 gate can pass. Wireless reconnection is left out because the car available for these checks does not
+support wireless Android Auto.
 
 Android's guidance specifically calls for service startup before an Activity, force-stop and clear-data
 scenarios, the Media Controller Test app, Desktop Head Unit testing, and real-vehicle testing.
