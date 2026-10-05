@@ -22,7 +22,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.annotation.MainThread
-import androidx.annotation.UiThread
 import androidx.media.utils.MediaConstants
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -71,7 +70,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import java.util.TreeSet
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
@@ -107,6 +105,11 @@ class OpenRadioService : MediaLibraryService() {
      * Track selected Radio Station.
      */
     private var mActiveRS = RadioStation.INVALID_INSTANCE
+
+    /**
+     * How far the current play request has got with a station url the player could not read.
+     */
+    private var mPlaylistFallback: PlaylistFallback = PlaylistFallback.Idle
     private val mUiScope: CoroutineScope
     private val mScope: CoroutineScope
     private val mCommandScope: CoroutineScope
@@ -305,57 +308,83 @@ class OpenRadioService : MediaLibraryService() {
         mSession.notifyChildrenChanged(mediaId, Int.MAX_VALUE, null)
     }
 
-    /**
-     * @param exception
-     */
+    @MainThread
     private fun onHandledError(exception: PlaybackException) {
         AppLogger.e("$TAG player handled exception", exception)
-        val throwable = exception.cause
-        if (throwable is UnrecognizedInputFormatException) {
-            handleUnrecognizedInputFormatException()
+        if (exception.cause !is UnrecognizedInputFormatException) {
+            return
         }
+        val mediaId = mPlayer.currentMediaItem?.mediaId
+        if (mediaId.isNullOrEmpty()) {
+            AppLogger.e("$TAG unrecognized stream without a current media item")
+            mPlayer.stop()
+            return
+        }
+        advancePlaylistFallback(mPlaylistFallback.onUnrecognized(mediaId))
     }
 
-    /**
-     * Handles exception related to unrecognized url. Try to parse url deeply to extract actual stream one from
-     * playlist.
-     */
-    private fun handleUnrecognizedInputFormatException() {
-        val playlistUrl = mActiveRS.getStreamUrlFixed()
-        AppLogger.i("UnrecognizedInputFormat:$playlistUrl")
-        handleStopRequest()
-        mScope.launch(Dispatchers.IO) {
-            withTimeout(API_CALL_TIMEOUT_MS) {
-                if (playlistUrl.isEmpty()) {
-                    AppLogger.e("HandleUnrecognizedInputFormatException with empty URL")
-                    return@withTimeout
-                }
-                val urls = NetUtils.extractUrlsFromPlaylist(applicationContext, mDownloader, playlistUrl)
-                mUiScope.launch {
-                    // Silently clear last references and try to restart:
-                    handlePlayListUrlsExtracted(urls)
-                }
+    @MainThread
+    private fun advancePlaylistFallback(step: PlaylistFallback.Step) {
+        AppLogger.i("$TAG playlist fallback $mPlaylistFallback -> ${step.next}: ${step.action}")
+        mPlaylistFallback = step.next
+        when (val action = step.action) {
+            PlaylistFallback.Action.Ignore -> Unit
+            is PlaylistFallback.Action.Resolve -> resolvePlaylist(action.mediaId)
+            is PlaylistFallback.Action.Play -> playResolvedStream(action.mediaId, action.streamUrl)
+            is PlaylistFallback.Action.GiveUp -> {
+                mPlayer.stop()
+                mPlayer.reportUnplayableStream()
             }
         }
     }
 
-    @UiThread
-    private fun handlePlayListUrlsExtracted(urls: Array<String>) {
-        if (urls.isEmpty()) {
-            handleStopRequest()
+    /**
+     * Reads the station url of [mediaId] as a playlist, because the player could not recognise
+     * what it serves as a stream.
+     */
+    @MainThread
+    private fun resolvePlaylist(mediaId: String) {
+        mPlayer.stop()
+        val playlistUrl = getStationUrl(mediaId)
+        if (playlistUrl.isEmpty()) {
+            AppLogger.e("$TAG no station url to resolve for $mediaId")
+            advancePlaylistFallback(mPlaylistFallback.onResolved(mediaId, emptyList()))
             return
         }
-        if (mActiveRS.isInvalid()) {
-            handleStopRequest()
-            return
+        AppLogger.i("$TAG resolve playlist $playlistUrl of $mediaId")
+        mScope.launch {
+            val urls = NetUtils.extractUrlsFromPlaylist(applicationContext, mDownloader, playlistUrl).toList()
+            mUiScope.launch {
+                advancePlaylistFallback(mPlaylistFallback.onResolved(mediaId, urls))
+            }
         }
+    }
 
-        mPlayer.currentMediaItem?.let {
-            val curIndx = mPlayer.currentMediaItemIndex
-            val newItem = MediaItemBuilder.withStreamUrl(it, urls[0])
-            mPlayer.replaceMediaItem(curIndx, newItem)
-            handlePlayRequestUiThread()
+    /**
+     * The url the station of [mediaId] was listed with. The browse tree forgets a station when its
+     * list is invalidated, which may happen while it plays, so the active station answers then.
+     */
+    private fun getStationUrl(mediaId: String): String {
+        val station = mBrowseTree.getRadioStationByMediaId(mediaId)
+        if (station.isInvalid().not()) {
+            return station.getStreamUrlFixed()
         }
+        if (mActiveRS.id == mediaId) {
+            return mActiveRS.getStreamUrlFixed()
+        }
+        return AppUtils.EMPTY_STRING
+    }
+
+    @MainThread
+    private fun playResolvedStream(mediaId: String, streamUrl: String) {
+        val current = mPlayer.currentMediaItem
+        if (current == null || current.mediaId != mediaId) {
+            AppLogger.w("$TAG drop stream $streamUrl of $mediaId, now at ${current?.mediaId}")
+            return
+        }
+        AppLogger.i("$TAG play $streamUrl in place of $mediaId")
+        mPlayer.replaceMediaItem(mPlayer.currentMediaItemIndex, MediaItemBuilder.withStreamUrl(current, streamUrl))
+        handlePlayRequestUiThread()
     }
 
     /**
@@ -618,6 +647,18 @@ class OpenRadioService : MediaLibraryService() {
                     mPlayer.getPlaylist(), mPlayer.currentMediaItemIndex, 0
                 )
             )
+        }
+
+        override fun onPlayerCommandRequest(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            playerCommand: @Player.Command Int
+        ): Int {
+            if (PlaylistFallback.isPlayRequest(playerCommand)) {
+                AppLogger.d("$TAG [$controller] play request $playerCommand, fallback was $mPlaylistFallback")
+                mPlaylistFallback = PlaylistFallback.Idle
+            }
+            return super.onPlayerCommandRequest(session, controller, playerCommand)
         }
 
         override fun onMediaButtonEvent(
@@ -1123,8 +1164,6 @@ class OpenRadioService : MediaLibraryService() {
         const val EXTRA_ACTIVE_STATION_ID = "com.github.jcszymansk.freenetradio.EXTRA.ACTIVE_STATION_ID"
 
         private lateinit var TAG: String
-
-        private const val API_CALL_TIMEOUT_MS = 3_000L
 
         const val MASTER_VOLUME_DEFAULT = 100
     }

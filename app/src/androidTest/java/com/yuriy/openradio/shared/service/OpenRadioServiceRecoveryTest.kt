@@ -120,7 +120,7 @@ class OpenRadioServiceRecoveryTest {
 
     /**
      * A playlist that parses but names nothing leaves the service with no url to try, so it stops
-     * rather than replacing the station's url with something it made up.
+     * rather than replacing the station's url with something it made up, and says so.
      */
     @Test
     fun aPlaylistWithNoEntriesStopsPlayback() {
@@ -134,9 +134,83 @@ class OpenRadioServiceRecoveryTest {
         mBrowser.awaitPlayback("the empty playlist to be fetched") {
             mServer.requestedPaths().contains("/empty.pls")
         }
+        mBrowser.awaitMetadataSubtitle(string(R.string.media_stream_unplayable))
         awaitSettled()
         assertEquals(playlist, mBrowser.currentMediaItemUri())
         assertFalse(mBrowser.isPlaying())
+        assertEquals(READ_ONCE, requestsFor("/empty.pls"))
+    }
+
+    /**
+     * A playlist whose stream the player cannot read either is not read again: it would only name
+     * the same stream. The service gives up after trying what it named, and says so.
+     */
+    @Test
+    fun aPlaylistWhoseStreamIsUnreadableIsResolvedOnce() {
+        val noise = mServer.serve("/noise", LoopbackHttpFixture.TEXT_PLAIN, NOT_AUDIO)
+        val playlist = mServer.serve(
+            "/unreadable.pls", LoopbackHttpFixture.AUDIO_PLS, plsPointingAt(noise)
+        )
+
+        selectAndPlay(mStations.seed(playlist).first())
+
+        mBrowser.awaitPlayback("the stream the playlist names to be tried") {
+            mServer.requestedPaths().contains("/noise")
+        }
+        awaitSettled()
+        assertEquals(READ_ONCE, requestsFor("/unreadable.pls"))
+        mBrowser.awaitMetadataSubtitle(string(R.string.media_stream_unplayable))
+        assertFalse(mBrowser.isPlaying())
+    }
+
+    /**
+     * Playlists commonly list mirrors of one stream, so one that cannot be read is no reason to
+     * give up while the playlist names another; and the next one is tried without reading the
+     * playlist again.
+     */
+    @Test
+    fun theNextStreamAPlaylistNamesIsTriedWhenTheFirstIsUnreadable() {
+        val noise = mServer.serve("/noise", LoopbackHttpFixture.TEXT_PLAIN, NOT_AUDIO)
+        val stream = mServer.serve(
+            "/fixture.wav", LoopbackHttpFixture.AUDIO_WAV, mAudio.wavBytes(seconds = 10)
+        )
+        val playlist = mServer.serve(
+            "/mirrors.pls", LoopbackHttpFixture.AUDIO_PLS, plsPointingAt(noise, stream)
+        )
+
+        selectAndPlay(mStations.seed(playlist).first())
+
+        mBrowser.awaitPlayback("the second stream the playlist names to replace the first") {
+            mBrowser.currentMediaItemUri() == stream
+        }
+        mBrowser.awaitPlaying()
+        assertEquals(READ_ONCE, requestsFor("/mirrors.pls"))
+    }
+
+    /**
+     * Giving up ends one play request, not the station: asking for it again is a new request and
+     * reads its playlist again, because the station may have been fixed in the meantime.
+     */
+    @Test
+    fun playingAStationAgainAfterGivingUpReadsItsPlaylistAgain() {
+        val noise = mServer.serve("/noise", LoopbackHttpFixture.TEXT_PLAIN, NOT_AUDIO)
+        val playlist = mServer.serve(
+            "/again.pls", LoopbackHttpFixture.AUDIO_PLS, plsPointingAt(noise)
+        )
+        val station = mStations.seed(playlist).first()
+        selectAndPlay(station)
+        mBrowser.awaitMetadataSubtitle(string(R.string.media_stream_unplayable))
+        awaitSettled()
+        mBrowser.forgetPlayerEvents()
+
+        mBrowser.prepareAndPlay()
+
+        mBrowser.awaitPlayback("the playlist to be read for the second request") {
+            requestsFor("/again.pls") == READ_ONCE + 1
+        }
+        mBrowser.awaitMetadataSubtitle(string(R.string.media_stream_unplayable))
+        awaitSettled()
+        assertEquals(READ_ONCE + 1, requestsFor("/again.pls"))
     }
 
     @Test
@@ -235,19 +309,39 @@ class OpenRadioServiceRecoveryTest {
         return mContext.getString(id)
     }
 
-    private fun plsPointingAt(url: String): String {
-        return "[playlist]\nNumberOfEntries=1\nFile1=$url\nTitle1=Fixture\nLength1=-1\nVersion=2\n"
+    private fun plsPointingAt(vararg urls: String): String {
+        val entries = urls.withIndex().joinToString("") { (index, url) ->
+            val number = index + 1
+            "File$number=$url\nTitle$number=Fixture\nLength$number=-1\n"
+        }
+        return "[playlist]\nNumberOfEntries=${urls.size}\n${entries}Version=2\n"
+    }
+
+    private fun requestsFor(path: String): Int {
+        return mServer.requestedPaths().count { it == path }
     }
 
     private companion object {
 
         const val EMPTY_PLS = "[playlist]\nNumberOfEntries=0\nVersion=2\n"
 
+        /**
+         * A body no extractor recognises, which is how a stream the player cannot read fails.
+         */
+        const val NOT_AUDIO = "not really audio, only text that no extractor will recognise"
+
         const val UNREACHABLE_STREAM = "$UNREACHABLE_ORIGIN/live.mp3"
 
         /**
-         * Comfortably longer than `OpenRadioService.API_CALL_TIMEOUT_MS`, which bounds the
-         * playlist resolution a failure kicks off.
+         * Requests for a station playlist that is resolved once: the player opens the station url
+         * as a stream first, and the service then reads it as a playlist. A later play request
+         * starts from the stream that replaced it, so only the service's read adds to this.
+         */
+        const val READ_ONCE = 2
+
+        /**
+         * Comfortably longer than a playlist resolution over the loopback takes, so an assertion
+         * that something did not happen also covers what a late resolution could still do.
          */
         const val SETTLE_MILLIS = 5_000L
     }
