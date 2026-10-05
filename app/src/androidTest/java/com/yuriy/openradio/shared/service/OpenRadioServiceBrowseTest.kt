@@ -380,9 +380,8 @@ class OpenRadioServiceBrowseTest {
      * children that carry the id its own command will be asked for next.
      *
      * The fixture lists blues before jazz and the browse returns jazz first, which is what shows
-     * the station counts were parsed: [com.yuriy.openradio.shared.model.media.Category] orders on
-     * the count alone, descending. That also makes two equal counts collapse into one entry inside
-     * the parser's `TreeSet`, so the seeded counts differ.
+     * the station counts were parsed: [com.yuriy.openradio.shared.model.media.Category.BROWSE_ORDER]
+     * puts the larger count first, ahead of the title that would have put blues first.
      */
     @Test
     fun seededCategoriesBecomeBrowsableChildren() {

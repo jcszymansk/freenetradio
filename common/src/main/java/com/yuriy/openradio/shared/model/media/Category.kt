@@ -30,7 +30,7 @@ class Category(
     val id: String,
     val title: String,
     private val mStationsCount: Int
-) : Comparable<Category> {
+) {
 
     fun getDescription(context: Context): String {
         var desc = mStationsCount.toString()
@@ -42,7 +42,16 @@ class Category(
         return desc
     }
 
-    override fun compareTo(other: Category): Int {
-        return other.mStationsCount.compareTo(mStationsCount)
+    companion object {
+
+        /**
+         * The order the category list is browsed in: most stations first, ties broken by title as the
+         * user reads it, ignoring case, and then by id. Two categories compare equal only when count,
+         * title and id all agree, so a sorted set built with this order never merges distinct categories.
+         */
+        val BROWSE_ORDER: Comparator<Category> =
+            compareByDescending<Category> { it.mStationsCount }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+                .thenBy { it.id }
     }
 }

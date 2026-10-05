@@ -215,6 +215,41 @@ class ParserLayerMappingTest {
     }
 
     @Test
+    fun categoriesWithTheSameStationCountAreAllKeptByBothParsers() {
+        val radioBrowserCategories = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCategories(
+            """
+            [{"name":"rock","stationcount":2},{"name":"jazz","stationcount":2},
+             {"name":"pop","stationcount":5},{"name":"blues","stationcount":2},
+             {"name":"Rock","stationcount":2}]
+            """.trimIndent()
+        )
+        assertEquals(
+            listOf("pop", "blues", "jazz", "Rock", "rock"),
+            radioBrowserCategories.map { it.id }
+        )
+
+        val webRadioCategories = ParserLayerWebRadioImpl(emptySet()).getAllCategories(
+            """
+            {"radio-one":{"Genre":["Rock","Jazz","Pop"]},"radio-two":{"Genre":["Pop","Blues"]},
+             "radio-three":{"Genre":["Ambient"]}}
+            """.trimIndent()
+        )
+        assertEquals(
+            listOf("Pop", "Ambient", "Blues", "Jazz", "Rock"),
+            webRadioCategories.map { it.id }
+        )
+    }
+
+    @Test
+    fun aRepeatedRadioBrowserCategoryIsListedOnce() {
+        val categories = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCategories(
+            """[{"name":"rock","stationcount":2},{"name":"rock","stationcount":2}]"""
+        )
+
+        assertEquals(listOf("rock"), categories.map { it.id })
+    }
+
+    @Test
     fun countryCodesAreMappedByBothParsers() {
         val radioBrowserCountries = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCountries(
             """[{"iso_3166_1":"PL"},{"iso_3166_1":"??"}]"""

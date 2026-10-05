@@ -29,7 +29,7 @@ class MediaItemAllCategoriesTest {
 
     @Test
     fun eachCategoryBecomesABrowsableChildNode() {
-        val categories = TreeSet<Category>()
+        val categories = TreeSet(Category.BROWSE_ORDER)
         categories.add(Category("rock", "Rock", 42))
         categories.add(Category("jazz", "Jazz", 7))
         val presenter = RecordingPresenter(mCategories = categories)

@@ -67,6 +67,7 @@ com/yuriy/openradio/shared/model/media/RadioStationKt	com.yuriy.openradio.shared
 com/yuriy/openradio/shared/model/media/PlaybackState	com.yuriy.openradio.shared.model.media.PlaybackStateTest	:common
 com/yuriy/openradio/shared/model/media/RadioStationToAdd	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/RadioStationManagerLayerImpl	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
+com/yuriy/openradio/shared/model/media/Category	com.yuriy.openradio.shared.model.media.CategoryTest	:common
 com/yuriy/openradio/shared/model/media/item/IndexableMediaItemCommand	com.yuriy.openradio.shared.model.media.item.IndexableMediaItemCommandTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandImpl	com.yuriy.openradio.shared.model.media.item.MediaItemCommandImplTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemAllCategories	com.yuriy.openradio.shared.model.media.item.MediaItemAllCategoriesTest	:common
@@ -114,7 +115,6 @@ wseemann/media/jplaylistparser/parser/asx/ASXPlaylistParser	wseemann.media.jplay
 wseemann/media/jplaylistparser/parser/xspf/XSPFPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/mime/MediaType	wseemann.media.jplaylistparser.mime.MediaTypeTest	:common
 
-com/yuriy/openradio/shared/model/media/Category	EXCLUDED	rule 3: its only decision picks the singular or plural label from Context string resources.
 com/yuriy/openradio/shared/model/media/MediaResourcesManager	EXCLUDED	rule 3: its behaviour is a Media3 MediaBrowser session connected to the service.
 com/yuriy/openradio/shared/model/media/MediaResourcesManager$BrowserListener	EXCLUDED	rule 3: it answers Media3 MediaBrowser callbacks by re-reading the browser's children.
 com/yuriy/openradio/shared/model/media/MediaResourcesManager$PlayerListener	EXCLUDED	rule 3: it relays Media3 Player events and reads the player's state.
