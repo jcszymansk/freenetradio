@@ -1,11 +1,11 @@
 ---
 id: TASK-037
 title: Clear the stopped-by-network flag once playback recovers
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-18 19:17'
-updated_date: '2026-10-05 20:20'
+updated_date: '2026-10-05 20:27'
 labels: []
 dependencies: []
 type: bug
@@ -22,9 +22,9 @@ Found while isolating the playback error classification in task-005.01. The flag
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Reaching a ready playback state clears the stopped-by-network flag
-- [ ] #2 A network-connected broadcast restarts playback only for a station that the network, not the user, stopped
-- [ ] #3 The recovery decision is covered by a test that needs neither a network nor a real stream
+- [x] #1 Reaching a ready playback state clears the stopped-by-network flag
+- [x] #2 A network-connected broadcast restarts playback only for a station that the network, not the user, stopped
+- [x] #3 The recovery decision is covered by a test that needs neither a network nor a real stream
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -36,3 +36,17 @@ Found while isolating the playback error classification in task-005.01. The flag
 4. Service asks resumesOnReconnect() before restarting playback on a network-connected event.
 5. JVM test NetworkRecoveryTest; list the class in gradle/pure-core-coverage.tsv.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Media3 1.2.1 paths checked from bytecode: controller and legacy (Android Auto) pause reach Player.pause(), stop reaches Player.stop(), play from IDLE-with-error calls prepare() then play(); ExoPlayer keeps playWhenReady across a fatal error and across stop(). The player listener and the connectivity receiver both run on the main thread.
+A pause forced by the mobile-network policy (pauseForNetworkPolicy) deliberately leaves the state alone, which keeps the earlier behaviour: a station the network stopped still resumes when a usable network returns. It does not newly arm a resume for a healthy station the policy paused.
+Evidence level: the transitions are proven by NetworkRecoveryTest; the wiring in OpenRadioPlayer (an ExoPlayer wrapper, excluded from the pure-core gate) was checked by reading it and by the round-1 codex review, not on a device.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replaced OpenRadioPlayer's never-cleared mStoppedByNetwork with NetworkRecovery, a pure enum whose transitions return the next state: a network loss while play is requested waits for the network; STATE_READY, any pause/stop/setPlayWhenReady(false)/reset, or a loss while paused clears it. OpenRadioService restarts playback on a network-connected event only when resumesOnReconnect() is true; the mobile-network-blocked pause goes through pauseForNetworkPolicy and leaves the state alone. Verified with NetworkRecoveryTest (11 JVM cases), ./gradlew test, verifyPureCoreCoverage, verifyPureCoreAttribution and assembleDebug; codex review round 1 PASS. Not run on a device.
+<!-- SECTION:FINAL_SUMMARY:END -->
