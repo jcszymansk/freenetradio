@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-05 05:22'
-updated_date: '2026-10-05 15:09'
+updated_date: '2026-10-05 17:01'
 labels: []
 milestone: m-1
 dependencies: []
@@ -39,4 +39,6 @@ Both parsers collect categories into a TreeSet<Category> (ParserLayerRadioBrowse
 
 <!-- SECTION:NOTES:BEGIN -->
 Decided: Radio Browser tags that differ only in case (rock, Rock) stay two entries with the same title, ordered by id. The ids differ, which is what AC1 protects, and the old code already listed both whenever their counts differed. Whether they should be merged is a product question left open. Plurals for the station label and a malformed stationcount aborting the whole parse are pre-existing and tracked as TASK-098 and TASK-099.
+
+Follow-up: merging categories that differ only in case is tracked as TASK-100.
 <!-- SECTION:NOTES:END -->
