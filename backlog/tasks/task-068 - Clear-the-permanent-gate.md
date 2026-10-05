@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 20:03'
-updated_date: '2026-10-05 06:40'
+updated_date: '2026-10-05 06:48'
 labels: []
 milestone: m-0
 dependencies:
@@ -100,6 +100,8 @@ Residue judged: callWhenSearchReady's bad-value branch is unreachable and become
 Final pass at fc3213f: ./gradlew test --rerun-tasks, 399 tests per variant (:common 369, :common-ui 7, :android-jvm-stubs 23), 0 failures, 0 skipped. verifyPureCoreCoverage, 53 listed classes, 96.1% line (1727/1797), 85.7% branch (816/952), thinnest CoroutineTimerTask at 80.0%. verifyPureCoreAttribution, all 37 owners carry their classes alone. Instrumented on the API 34 emulator with wifi and data off, no active network and the app cleared: 217 tests, 0 failures, 0 skipped, including all 28 journey tests.
 
 Review round 1: two MediaItemHelperTest cases only invoked the call they named, which criterion 8 rules out; they now assert the call raises nothing. A scan of every @Test body across the four test source sets for a missing assertion finds nothing else. AGENTS.md now states the thresholds and the watched-package boundary of the unlisted-class check, and the roadmap describes both row kinds of the class list.
+
+Review round 2: the command test listener and presenter fake counted with ++ on plain or volatile fields, which loses an increment when two IO coroutines report at once, the very duplicate the single-result assertions exist to catch. Their counters are now AtomicInteger and their request records synchronized lists.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

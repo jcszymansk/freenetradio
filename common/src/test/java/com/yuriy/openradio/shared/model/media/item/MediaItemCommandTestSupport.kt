@@ -35,10 +35,12 @@ import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.AppUtils
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Proxy
+import java.util.Collections
 import java.util.TreeSet
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -169,9 +171,14 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
 
     private val mErrorLatch = CountDownLatch(1)
 
-    @Volatile
-    var results = 0
-        private set
+    private val mResults = AtomicInteger()
+
+    /**
+     * How many results arrived. Atomic rather than volatile, because a second delivery racing the
+     * first is exactly what the single-result assertions exist to catch.
+     */
+    val results: Int
+        get() = mResults.get()
 
     @Volatile
     var items = emptyList<MediaItem>()
@@ -185,9 +192,11 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
     var pageNumber = UNSET_PAGE_NUMBER
         private set
 
-    @Volatile
-    var errors = 0
-        private set
+    private val mErrors = AtomicInteger()
+
+    /** How many errors arrived, counted atomically for the same reason as [results]. */
+    val errors: Int
+        get() = mErrors.get()
 
     @Volatile
     var error: String? = null
@@ -216,7 +225,7 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
         InvocationHandler { _, method, arguments ->
             if (method.name == UPDATE_PLAYBACK_STATE) {
                 error = arguments?.firstOrNull() as String?
-                errors++
+                mErrors.incrementAndGet()
                 mErrorLatch.countDown()
             }
             null
@@ -228,7 +237,7 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
         this.radioStations = radioStations
         this.pageNumber = pageNumber
         resultThread = Thread.currentThread()
-        results++
+        mResults.incrementAndGet()
         mResultLatch.countDown()
     }
 
@@ -399,31 +408,45 @@ internal class RecordingPresenter(
     private val mFavoriteIds: Set<String> = emptySet()
 ) : OpenRadioServicePresenter {
 
-    val categoryRequests = mutableListOf<Pair<String, Int>>()
+    // A command asks from its IO coroutines, which may run at once, so every record is safe to
+    // write from several threads; a lost write would hide the second request a test counts.
+    val categoryRequests: MutableList<Pair<String, Int>> = Collections.synchronizedList(mutableListOf())
 
-    val countryRequests = mutableListOf<Pair<String, Int>>()
+    val countryRequests: MutableList<Pair<String, Int>> = Collections.synchronizedList(mutableListOf())
 
-    val searchRequests = mutableListOf<String>()
+    val searchRequests: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
-    val favoriteChecks = mutableListOf<String>()
+    val favoriteChecks: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
-    var categoriesRequests = 0
-        private set
+    private val mCategoriesRequests = AtomicInteger()
 
-    var countriesRequests = 0
-        private set
+    val categoriesRequests: Int
+        get() = mCategoriesRequests.get()
 
-    var favoritesRequests = 0
-        private set
+    private val mCountriesRequests = AtomicInteger()
 
-    var deviceLocalsRequests = 0
-        private set
+    val countriesRequests: Int
+        get() = mCountriesRequests.get()
 
-    var newStationsRequests = 0
-        private set
+    private val mFavoritesRequests = AtomicInteger()
 
-    var popularStationsRequests = 0
-        private set
+    val favoritesRequests: Int
+        get() = mFavoritesRequests.get()
+
+    private val mDeviceLocalsRequests = AtomicInteger()
+
+    val deviceLocalsRequests: Int
+        get() = mDeviceLocalsRequests.get()
+
+    private val mNewStationsRequests = AtomicInteger()
+
+    val newStationsRequests: Int
+        get() = mNewStationsRequests.get()
+
+    private val mPopularStationsRequests = AtomicInteger()
+
+    val popularStationsRequests: Int
+        get() = mPopularStationsRequests.get()
 
     override fun getStationsInCategory(categoryId: String, pageNumber: Int): Set<RadioStation> {
         categoryRequests.add(categoryId to pageNumber)
@@ -436,12 +459,12 @@ internal class RecordingPresenter(
     }
 
     override fun getNewStations(): Set<RadioStation> {
-        newStationsRequests++
+        mNewStationsRequests.incrementAndGet()
         return mNewStations
     }
 
     override fun getPopularStations(): Set<RadioStation> {
-        popularStationsRequests++
+        mPopularStationsRequests.incrementAndGet()
         return mPopularStations
     }
 
@@ -457,22 +480,22 @@ internal class RecordingPresenter(
     }
 
     override fun getAllCategories(): Set<Category> {
-        categoriesRequests++
+        mCategoriesRequests.incrementAndGet()
         return mCategories
     }
 
     override fun getAllCountries(): Set<Country> {
-        countriesRequests++
+        mCountriesRequests.incrementAndGet()
         return mCountries
     }
 
     override fun getAllFavorites(): Set<RadioStation> {
-        favoritesRequests++
+        mFavoritesRequests.incrementAndGet()
         return mFavorites
     }
 
     override fun getAllDeviceLocal(): Set<RadioStation> {
-        deviceLocalsRequests++
+        mDeviceLocalsRequests.incrementAndGet()
         return mDeviceLocals
     }
 
