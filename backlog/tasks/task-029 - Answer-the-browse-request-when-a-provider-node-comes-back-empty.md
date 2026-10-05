@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-18 04:27'
-updated_date: '2026-09-18 07:32'
+updated_date: '2026-10-05 05:13'
 labels: []
 dependencies: []
 type: bug
@@ -56,6 +56,8 @@ Verification, all on emulator-5554 (API 34) with wifi and data disabled:
 - OpenRadioServiceBrowseTest.providerNodesAnswerWithAnEmptyListWhenNothingIsCached completes in 0.19s where it previously had to wait out an 8s bounded timeout.
 
 Not addressed, and outside the acceptance criteria: a MediaItemCommand whose body throws still leaves the same future unset, though on Dispatchers.IO with a plain Job that surfaces as an uncaught exception rather than a hang.
+
+Record correction from TASK-068. The final summary and plan step 5 say OpenRadioServiceBrowseTest asserts an empty success for both provider nodes, and the notes cite providerNodesAnswerWithAnEmptyListWhenNothingIsCached. 9254e23 renamed that test to aProviderNodeAnswersWithAnEmptyListWhenNothingIsCached and narrowed it to MEDIA_ID_ALL_CATEGORIES, because the countries node can no longer be empty on a device (TASK-035). The countries half is pinned on the JVM by MediaItemCountriesListTest.anEmptyCountryListIsDeliveredAndReportedAsAnError.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

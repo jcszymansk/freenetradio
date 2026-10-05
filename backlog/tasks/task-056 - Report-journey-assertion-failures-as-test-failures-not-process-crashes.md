@@ -4,6 +4,7 @@ title: 'Report journey assertion failures as test failures, not process crashes'
 status: To Do
 assignee: []
 created_date: '2026-09-21 17:45'
+updated_date: '2026-10-05 05:13'
 labels:
   - test
 milestone: m-0
@@ -24,3 +25,9 @@ ActivityScenario.onActivity called off the main thread runs the block through In
 - [ ] #2 A single failing journey case does not abort the remaining instrumented classes
 - [ ] #3 Values needed for an assertion are read on the main thread and asserted on the test thread
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+The TASK-068 re-audit found the inventory above incomplete. EditStationDialogTest asserts everything inside onActivity (lines 164 to 178), JourneyDialogs throws AssertionError inside onActivity (lines 50 to 56), and JourneyDialogs.field() throws and is called inside many onActivity blocks. SettingsPersistenceJourneyTest has five asserting blocks, not three (226, 238, 266, 281, 330).
+<!-- SECTION:NOTES:END -->

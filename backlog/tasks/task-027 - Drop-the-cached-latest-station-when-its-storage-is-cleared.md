@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-17 19:45'
-updated_date: '2026-09-18 06:14'
+updated_date: '2026-10-05 05:13'
 labels: []
 dependencies: []
 type: bug
@@ -39,6 +39,8 @@ OpenRadioServiceBrowseTest.reconnectsOnAnEmptyProfileAfterEveryStoreIsCleared al
 Criteria 2 and 3 were left unchecked when this was closed, which the TASK-004.02 round 7 review caught. Both hold and the evidence is above; only the checkboxes were missing.
 
 Criterion 2 is covered twice: OpenRadioServiceBrowseTest.reconnectsOnAnEmptyProfileAfterEveryStoreIsCleared asserts the service's own storage reports no latest station after CMD_CLEAR_CACHE, over a real MediaBrowser connection, and OpenRadioServicePresenterImplTest.clearingDropsEveryCacheAndTheLatestStation asserts the same through the presenter that the command reaches. Criterion 3 is LatestRadioStationStorageTest.clearDropsTheCachedStationOnTheSameInstance, which replaced the test that pinned the stale value and fails again if the override is removed.
+
+Record correction from TASK-068. The regression test at the lowest layer is the JVM OpenRadioServicePresenterImplTest.clearingDropsEveryCacheAndTheLatestStation, which fails if the override is reverted because ContextWrapper(null) stores nothing and only the in-memory field can answer. The instrumented LatestRadioStationStorageTest.clearDropsTheCachedStationOnTheSameInstance named in the final summary also fails on revert but needs a device for a defect that is a one-field cache in :common.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

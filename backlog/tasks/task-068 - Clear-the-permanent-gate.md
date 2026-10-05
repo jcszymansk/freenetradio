@@ -1,10 +1,11 @@
 ---
 id: TASK-068
 title: Clear the permanent gate
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-09-21 20:03'
-updated_date: '2026-09-22 10:35'
+updated_date: '2026-10-05 05:13'
 labels: []
 milestone: m-0
 dependencies:
@@ -63,3 +64,16 @@ Residue deliberately left unfiled, to be judged here: callWhenSearchReady RESULT
 - [ ] #8 No ignored, commented-out, assertion-free or retry-masked tests exist
 - [ ] #9 Android Auto manual checks have a recorded result for the current build
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Run JVM, coverage and attribution, and the offline instrumented suite, to see where the tree stands before changing anything.
+2. Re-audit criteria 7 and 8 over every test file, and criterion 6 over every production fix since the fork, by reading rather than sampling.
+3. Fix what blocks criteria 6 and 8 in test sources only. Production code stays as it was for the Android Auto check of 8ab2329, so criterion 9 keeps referring to the current build.
+4. Close the measurement holes in the gate: fold synthetic classes into their outer class, fail on unlisted classes with decisions in watched packages unless excluded with a rule, drop Country, add what the new check finds.
+5. Wire verifyPureCoreCoverage into check.
+6. File the residue that needs production changes or is hygiene, and correct the records of TASK-027, TASK-029, TASK-055 and TASK-056.
+7. Update doc/testing-roadmap.md where the gate's description has changed.
+8. Re-run every suite in one pass with both gate tasks, then check the criteria.
+<!-- SECTION:PLAN:END -->
