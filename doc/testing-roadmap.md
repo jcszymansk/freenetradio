@@ -225,7 +225,8 @@ it. The two are told apart by what the compiler recorded in the class files, bec
 cannot do it: Kotlin accepts a nested class called `child`. A class is declared on its own when its
 `InnerClasses` entry makes it a member of a class that is itself declared, and the compiler did not
 invent it (`WhenMappings` is `ACC_SYNTHETIC`, `DefaultImpls` carries `kotlin.Metadata` kind 3) and
-it is not the companion object, which the outer class keeps in a static field named after it.
+it is not the companion object, which only the outer class's `kotlin.Metadata` names (a static
+field named and typed after a nested class can belong to a companion that holds an instance of it).
 Lambdas, anonymous objects and classes local to a function have no outer class in that entry. A
 companion holds its class's static members, so it folds into its class under any name. Folding
 counts a line twice where a lambda opens on a line of outer code, such as `launch {`, which shifts

@@ -1,5 +1,7 @@
 import groovy.io.FileType
 import groovy.xml.XmlSlurper
+import kotlinx.metadata.jvm.JvmMetadataUtil
+import kotlinx.metadata.jvm.KotlinClassMetadata
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.Opcodes
 import org.objectweb.asm.tree.ClassNode
@@ -29,6 +31,11 @@ buildscript {
     }
     dependencies {
         classpath 'org.ow2.asm:asm-tree:9.2'
+        // Which member class is the companion object is recorded only in the
+        // protobuf-encoded kotlin.Metadata, so JetBrains' reader decodes it.
+        // 0.9.0 is the last release under this name and reads metadata up to
+        // Kotlin 2.0, which covers the 1.9 compiler in constants.gradle.
+        classpath 'org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.9.0'
     }
 }
 
@@ -73,39 +80,65 @@ def membershipRulePattern = ~/\brule [1-5]\b/
 //   Outer$run$Local       Local, no outer          no, local to a function
 //   Outer$WhenMappings    member of Outer          no, ACC_SYNTHETIC
 //   Outer$DefaultImpls    member of Outer          no, kotlin.Metadata k=3
-//   Outer$Companion       member of Outer          no, companion object
+//   Outer$Companion       member of Outer          no, the companion object
+//                                                  Outer's kotlin.Metadata names
 //
 // The compiler marks most of the member classes it invents: WhenMappings is
 // ACC_SYNTHETIC, and DefaultImpls, like every lambda, carries kotlin.Metadata
 // kind 3, "synthetic class". A companion object is written in the source, but
 // it holds the class's static members, so it is part of its class whatever it
-// is named. Outside the protobuf-encoded Kotlin metadata, the one record of
-// which member is the companion is the static field the outer class keeps it
-// in, named after it, so that field is the signal. A class local to a
-// function lands in the class that declares the function, like the rest of
-// that function body. Everything not declared on its own folds into the
-// longest prefix of its name that is.
+// is named. Only the outer class's Kotlin metadata says which member is the
+// companion. A static field named and typed after a member proves nothing,
+// since a companion may keep an instance of a nested class under that class's
+// name, and a Java class, which has no Kotlin metadata, has no companion. A
+// class local to a function lands in the class that declares the function,
+// like the rest of that function body. Everything not declared on its own
+// folds into the longest prefix of its name that is.
 def kotlinMetadataDescriptor = 'Lkotlin/Metadata;'
-def kotlinSyntheticClassKind = 3
+
+/**
+ * Decodes one class's kotlin.Metadata annotation. Metadata that cannot be
+ * read fails the gate, because guessing would let a declared class fold
+ * unjudged or a companion stand as a row of its own.
+ *
+ * @param className JVM internal name of the annotated class, for the error
+ * @param annotation the kotlin.Metadata AnnotationNode as ASM read it
+ * @return the decoded KotlinClassMetadata
+ */
+def readKotlinMetadata = { String className, annotation ->
+    // AnnotationNode.values alternates element names and their values, and
+    // holds array elements as lists. An element left at its default is absent,
+    // which the Metadata factory takes as null.
+    def values = annotation.values.collate(2).collectEntries { [(it[0]): it[1]] }
+    def header = JvmMetadataUtil.Metadata(
+            values.k as Integer, values.mv as int[], values.d1 as String[], values.d2 as String[],
+            values.xs as String, values.pn as String, values.xi as Integer)
+    try {
+        KotlinClassMetadata.readStrict(header)
+    } catch (IllegalArgumentException failure) {
+        throw new GradleException("The Kotlin metadata of ${className} cannot be read, so the gate cannot tell " +
+                "which of its members is its companion object: ${failure.message}", failure)
+    }
+}
 
 /**
  * Reads what one class file records about where its class sits in the
  * source. A pure function of the bytes. The placement is TOP_LEVEL, MEMBER
- * (with outerName and simpleName) or LOCAL_OR_ANONYMOUS.
+ * (with outerName and simpleName) or LOCAL_OR_ANONYMOUS. companionName is the
+ * simple name of the class's companion object, null when it has none.
  */
 def readClassOrigin = { byte[] bytes ->
     def node = new ClassNode()
     new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
     def ownEntry = node.innerClasses.find { it.name == node.name }
-    def kotlinMetadata = (node.visibleAnnotations ?: []).find { it.desc == kotlinMetadataDescriptor }
-    // AnnotationNode.values alternates element names and their values.
-    def kotlinKind = kotlinMetadata?.values?.collate(2)?.find { it[0] == 'k' }?.getAt(1)
+    def annotation = (node.visibleAnnotations ?: []).find { it.desc == kotlinMetadataDescriptor }
+    def kotlinMetadata = annotation == null ? null : readKotlinMetadata(node.name, annotation)
     def origin = [
             name           : node.name,
             synthetic      : (node.access & Opcodes.ACC_SYNTHETIC) != 0,
-            kotlinSynthetic: kotlinKind == kotlinSyntheticClassKind,
-            staticFields   : node.fields.findAll { (it.access & Opcodes.ACC_STATIC) != 0 }
-                    .collect { "${it.name}:${it.desc}".toString() }.toSet()
+            kotlinSynthetic: kotlinMetadata instanceof KotlinClassMetadata.SyntheticClass,
+            companionName  : kotlinMetadata instanceof KotlinClassMetadata.Class ?
+                    kotlinMetadata.kmClass.companionObject : null
     ]
     if (ownEntry == null) {
         return origin + [placement: 'TOP_LEVEL']
@@ -144,7 +177,7 @@ def declaredClassesAmong = { Map<String, Map> origins ->
             throw new GradleException("${member.name} is a member of ${member.outerName}, which has no class file " +
                     'beside it, so the class directories the coverage report read are incomplete')
         }
-        def isCompanion = outer.staticFields.contains("${member.simpleName}:L${member.name};".toString())
+        def isCompanion = outer.companionName != null && outer.companionName == member.simpleName
         !member.synthetic && !member.kotlinSynthetic && !isCompanion
     }
     origins.keySet().findAll { String className ->

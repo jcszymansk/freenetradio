@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 20:03'
-updated_date: '2026-10-05 07:59'
+updated_date: '2026-10-05 08:38'
 labels: []
 milestone: m-0
 dependencies:
@@ -106,6 +106,8 @@ Review round 2: the command test listener and presenter fake counted with ++ on 
 Review round 3: folding every Outer$... class into the top-level class also swallowed nested classes declared in the source, so a decision-bearing nested class under an excluded outer, such as HTTPDownloaderImpl$BytesDownloader, escaped the unlisted-class check. The gate now folds only compiler-generated classes, each into its nearest declared enclosing class, and rejects a row that names a generated class. The rule was checked against all 257 $ classes in both reports. MediaStream$Variant joined the set, owned by RadioStationTest, and nine nested listener and callback classes are excluded under rule 3. Gate after a fresh run: 54 listed, 38 excluded, 96.1% line (1722/1792), 85.7% branch (816/952); attribution passes for all 37 owners.
 
 Review round 4: telling a declared nested class from generated code by the capital letter of its name missed a lower-case nested class, which Kotlin allows. The gate now reads each class file with ASM. A member class in the InnerClasses attribute is declared, unless the compiler marks it synthetic (ACC_SYNTHETIC or kotlin.Metadata kind 3) or the outer class keeps it as its companion; anything else folds into the longest declared prefix of its name. Over all 257 nested classes in today's reports this agrees with the old rule, and a probe with a lower-case nested class, a named companion and a lambda was classified correctly and then removed. asm-tree 9.2, the version AGP already resolves, is declared in the script's own buildscript block, as confirmed by the user.
+
+Review round 5: a static field named after a member class and typed as it does not prove the member is the companion, because a declared nested class can sit beside such a field. The gate now reads the companion from the outer class's kotlin.Metadata, decoded with kotlinx-metadata-jvm 0.9.0, a build-script dependency the user approved. Unreadable metadata fails the gate by class name. A Java outer has no companion. The folding is identical to before on all 261 nested classes the reports read, and a probe with a nested class Foo beside a companion @JvmField Foo of its type is now judged on its own, where the old check folded it.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
