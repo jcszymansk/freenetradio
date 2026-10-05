@@ -201,23 +201,17 @@ class AutoDetectParser private constructor(
     }
 
     /**
-     * The extension of the last path segment of [uri], from its last dot, in the case it was
-     * written in. The query and the fragment are not part of it, so a dot in either cannot hide
-     * the extension. A known playlist extension followed by more text, such as
-     * `.pls;jsessionid=abc`, is cut back to that extension, so a path parameter does not hide it.
+     * The extension of the name in the last path segment of [uri], from its last dot, in the case
+     * it was written in. The query, the fragment and path parameters such as `;jsessionid=abc` are
+     * not part of the name, so a dot in any of them cannot hide the extension, and text appended
+     * to an extension makes it a different one: `.m3u8x` is not `.m3u8`.
      *
-     * @return The extension with its dot, or an empty string when the last segment has no dot.
+     * @return The extension with its dot, or an empty string when the name has no dot.
      */
     fun getFileExtension(uri: String): String {
-        val lastSegment = uri.substringBefore('#').substringBefore('?').substringAfterLast('/')
-        val dot = lastSegment.lastIndexOf('.')
-        if (dot < 0) {
-            return AppUtils.EMPTY_STRING
-        }
-        val extension = lastSegment.substring(dot)
-        // PLAYLIST_EXTENSIONS lists .m3u8 before .m3u, which is a prefix of it.
-        val known = PLAYLIST_EXTENSIONS.firstOrNull { extension.startsWith(it, ignoreCase = true) }
-        return if (known == null) extension else extension.substring(0, known.length)
+        val name = uri.substringBefore('#').substringBefore('?').substringAfterLast('/').substringBefore(';')
+        val dot = name.lastIndexOf('.')
+        return if (dot < 0) AppUtils.EMPTY_STRING else name.substring(dot)
     }
 
     companion object {
@@ -244,8 +238,8 @@ class AutoDetectParser private constructor(
         private const val XSPF_ROOT_ELEMENT = "PLAYLIST"
 
         private val PLAYLIST_EXTENSIONS = listOf(
-            M3U8PlaylistParser.EXTENSION,
             M3UPlaylistParser.EXTENSION,
+            M3U8PlaylistParser.EXTENSION,
             PLSPlaylistParser.EXTENSION,
             XSPFPlaylistParser.EXTENSION,
             ASXPlaylistParser.EXTENSION

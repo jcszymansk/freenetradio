@@ -63,7 +63,9 @@ class AutoDetectParserTest {
             "https://example.com/station.PLS" to ".PLS",
             "https://example.com/station.m3u" to ".m3u",
             "https://example.com/listen.pls;jsessionid=abc" to ".pls",
-            "https://example.com/index.m3u8x" to ".m3u8",
+            "https://example.com/index.m3u8x" to ".m3u8x",
+            "https://example.com/live/index.m3u8;jsessionid=a.b" to ".m3u8",
+            "https://example.com/;stream.mp3" to "",
             "https://example.com/stream.mp3" to ".mp3",
             "https://example.com/hls.m3u8/stream" to "",
             "https://example.com/stream" to "",
@@ -375,6 +377,7 @@ class AutoDetectParserTest {
             "https://example.com/live/index.M3U8?token=abc",
             "https://example.com/live/index.m3u8?t=1.5",
             "https://example.com/live/index.m3u8#start.0",
+            "https://example.com/live/index.m3u8;jsessionid=a.b",
             "https://example.com/live/chunklist.m3u8?nimblesessionid=41472102"
         )
         val containers = listOf<Pair<String, (String) -> String>>(

@@ -483,6 +483,23 @@ class ASXPlaylistParserTest {
         assertEquals(emptyList<String>(), fetcher.reads)
     }
 
+    /**
+     * Only an extension that is exactly `.m3u8` marks HLS; one that merely starts with it is any
+     * other reference and is followed.
+     */
+    @Test
+    fun entryRefWhoseExtensionOnlyStartsWithM3u8IsFollowed() {
+        val reference = "$HOST/index.m3u8x"
+        val fetcher = RecordingFetcher(
+            reference to "<ASX><ENTRY><REF href=\"$HOST/from-m3u8x\"/></ENTRY></ASX>"
+        )
+
+        val playlist = parse("<ASX><ENTRYREF href=\"$reference\"/></ASX>", fetcher)
+
+        assertEquals(listOf(reference), fetcher.reads)
+        assertEquals(listOf("$HOST/from-m3u8x"), uris(playlist))
+    }
+
     @Test
     fun entriesAndEntryRefsInterleaveInDocumentOrder() {
         val fetcher = RecordingFetcher(
