@@ -33,7 +33,7 @@ import java.util.Locale
 
 /**
  * Reads an ASX playlist: each `ENTRY` becomes a stream named by its first `REF`, and each
- * `ENTRYREF` is followed as another playlist.
+ * `ENTRYREF` is followed as another playlist, unless it names HLS, which is kept as a stream.
  *
  * ASX is XML only in shape. Element names are case insensitive and real files mix the cases of an
  * element's start and end tags, and they carry bare ampersands in urls. Both are mended before the

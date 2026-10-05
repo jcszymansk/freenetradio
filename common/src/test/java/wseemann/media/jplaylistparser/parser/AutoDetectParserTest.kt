@@ -54,6 +54,27 @@ class AutoDetectParserTest {
     }
 
     @Test
+    fun theExtensionIsReadFromTheLastPathSegmentAlone() {
+        val parser = AutoDetectParser(NO_READS)
+        listOf(
+            "https://example.com/live/index.m3u8?t=1.5" to ".m3u8",
+            "https://example.com/live/index.M3U8?token=abc" to ".M3U8",
+            "https://example.com/live/index.m3u8#at.0" to ".m3u8",
+            "https://example.com/station.PLS" to ".PLS",
+            "https://example.com/station.m3u" to ".m3u",
+            "https://example.com/listen.pls;jsessionid=abc" to ".pls",
+            "https://example.com/index.m3u8x" to ".m3u8",
+            "https://example.com/stream.mp3" to ".mp3",
+            "https://example.com/hls.m3u8/stream" to "",
+            "https://example.com/stream" to "",
+            "https://example.com/stream?format=m3u8" to "",
+            "" to ""
+        ).forEach { (url, extension) ->
+            assertEquals(url, extension, parser.getFileExtension(url))
+        }
+    }
+
+    @Test
     fun dispatchesSupportedFormatsFromStreams() {
         data class Fixture(val extension: String, val uri: String, val content: String)
 
@@ -278,21 +299,148 @@ class AutoDetectParserTest {
         assertEquals(listOf("https://example.com/stream"), uris(playlist))
     }
 
+    /**
+     * The content opens with the M3U signature, which on its own would hand it to the M3U parser
+     * and keep `File1=...` as a stream address. Only the PLS parser the extension picks reads the
+     * address out of it.
+     */
     @Test
     fun aNestedPlaylistIsDispatchedOnItsExtensionBeforeItsContent() {
         val fetcher = RecordingFetcher(
-            "https://example.com/live/index.m3u8" to "#EXTM3U\n#EXTINF:10,\nsegment.ts"
+            "https://example.com/inner.pls" to "#EXTM3U\nFile1=https://example.com/stream\nLength1=-1"
         )
         val playlist = Playlist()
 
         AutoDetectParser(fetcher).parse(
             "https://example.com/station.m3u",
             null,
-            ByteArrayInputStream("https://example.com/live/index.m3u8\n".toByteArray()),
+            ByteArrayInputStream("https://example.com/inner.pls\n".toByteArray()),
             playlist
         )
 
-        assertEquals(listOf("https://example.com/live/segment.ts"), uris(playlist))
+        assertEquals(listOf("https://example.com/inner.pls"), fetcher.reads)
+        assertEquals(listOf("https://example.com/stream"), uris(playlist))
+    }
+
+    @Test
+    fun anHlsAddressThatAPlaylistNamesIsKeptAsAStreamInEveryFormat() {
+        data class Fixture(val name: String, val url: String, val mimeType: String?, val content: String)
+
+        val hls = "https://example.com/live/index.m3u8"
+        val fixtures = listOf(
+            Fixture("PLS entry", "https://example.com/station.pls", null, "[playlist]\nFile1=$hls\nLength1=-1"),
+            Fixture("M3U entry", "https://example.com/station.m3u", null, "#EXTM3U\n#EXTINF:-1,Station\n$hls"),
+            Fixture("M3U8 entry", "https://example.com/station.m3u8", null, "#EXTM3U\n#EXTINF:-1,Station\n$hls"),
+            Fixture(
+                "XSPF entry",
+                "https://example.com/station.xspf",
+                null,
+                "<playlist><trackList><track><location>$hls</location></track></trackList></playlist>"
+            ),
+            Fixture(
+                "ASX REF",
+                "https://example.com/station.asx",
+                "video/x-ms-asf",
+                "<ASX><ENTRY><REF href=\"$hls\"/></ENTRY></ASX>"
+            ),
+            Fixture(
+                "ASX ENTRYREF",
+                "https://example.com/station.asx",
+                "video/x-ms-asf",
+                "<ASX><ENTRYREF href=\"$hls\"/></ASX>"
+            )
+        )
+
+        fixtures.forEach { fixture ->
+            val fetcher = RecordingFetcher(hls to HLS_MASTER_PLAYLIST)
+            val playlist = Playlist()
+
+            AutoDetectParser(fetcher).parse(
+                fixture.url,
+                fixture.mimeType,
+                ByteArrayInputStream(fixture.content.toByteArray()),
+                playlist
+            )
+
+            assertEquals(fixture.name, emptyList<String>(), fetcher.reads)
+            assertEquals(fixture.name, listOf(hls), uris(playlist))
+        }
+    }
+
+    @Test
+    fun anHlsAddressIsRecognisedByItsPathWhateverItsCaseQueryOrFragment() {
+        val addresses = listOf(
+            "https://example.com/live/index.M3U8",
+            "https://example.com/live/index.m3u8?token=abc",
+            "https://example.com/live/index.M3U8?token=abc",
+            "https://example.com/live/index.m3u8?t=1.5",
+            "https://example.com/live/index.m3u8#start.0",
+            "https://example.com/live/chunklist.m3u8?nimblesessionid=41472102"
+        )
+        val containers = listOf<Pair<String, (String) -> String>>(
+            "https://example.com/station.pls" to { hls -> "[playlist]\nFile1=$hls\nLength1=-1" },
+            "https://example.com/station.m3u" to { hls -> "$hls\n" },
+            "https://example.com/station.asx" to { hls -> "<ASX><ENTRYREF href=\"$hls\"/></ASX>" }
+        )
+        for (hls in addresses) {
+            for ((url, content) in containers) {
+                val fetcher = RecordingFetcher(hls to HLS_MASTER_PLAYLIST)
+                val playlist = Playlist()
+
+                AutoDetectParser(fetcher).parse(
+                    url,
+                    null,
+                    ByteArrayInputStream(content(hls).toByteArray()),
+                    playlist
+                )
+
+                assertEquals("$hls in $url", emptyList<String>(), fetcher.reads)
+                assertEquals("$hls in $url", listOf(hls), uris(playlist))
+            }
+        }
+    }
+
+    /**
+     * The PLS parser once kept any address containing `.m3u8` anywhere. The shared rule reads the
+     * extension, so a playlist served from a directory with that name is still followed.
+     */
+    @Test
+    fun anAddressThatOnlyContainsM3u8BeforeItsExtensionIsStillFollowed() {
+        val nested = "https://example.com/hls.m3u8/station.pls"
+        val fetcher = RecordingFetcher(nested to "[playlist]\nFile1=https://example.com/stream\nLength1=-1")
+        val playlist = Playlist()
+
+        AutoDetectParser(fetcher).parse(
+            "https://example.com/outer.pls",
+            null,
+            ByteArrayInputStream("[playlist]\nFile1=$nested\nLength1=-1".toByteArray()),
+            playlist
+        )
+
+        assertEquals(listOf(nested), fetcher.reads)
+        assertEquals(listOf("https://example.com/stream"), uris(playlist))
+    }
+
+    /**
+     * A master playlist read as the station url itself, after the player failed to recognise it,
+     * still resolves to its variants, and a variant is kept rather than read down to segments.
+     */
+    @Test
+    fun aVariantOfAMasterPlaylistIsKeptAsAStream() {
+        val fetcher = RecordingFetcher(
+            "https://example.com/live/low/index.m3u8" to "#EXTM3U\n#EXTINF:10,\nsegment.ts"
+        )
+        val playlist = Playlist()
+
+        AutoDetectParser(fetcher).parse(
+            "https://example.com/live/master.m3u8",
+            null,
+            ByteArrayInputStream("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\nlow/index.m3u8\n".toByteArray()),
+            playlist
+        )
+
+        assertEquals(emptyList<String>(), fetcher.reads)
+        assertEquals(listOf("https://example.com/live/low/index.m3u8"), uris(playlist))
     }
 
     @Test
@@ -429,6 +577,13 @@ class AutoDetectParserTest {
          * real request.
          */
         val NO_READS = PlaylistFetcher { url -> throw AssertionError("unexpected read of $url") }
+
+        /**
+         * What a station's HLS address serves. Reading it as a playlist would put its variant in
+         * place of the address, which is what the HLS tests tell apart.
+         */
+        const val HLS_MASTER_PLAYLIST =
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\nhttps://example.com/live/low/index.m3u8\n"
 
         fun uris(playlist: Playlist): List<String> {
             return playlist.playlistEntries.map { it[PlaylistEntry.URI] }
