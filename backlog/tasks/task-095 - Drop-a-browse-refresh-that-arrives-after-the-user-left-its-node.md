@@ -1,9 +1,11 @@
 ---
 id: TASK-095
 title: Drop a browse refresh that arrives after the user left its node
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-10-05 06:19'
+updated_date: '2026-10-05 19:14'
 labels: []
 milestone: m-1
 dependencies: []
@@ -20,7 +22,29 @@ Editing or removing a local station sends CMD_UPDATE_TREE, and the service notif
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A children answer for a node the user is no longer showing never replaces the list that is showing, pinned by a JVM test in common-ui
-- [ ] #2 Both paths that fetch children, the change notification and subscribe, are covered by that guard
-- [ ] #3 A journey that walks back while a refresh is in flight ends on the root list
+- [x] #1 A children answer for a node the user is no longer showing never replaces the list that is showing, pinned by a JVM test in common-ui
+- [x] #2 Both paths that fetch children, the change notification and subscribe, are covered by that guard
+- [x] #3 A journey that walks back while a refresh is in flight ends on the root list
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Make the presenter's browse stack the single record of the node being shown: addMediaItemToStack moves an id already on the stack to the top, so the top is always the node last asked for.
+2. Hand MediaResourcesManager a presenter-owned subscription instead of the activity callback. It forwards an answer (children or error) only when its parent id is the top of the stack, and logs the dropped one. Both fetch paths (subscribe, and onChildrenChanged, which reuses the callback given to subscribe) then pass through it, and so does every side effect MainActivity's callback has (progress bar, add button, empty message).
+3. JVM tests in common-ui: a late answer for a node that was left is dropped after a back press and after navigating forward; the shown node's answer still renders; errors follow the same rule; re-adding an id already on the stack moves it to the top.
+4. Journey: fill the locals store with a full page of stations so the locals answer reliably arrives after the root, open the locals list, ask for a refresh and walk back as soon as it is acknowledged; assert the root rows, the rendered node and the add button. A single seeded station and a refresh burst never lost the race, and walk-back cycles caught it in one run of three.
+5. Run JVM tests, the coverage gate, and the instrumented suite offline.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified: ./gradlew test and verifyPureCoreCoverage pass; full :app:connectedDebugAndroidTest offline, 221 tests, pass. The new journey case failed 3/3 against the pre-fix presenter (add button hidden at the root) and passed 3/3 with the fix. MediaPresenterShownNodeTest: 7 of 9 cases fail with the guard disabled; askingAgainForANodeDeeperInTheStackShowsThatNode fails without the move-to-top.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+MediaPresenterImpl now hands MediaResourcesManager its own ShownNodeSubscription instead of the activity's callback; it forwards children and errors only for the node on top of the browse stack, so a fetch from subscribe or from a change notification that returns after the user left its node is dropped before MainActivity renders it or sets the add button. addMediaItemToStack moves an id already on the stack to the top so the top is always the node last asked for. Verified by MediaPresenterShownNodeTest (9 JVM cases, 7 fail without the guard), the new journey walkingBackWhileTheLocalsListRefreshesEndsOnTheRootList (fails 3/3 before the fix, passes 3/3 after), ./gradlew test verifyPureCoreCoverage, and the full offline instrumented suite (221 tests).
+<!-- SECTION:FINAL_SUMMARY:END -->
