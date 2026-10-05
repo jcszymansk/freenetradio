@@ -32,12 +32,23 @@ import org.junit.Test
  */
 class MediaItemBuilderTest {
 
+    /**
+     * Every form of HLS address the playlist parsers keep as a stream, see
+     * `AutoDetectParser.isHlsUrl`, is one the player opens as HLS.
+     */
     @Test
     fun anHlsStreamResolvedFromAPlaylistIsPlayedAsHls() {
-        val resolved = MediaItemBuilder.withStreamUrl(stationItem(), "https://example.com/live/index.m3u8")
+        listOf(
+            "https://example.com/live/index.m3u8",
+            "https://example.com/live/index.M3U8?token=a.b",
+            "https://example.com/live/index.m3u8#start.0",
+            "https://example.com/live/index.m3u8;jsessionid=a.b"
+        ).forEach { url ->
+            val resolved = MediaItemBuilder.withStreamUrl(stationItem(), url)
 
-        assertEquals(MimeTypes.APPLICATION_M3U8, resolved.localConfiguration?.mimeType)
-        assertEquals(C.CONTENT_TYPE_HLS, contentTypeOf(resolved))
+            assertEquals(url, MimeTypes.APPLICATION_M3U8, resolved.localConfiguration?.mimeType)
+            assertEquals(url, C.CONTENT_TYPE_HLS, contentTypeOf(resolved))
+        }
     }
 
     /**
@@ -57,6 +68,9 @@ class MediaItemBuilderTest {
 
         listOf(
             Fixture("https://example.com/live/index.M3U8?token=a.b", MimeTypes.APPLICATION_M3U8),
+            Fixture("https://example.com/live/index.m3u8;jsessionid=a.b", MimeTypes.APPLICATION_M3U8),
+            Fixture("https://example.com/live/index.m3u8;jsessionid=ab?token=c;d", MimeTypes.APPLICATION_M3U8),
+            Fixture("https://example.com/stream.mp3;jsessionid=ab", MimeTypes.AUDIO_MPEG),
             Fixture("https://example.com/stream.mp3", MimeTypes.AUDIO_MPEG),
             Fixture("https://example.com/stream.aac?sid=1", MimeTypes.AUDIO_AAC),
             Fixture("https://example.com/stream", MimeTypes.AUDIO_UNKNOWN)

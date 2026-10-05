@@ -69,6 +69,11 @@ object AppUtils {
     private val CLASS_NAME = AppUtils::class.java.simpleName
 
     /**
+     * A path parameter, such as `;jsessionid=abc`, up to the next path segment, query or fragment.
+     */
+    private val PATH_PARAMETER = Regex(";[^/?#]*")
+
+    /**
      * Whether or not device supports Location feature.
      *
      * @param context Context of the callee.
@@ -264,10 +269,14 @@ object AppUtils {
 
     /**
      * Utility method to extract stream mime type from the stream extension (if exists).
+     *
+     * Path parameters are dropped first: [MimeTypeMap] finds no extension at all in a file name
+     * carrying one, so `index.m3u8;jsessionid=abc` would otherwise not be typed as HLS.
      */
     fun getMimeTypeFromUri(uri: Uri): String {
+        val url = PATH_PARAMETER.replace(uri.toString(), EMPTY_STRING)
         val mime: String =
-            when (MimeTypeMap.getFileExtensionFromUrl(uri.toString()).lowercase(Locale.getDefault())) {
+            when (MimeTypeMap.getFileExtensionFromUrl(url).lowercase(Locale.getDefault())) {
                 "aacp", "aac" -> MimeTypes.AUDIO_AAC
                 "ac3" -> MimeTypes.AUDIO_AC3
                 "ac4" -> MimeTypes.AUDIO_AC4

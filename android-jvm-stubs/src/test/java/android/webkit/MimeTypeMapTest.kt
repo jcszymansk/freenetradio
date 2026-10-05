@@ -44,6 +44,24 @@ class MimeTypeMapTest {
     }
 
     @Test
+    fun aFileNameWithACharacterOutsideThePlatformSetHasNoExtension() {
+        assertEquals("", MimeTypeMap.getFileExtensionFromUrl("https://radio.example/live.m3u8;jsessionid=ab"))
+        assertEquals("", MimeTypeMap.getFileExtensionFromUrl("https://radio.example/live.m3u8;jsessionid=a.b"))
+        assertEquals("", MimeTypeMap.getFileExtensionFromUrl("https://radio.example/my live.mp3"))
+        assertEquals("mp3", MimeTypeMap.getFileExtensionFromUrl("https://radio.example/live(1)%20hq.mp3"))
+    }
+
+    /**
+     * The platform cuts at the last `?` and `#`, so a second one leaves the first in the name.
+     */
+    @Test
+    fun onlyTheLastQueryAndFragmentSeparatorsCut() {
+        assertEquals("", MimeTypeMap.getFileExtensionFromUrl("https://radio.example/live.mp3?a=1?b=2"))
+        assertEquals("", MimeTypeMap.getFileExtensionFromUrl("https://radio.example/live.mp3#a#b"))
+        assertEquals("mp3", MimeTypeMap.getFileExtensionFromUrl("live.mp3?a#b"))
+    }
+
+    @Test
     fun aDottedDirectoryDoesNotLeakIntoTheExtension() {
         assertEquals("", MimeTypeMap.getFileExtensionFromUrl("https://radio.example/v1.2/live"))
     }
