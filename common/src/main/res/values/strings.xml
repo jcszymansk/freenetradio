@@ -30,6 +30,7 @@
     <string name="media_stream_http_403">Forbidden</string>
     <string name="media_stream_http_404">Not Found</string>
     <string name="media_stream_network_failed">Network Failed</string>
+    <string name="media_stream_unplayable">Unplayable Stream</string>
     <string name="no_data_message">No data received</string>
     <string name="favorite">Favorite</string>
     <string name="favorites_list_title">Favorites</string>

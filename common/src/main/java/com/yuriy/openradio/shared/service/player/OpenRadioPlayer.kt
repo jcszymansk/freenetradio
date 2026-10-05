@@ -747,6 +747,13 @@ class OpenRadioPlayer(
     }
 
     /**
+     * Tells the user that no stream of the current station could be played.
+     */
+    fun reportUnplayableStream() {
+        mComponentListener.reportUnplayableStream()
+    }
+
+    /**
      * Resets the player to its uninitialized state.
      */
     fun reset() {
@@ -884,6 +891,10 @@ class OpenRadioPlayer(
 
         fun invalidateMetaData() {
             updateStreamMetadata(mStreamMetadata)
+        }
+
+        fun reportUnplayableStream() {
+            updateStreamMetadata(mContext.getString(R.string.media_stream_unplayable))
         }
 
         private fun updateStreamMetadata(msg: String) {

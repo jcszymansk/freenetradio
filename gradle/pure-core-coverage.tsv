@@ -95,6 +95,10 @@ com/yuriy/openradio/shared/model/filter/FilterImpl	com.yuriy.openradio.shared.mo
 com/yuriy/openradio/shared/model/timer/SleepTimerImpl	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/model/timer/CoroutineTimerTask	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
+com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
+com/yuriy/openradio/shared/service/PlaylistFallback$Exhausted	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
+com/yuriy/openradio/shared/service/PlaylistFallback$Resolving	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
+com/yuriy/openradio/shared/service/PlaylistFallback$Trying	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/player/PlaybackErrorClassifier	com.yuriy.openradio.shared.service.player.PlaybackErrorClassifierTest	:common
 com/yuriy/openradio/shared/utils/JsonUtils	com.yuriy.openradio.shared.utils.JsonUtilsTest	:common
 com/yuriy/openradio/shared/utils/SortUtils	com.yuriy.openradio.shared.utils.SortUtilsTest	:common
