@@ -1,9 +1,11 @@
 ---
 id: TASK-095
 title: Drop a browse refresh that arrives after the user left its node
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-10-05 06:19'
+updated_date: '2026-10-05 18:53'
 labels: []
 milestone: m-1
 dependencies: []
@@ -24,3 +26,13 @@ Editing or removing a local station sends CMD_UPDATE_TREE, and the service notif
 - [ ] #2 Both paths that fetch children, the change notification and subscribe, are covered by that guard
 - [ ] #3 A journey that walks back while a refresh is in flight ends on the root list
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Make the presenter's browse stack the single record of the node being shown: addMediaItemToStack moves an id already on the stack to the top, so the top is always the node last asked for.
+2. Hand MediaResourcesManager a presenter-owned subscription instead of the activity callback. It forwards an answer (children or error) only when its parent id is the top of the stack, and logs the dropped one. Both fetch paths (subscribe, and onChildrenChanged, which reuses the callback given to subscribe) then pass through it, and so does every side effect MainActivity's callback has (progress bar, add button, empty message).
+3. JVM tests in common-ui: a late answer for a node that was left is dropped after a back press and after navigating forward; the shown node's answer still renders; errors follow the same rule; re-adding an id already on the stack moves it to the top.
+4. Journey: remove or edit a local station from the locals list and walk back without waiting for the refresh; assert the root list and the add button.
+5. Run JVM tests, coverage gate, and the instrumented suite offline.
+<!-- SECTION:PLAN:END -->

@@ -16,22 +16,10 @@
 
 package com.yuriy.openradio.shared.presenter
 
-import android.content.Context
-import android.content.ContextWrapper
 import com.yuriy.openradio.shared.model.media.MediaId
-import com.yuriy.openradio.shared.model.net.NetworkLayer
-import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
-import com.yuriy.openradio.shared.model.source.Source
-import com.yuriy.openradio.shared.model.source.SourcesLayer
-import com.yuriy.openradio.shared.model.storage.FavoritesStorage
-import com.yuriy.openradio.shared.model.storage.LocationStorage
-import com.yuriy.openradio.shared.model.timer.SleepTimerListener
-import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import com.yuriy.openradio.shared.view.list.TestMediaItemsAdapter
 import com.yuriy.openradio.shared.view.list.TestMediaItemsAdapter.Companion.mediaItem
-import java.lang.ref.WeakReference
-import java.util.Date
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -44,7 +32,7 @@ import org.junit.Test
 class MediaPresenterChildrenLoadedTest {
 
     private val mAdapter = TestMediaItemsAdapter()
-    private val mPresenter = presenter(mAdapter)
+    private val mPresenter = listOnlyPresenter(mAdapter)
 
     @Test
     fun refreshOfTheSameCatalogueReplacesItsRows() {
@@ -96,74 +84,5 @@ class MediaPresenterChildrenLoadedTest {
          * node can tell the two halves of the decision apart.
          */
         const val COUNTRY_STATIONS = MediaId.MEDIA_ID_COUNTRY_STATIONS
-
-        /**
-         * A presenter holding nothing but the adapter. The children-loaded path reads no other
-         * collaborator, and it tolerates the absent list, so none of them has to work here.
-         */
-        fun presenter(adapter: TestMediaItemsAdapter): MediaPresenterImpl {
-            val context: Context = object : ContextWrapper(null) {}
-            val presenter = MediaPresenterImpl(
-                context,
-                UnusedNetworkLayer(),
-                LocationStorage(WeakReference(context)),
-                UnusedSleepTimerModel(),
-                UnusedSourcesLayer(),
-                FavoritesStorage(WeakReference(context))
-            )
-            presenter.attachList(null, adapter)
-            return presenter
-        }
-
-        fun unexpected(): Nothing {
-            throw AssertionError("The children loaded path reached a collaborator it has no business calling")
-        }
-    }
-
-    private class UnusedNetworkLayer : NetworkLayer {
-
-        override fun startMonitor(context: Context, listener: NetworkMonitorListener) = unexpected()
-
-        override fun stopMonitor(context: Context) = unexpected()
-
-        override fun checkConnectivityAndNotify(context: Context) = unexpected()
-
-        override fun isMobileNetwork() = unexpected()
-    }
-
-    private class UnusedSourcesLayer : SourcesLayer {
-
-        override fun getAllSources(): Set<Source> = unexpected()
-
-        override fun getActiveSource(): Source = unexpected()
-
-        override fun setActiveSource(source: Source) = unexpected()
-    }
-
-    private class UnusedSleepTimerModel : SleepTimerModel {
-
-        override fun init() = unexpected()
-
-        override fun isEnabled() = unexpected()
-
-        override fun setEnabled(value: Boolean) = unexpected()
-
-        override fun updateTime(enabled: Boolean) = unexpected()
-
-        override fun updateTimer(time: Long, enabled: Boolean) = unexpected()
-
-        override fun setDate(year: Int, month: Int, day: Int) = unexpected()
-
-        override fun setTime(hourOfDay: Int, minute: Int) = unexpected()
-
-        override fun getTime(): Date = unexpected()
-
-        override fun getTimestamp() = unexpected()
-
-        override fun isTimestampNotValid(value: Long) = unexpected()
-
-        override fun addSleepTimerListener(listener: SleepTimerListener) = unexpected()
-
-        override fun removeSleepTimerListener(listener: SleepTimerListener) = unexpected()
     }
 }

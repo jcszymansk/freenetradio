@@ -117,7 +117,13 @@ class MediaPresenterImpl(
      * ID of the parent of current item (whether it is directory or Radio Station).
      */
     private var mCurrentParentId = AppUtils.EMPTY_STRING
+
+    /**
+     * The activity's subscription. [MediaResourcesManager] is never handed it directly, only
+     * [mShownNodeSubscription], which decides what reaches it.
+     */
     private var mCallback: MediaItemsSubscription? = null
+    private val mShownNodeSubscription = ShownNodeSubscription()
     private var mActivity: FragmentActivity? = null
     private var mMainLayoutView: View? = null
     private var mListener: MediaPresenterListener? = null
@@ -163,7 +169,7 @@ class MediaPresenterImpl(
         mMediaRsrMgr = MediaResourcesManager(mContext, javaClass.simpleName, mMdResMrgListener)
         registerReceivers(localReceiverCallback)
         mIsOnSaveInstancePassed.set(false)
-        mCallback = mediaSubscriptionCallback
+        attachSubscription(mediaSubscriptionCallback)
         mActivity = activity
         mMainLayoutView = mainLayout
         mListener = listener
@@ -207,6 +213,25 @@ class MediaPresenterImpl(
         mListView = listView
         mAdapter = adapter
     }
+
+    /**
+     * Binds the activity's subscription, which receives the browse answers for the node on top of
+     * the stack.
+     *
+     * Split out of [init] for the same reason as [attachList].
+     *
+     * @param callback Subscription that renders the answers.
+     */
+    internal fun attachSubscription(callback: MediaItemsSubscription) {
+        mCallback = callback
+    }
+
+    /**
+     * What [MediaResourcesManager] delivers its answers to. Exposed so that a test can deliver an
+     * answer the way the manager does, which the manager itself cannot do without a bound service.
+     */
+    internal val browserSubscription: MediaItemsSubscription
+        get() = mShownNodeSubscription
 
     private fun itemsCount(): Int {
         return mAdapter?.itemCount ?: 0
@@ -334,7 +359,7 @@ class MediaPresenterImpl(
             val previousMediaId = mMediaItemsStack[index]
             if (previousMediaId.isNotEmpty()) {
                 mListener?.showProgressBar()
-                mMediaRsrMgr?.subscribe(previousMediaId, mCallback)
+                mMediaRsrMgr?.subscribe(previousMediaId, mShownNodeSubscription)
             }
         } else {
             return true
@@ -363,11 +388,12 @@ class MediaPresenterImpl(
             AppLogger.e("$TAG add empty media id to stack")
             return
         }
-        if (!mMediaItemsStack.contains(mediaId)) {
-            mMediaItemsStack.add(mediaId)
-        }
+        // The node asked for is the node shown, so it has to be the top even when it is already on
+        // the stack: ShownNodeSubscription drops every answer for any other node.
+        unsubscribeFromItem(mediaId)
+        mMediaItemsStack.add(mediaId)
         mListener?.showProgressBar()
-        mMediaRsrMgr?.subscribe(mediaId, mCallback, page, bundle)
+        mMediaRsrMgr?.subscribe(mediaId, mShownNodeSubscription, page, bundle)
     }
 
     override fun updateDescription(descriptionView: TextView?, mediaMetadata: MediaMetadata) {
@@ -718,6 +744,48 @@ class MediaPresenterImpl(
 
         override fun onMetadataChanged(metadata: MediaMetadata) {
             handleMetadataChanged(metadata)
+        }
+    }
+
+    /**
+     * Lets through to the activity only the answers for the node on top of [mMediaItemsStack].
+     *
+     * [MediaResourcesManager] fetches children on a coroutine, both when asked to subscribe and
+     * when the service reports that the subscribed node changed, and the user can walk to another
+     * node while either fetch is in flight. The stack follows the user synchronously, so an answer
+     * whose parent is not its top was asked for a node that is no longer shown. Rendering it would
+     * put that node's rows on screen while the stack stands elsewhere, and the activity would set
+     * the add button from the stale parent id.
+     *
+     * ```
+     *   locals shown, station removed
+     *   service: locals changed ──► fetch(locals) ──────────────────────┐
+     *   user presses back ──► stack top = root ──► fetch(root) ──┐      │
+     *                                     root answer, rendered ◄┘      │
+     *                                     locals answer, dropped ◄──────┘
+     * ```
+     */
+    private inner class ShownNodeSubscription : MediaItemsSubscription {
+
+        override fun onChildrenLoaded(parentId: String, children: List<MediaItem>, replace: Boolean) {
+            if (isShown(parentId, "${children.size} children")) {
+                mCallback?.onChildrenLoaded(parentId, children, replace)
+            }
+        }
+
+        override fun onError(parentId: String) {
+            if (isShown(parentId, "an error")) {
+                mCallback?.onError(parentId)
+            }
+        }
+
+        private fun isShown(parentId: String, answer: String): Boolean {
+            val shownId = mMediaItemsStack.peekLast()
+            if (parentId == shownId) {
+                return true
+            }
+            AppLogger.w("$TAG drop $answer for '$parentId', the shown node is '$shownId'")
+            return false
         }
     }
 
