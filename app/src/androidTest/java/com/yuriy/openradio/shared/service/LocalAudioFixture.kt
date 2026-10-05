@@ -57,14 +57,6 @@ internal class LocalAudioFixture(private val mContext: Context) {
     }
 
     /**
-     * Writes [content] verbatim and returns its `file://` url, for the cases where what the url
-     * points at is not playable audio.
-     */
-    fun file(name: String, content: String): String {
-        return write(name, content.toByteArray(Charsets.UTF_8))
-    }
-
-    /**
      * Removes every file this fixture wrote. A url handed out before this is no longer readable.
      */
     fun delete() {

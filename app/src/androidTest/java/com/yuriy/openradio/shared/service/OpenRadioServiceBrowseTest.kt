@@ -131,6 +131,7 @@ class OpenRadioServiceBrowseTest {
     fun tearDown() {
         mStorages.clear()
         PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME).clear()
+        InMemoryApiCache().clear()
         if (mBrowser.isConnected()) {
             mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         }
@@ -302,17 +303,17 @@ class OpenRadioServiceBrowseTest {
         // preference file on purpose: the command has to take it away again for the
         // every-file-is-empty check below to hold, so that check cannot pass trivially either.
         //
-        // It is written through a throwaway storage rather than the service's own. Adding through
-        // the service's instance would also seed its in-memory copy, which no clear resets
-        // (TASK-027), and the next service start would then adopt the probe as its active station
-        // and browse a playlist for it.
+        // It is written through the service's own storage, so the copy that storage keeps in
+        // memory is seeded too. That copy is what the next service start adopts as its active
+        // station, and the check on `mStorages.latest` below can only fail if the clear has
+        // something there to drop (TASK-027).
         val persistentCache = PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         val memoryCache = InMemoryApiCache()
         val images = ImagesDatabase.getInstance(mContext).rsImageDao()
         persistentCache.put(CACHE_KEY, CACHE_VALUE)
         memoryCache.put(CACHE_KEY, CACHE_VALUE)
         images.insertImage(Image(CLEAR_PROBE_STATION_ID, byteArrayOf(1, 2, 3)))
-        mStorages.freshLatest().add(makeStation(CLEAR_PROBE_STATION_ID))
+        mStorages.latest.add(makeStation(CLEAR_PROBE_STATION_ID))
         assertEquals(CACHE_VALUE, persistentCache[CACHE_KEY])
         assertEquals(CACHE_VALUE, memoryCache[CACHE_KEY])
         // The probe row, not the row count: whatever else the database already holds is the app
@@ -568,10 +569,9 @@ class OpenRadioServiceBrowseTest {
      * Drops whatever either API cache holds for [url], so a case reads its own fixture or nothing.
      *
      * The in-memory cache matters most: its map is static and outlives every test in the run, and
-     * a persistent hit is promoted into it, so a response one case seeded would go on answering
-     * for every case that shares the URL. It is emptied today whenever releasing the last browser
-     * destroys the service, because `onDestroy` closes the presenter, but that is Android's timing
-     * rather than this suite's.
+     * a persistent hit is promoted into it, so a response seeded earlier would go on answering for
+     * every case that shares the URL. [tearDown] empties it after each case here, which does not
+     * cover a class that ran before this one and left its own entry behind.
      */
     private fun forgetCachedResponse(url: String) {
         val memoryCache = InMemoryApiCache()

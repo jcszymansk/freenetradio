@@ -9,17 +9,16 @@ import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.model.ServiceCommander
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
-import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
-import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
+import com.yuriy.openradio.shared.permission.grantImageReadPermission
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.ServiceBrowser
+import com.yuriy.openradio.shared.service.ServiceStorages
 import org.junit.After
 import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.lang.ref.WeakReference
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -27,24 +26,30 @@ import java.util.concurrent.TimeUnit
 @RunWith(AndroidJUnit4::class)
 class AddStationDialogTest {
 
-    private lateinit var sleepTimerStorage: SleepTimerStorage
-    private lateinit var latestRadioStationStorage: LatestRadioStationStorage
+    /**
+     * The service's own storages: the latest station is cleared so that no service this test
+     * starts adopts one, and a service reads it through the registry instance, which keeps a copy
+     * that clearing a parallel instance would leave behind.
+     */
+    private lateinit var mStorages: ServiceStorages
 
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val contextRef = WeakReference(context)
-        sleepTimerStorage = SleepTimerStorage(contextRef)
-        sleepTimerStorage.clear()
-        latestRadioStationStorage = LatestRadioStationStorage(contextRef)
-        latestRadioStationStorage.clear()
+        grantImageReadPermission(context)
+        mStorages = ServiceStorages(context)
+        clearState()
         ServiceBrowser.assertABrowseCannotStartPlayback()
     }
 
     @After
     fun tearDown() {
-        sleepTimerStorage.clear()
-        latestRadioStationStorage.clear()
+        clearState()
+    }
+
+    private fun clearState() {
+        mStorages.sleepTimer.clear()
+        mStorages.latest.clear()
     }
 
     @Test

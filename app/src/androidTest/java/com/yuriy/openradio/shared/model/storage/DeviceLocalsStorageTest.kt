@@ -39,10 +39,23 @@ class DeviceLocalsStorageTest {
 
     @Test
     fun theFirstAllocatedIdIsTheInitialValueAndTheNextOnesIncrement() {
-        val first = mStorage.getId().toInt()
+        assertEquals(INITIAL_ID, mStorage.getId())
+        assertEquals((INITIAL_ID.toInt() + 1).toString(), mStorage.getId())
+        assertEquals((INITIAL_ID.toInt() + 2).toString(), mStorage.getId())
+    }
 
-        assertEquals(first + 1, mStorage.getId().toInt())
-        assertEquals(first + 2, mStorage.getId().toInt())
+    /**
+     * A device that ran the app before reaches the first-id case with a counter already advanced,
+     * so this is the case that shows `clear` is what puts it back.
+     */
+    @Test
+    fun clearResetsTheIdCounterToTheInitialValue() {
+        mStorage.getId()
+        mStorage.getId()
+
+        mStorage.clear()
+
+        assertEquals(INITIAL_ID, mStorage.getId())
     }
 
     @Test
@@ -192,5 +205,16 @@ class DeviceLocalsStorageTest {
         mStorage.clear()
         mFavorites.clear()
         mLatest.clear()
+    }
+
+    private companion object {
+
+        /**
+         * `DeviceLocalsStorage.ID_INIT_VALUE`, which is private, spelled out: `Int.MAX_VALUE -
+         * 1_000_000`. It is pinned rather than read because every local station id ever handed out
+         * was counted up from it, and those ids are stored in favorites and the latest station as
+         * well as here.
+         */
+        const val INITIAL_ID = "2146483647"
     }
 }

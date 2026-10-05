@@ -26,6 +26,7 @@ import com.yuriy.openradio.shared.model.net.DirectUrlResolver
 import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -111,7 +112,7 @@ class PlaylistResolutionTest {
      */
     @Test
     fun aPlaylistThatCannotBeOpenedResolvesToOneEmptyUrl() {
-        assertArrayEquals(arrayOf(""), resolve("http://127.0.0.1:1/unreachable.pls"))
+        assertArrayEquals(arrayOf(""), resolve("$UNREACHABLE_ORIGIN/unreachable.pls"))
     }
 
     /**

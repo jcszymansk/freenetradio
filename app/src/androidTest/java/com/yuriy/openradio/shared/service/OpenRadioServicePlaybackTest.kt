@@ -216,10 +216,6 @@ class OpenRadioServicePlaybackTest {
         mBrowser.awaitMetadataSubtitle(liveStreamLabel())
 
         assertTrue(
-            "No metadata reached the controller",
-            mBrowser.metadataUpdates().isNotEmpty()
-        )
-        assertTrue(
             "The station's own title never reached the controller",
             mBrowser.metadataUpdates().any { it.title?.toString() == stations[0].name }
         )

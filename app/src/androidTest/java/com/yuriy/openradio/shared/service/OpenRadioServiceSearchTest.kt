@@ -23,6 +23,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
+import com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
@@ -61,6 +62,7 @@ class OpenRadioServiceSearchTest {
         mStorages.clear()
         mCache = PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         mCache.clear()
+        InMemoryApiCache().clear()
         mBrowser = ServiceBrowser()
         mBrowser.connect()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
@@ -93,6 +95,9 @@ class OpenRadioServiceSearchTest {
     @After
     fun tearDown() {
         mCache.clear()
+        // A persistent hit is promoted into this static map, so a seeded response would otherwise
+        // keep answering for every later class that searches the same query.
+        InMemoryApiCache().clear()
         mStorages.clear()
         if (mBrowser.isConnected()) {
             mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)

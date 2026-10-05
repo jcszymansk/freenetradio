@@ -492,6 +492,24 @@ internal class ServiceBrowser {
         }
 
         /**
+         * Drops the browse tree the service caches, for a class that reaches the service without
+         * a [ServiceBrowser] of its own. Connecting checks the [connect] precondition as well.
+         *
+         * The service outlives a class whenever an earlier one left it started by playing, so a
+         * root an Activity browsed while a local station was seeded keeps answering with a locals
+         * node after the station is wiped, and the next class reads it.
+         */
+        fun invalidateTheBrowseTree() {
+            val browser = ServiceBrowser()
+            browser.connect()
+            try {
+                browser.command(OpenRadioService.CMD_UPDATE_TREE)
+            } finally {
+                browser.release()
+            }
+        }
+
+        /**
          * What a media item transition reports when the queue has run out of items.
          */
         const val NO_ITEM = "<none>"

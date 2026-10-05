@@ -112,13 +112,18 @@ class OpenRadioServiceCommandTest {
      */
     @Test
     fun rejectsAnUnknownCustomCommand() {
+        val local = makeStation(mStorages.locals.getId(), name = "Kept local", isLocal = true)
+        mStorages.locals.add(local)
+        val favorite = makeStation("fav-kept", name = "Kept favorite")
+        mStorages.favorites.add(favorite)
+
         assertEquals(
             SessionResult.RESULT_ERROR_PERMISSION_DENIED,
             mBrowser.command(UNKNOWN_COMMAND).resultCode
         )
-        // A denied command must not have reached the handler, so nothing may have moved.
-        assertTrue(mStorages.freshFavorites().getAll().isEmpty())
-        assertTrue(mStorages.freshLocals().getAll().isEmpty())
+        // A denied command must not have reached the handler, so what was stored has to be there.
+        assertEquals(listOf(favorite.id), mStorages.freshFavorites().getAll().map { it.id })
+        assertEquals(listOf(local.id), mStorages.freshLocals().getAll().map { it.id })
     }
 
     @Test
@@ -400,24 +405,44 @@ class OpenRadioServiceCommandTest {
         )
     }
 
+    /**
+     * The request asks for exactly what [sortUpdateReordersLocalsAndRefreshesThem] asks for, the
+     * last local moved to the front, and names the root instead of the locals node. Had the command
+     * applied it to the locals anyway, the order read back would lead with that station.
+     *
+     * The order is what is asserted, not the sort ids: `getAll` renumbers them from zero on every
+     * read, so any stored values read back as `0, 1, 2`.
+     */
     @Test
     fun sortUpdateForAnUnsortableCategoryIsAcceptedAndChangesNothing() {
-        val station = makeStation(mStorages.locals.getId(), isLocal = true)
-        mStorages.locals.add(station)
+        val stations = (0 until 3).map {
+            makeStation(mStorages.locals.getId(), name = "Local $it", isLocal = true)
+        }
+        stations.forEach(mStorages.locals::add)
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
-        mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        val before = mBrowser.mediaIds(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        assertEquals(stations.map { it.id }, before)
 
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(
                 OpenRadioService.CMD_UPDATE_SORT_IDS,
-                OpenRadioStore.makeUpdateSortIdsBundle(station.id, 7, MediaId.MEDIA_ID_ROOT)
+                OpenRadioStore.makeUpdateSortIdsBundle(
+                    stations.last().id, 0, MediaId.MEDIA_ID_ROOT
+                )
             ).resultCode
         )
 
         assertEquals(
-            listOf(0),
-            mStorages.freshLocals().getAll().map { it.sortId }
+            "A sort update for the root reordered the stored locals",
+            before,
+            mStorages.freshLocals().getAll().map { it.id }
+        )
+        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        assertEquals(
+            "A sort update for the root reordered the locals node",
+            before,
+            mBrowser.mediaIds(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
         )
     }
 
