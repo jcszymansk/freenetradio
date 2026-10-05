@@ -1,11 +1,11 @@
 ---
 id: TASK-095
 title: Drop a browse refresh that arrives after the user left its node
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-05 06:19'
-updated_date: '2026-10-05 19:11'
+updated_date: '2026-10-05 19:14'
 labels: []
 milestone: m-1
 dependencies: []
@@ -22,9 +22,9 @@ Editing or removing a local station sends CMD_UPDATE_TREE, and the service notif
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A children answer for a node the user is no longer showing never replaces the list that is showing, pinned by a JVM test in common-ui
-- [ ] #2 Both paths that fetch children, the change notification and subscribe, are covered by that guard
-- [ ] #3 A journey that walks back while a refresh is in flight ends on the root list
+- [x] #1 A children answer for a node the user is no longer showing never replaces the list that is showing, pinned by a JVM test in common-ui
+- [x] #2 Both paths that fetch children, the change notification and subscribe, are covered by that guard
+- [x] #3 A journey that walks back while a refresh is in flight ends on the root list
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -42,3 +42,9 @@ Editing or removing a local station sends CMD_UPDATE_TREE, and the service notif
 <!-- SECTION:NOTES:BEGIN -->
 Verified: ./gradlew test and verifyPureCoreCoverage pass; full :app:connectedDebugAndroidTest offline, 221 tests, pass. The new journey case failed 3/3 against the pre-fix presenter (add button hidden at the root) and passed 3/3 with the fix. MediaPresenterShownNodeTest: 7 of 9 cases fail with the guard disabled; askingAgainForANodeDeeperInTheStackShowsThatNode fails without the move-to-top.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+MediaPresenterImpl now hands MediaResourcesManager its own ShownNodeSubscription instead of the activity's callback; it forwards children and errors only for the node on top of the browse stack, so a fetch from subscribe or from a change notification that returns after the user left its node is dropped before MainActivity renders it or sets the add button. addMediaItemToStack moves an id already on the stack to the top so the top is always the node last asked for. Verified by MediaPresenterShownNodeTest (9 JVM cases, 7 fail without the guard), the new journey walkingBackWhileTheLocalsListRefreshesEndsOnTheRootList (fails 3/3 before the fix, passes 3/3 after), ./gradlew test verifyPureCoreCoverage, and the full offline instrumented suite (221 tests).
+<!-- SECTION:FINAL_SUMMARY:END -->
