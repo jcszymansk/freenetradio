@@ -23,7 +23,6 @@ import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.lang.ref.WeakReference
 
 /**
  * The fake behind [preferencesContext] decides what every JVM test built on it can observe, so the
@@ -98,11 +97,12 @@ class InMemoryPreferencesTest {
 
         storage.putStringValue(KEY, "not a number")
 
+        assertEquals("not a number", storage.getStringValue(KEY, ""))
         assertEquals(-1, storage.getIntValue(KEY, -1))
     }
 
     private class TestStorage(context: Context, name: String = FILE_NAME) :
-        AbstractStorage(WeakReference(context), name)
+        AbstractStorage(StrongContextReference(context), name)
 
     private companion object {
 

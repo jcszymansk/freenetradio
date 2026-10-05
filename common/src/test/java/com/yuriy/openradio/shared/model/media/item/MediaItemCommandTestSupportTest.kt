@@ -18,6 +18,11 @@ package com.yuriy.openradio.shared.model.media.item
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -115,7 +120,173 @@ class MediaItemCommandTestSupportTest {
         assertTrue(NOT_INLINE, failure.message?.contains(ANSWERED_ELSEWHERE) == true)
     }
 
+    /**
+     * The regression the restored instance tests exist for: a command that answers inline and then
+     * launches its fetch anyway. Its second answer comes from a coroutine that has not run when
+     * `execute` returns, so only a listener that settles before counting can see it.
+     */
+    @Test
+    fun theRestoredInstanceAssertionRejectsACommandThatAlsoLaunchesItsFetch() {
+        val presenter = RecordingPresenter(mPopularStations = stations("first"))
+        val listener = RecordingCommandListener()
+        val command = MediaItemCommand { _, dependencies ->
+            dependencies.resultListener.onResult()
+            dependencies.mScope.launch {
+                delay(LATE_MILLIS)
+                dependencies.resultListener.onResult(
+                    radioStations = dependencies.presenter.getPopularStations()
+                )
+            }
+        }
+
+        command.execute(listener.playbackStateListener, dependencies(presenter, listener))
+
+        val failure = assertThrows(AssertionError::class.java) {
+            listener.assertAnsweredFromCacheBeforeReturning()
+        }
+        assertEquals(ANSWERED_TWICE, failure.message)
+        assertEquals(1, presenter.popularStationsRequests)
+    }
+
+    /**
+     * A fetch that asks the provider without answering leaves the single inline result intact, so
+     * the only witness is the presenter counter the test reads next. It must already be final.
+     */
+    @Test
+    fun theRestoredInstanceAssertionLeavesTheProviderCountersFinal() {
+        val presenter = RecordingPresenter()
+        val listener = RecordingCommandListener()
+        val command = MediaItemCommand { _, dependencies ->
+            dependencies.resultListener.onResult()
+            dependencies.mScope.launch {
+                delay(LATE_MILLIS)
+                dependencies.presenter.getPopularStations()
+            }
+        }
+
+        command.execute(listener.playbackStateListener, dependencies(presenter, listener))
+        listener.assertAnsweredFromCacheBeforeReturning()
+
+        assertEquals(1, presenter.popularStationsRequests)
+    }
+
+    @Test
+    fun settlingWaitsForACoroutineThatIsStillRunning() {
+        val listener = RecordingCommandListener()
+        val finished = AtomicBoolean(false)
+        listener.scope.launch {
+            delay(LATE_MILLIS)
+            finished.set(true)
+        }
+
+        listener.settle()
+
+        assertTrue("Settling returned while a launched coroutine was still running", finished.get())
+    }
+
+    @Test
+    fun settlingWaitsForACoroutineLaunchedByAnotherCoroutine() {
+        val listener = RecordingCommandListener()
+        val finished = AtomicBoolean(false)
+        listener.scope.launch {
+            listener.scope.launch {
+                delay(LATE_MILLIS)
+                finished.set(true)
+            }
+        }
+
+        listener.settle()
+
+        assertTrue("Settling returned while a nested coroutine was still running", finished.get())
+    }
+
+    /**
+     * A presenter call a browse command has no business making throws on an IO thread. Unless the
+     * scope captures it, the thread's uncaught exception handler swallows it and the test passes.
+     */
+    @Test
+    fun settlingFailsWithWhatALaunchedCoroutineThrew() {
+        val listener = RecordingCommandListener()
+        val command = MediaItemCommand { _, dependencies ->
+            dependencies.mScope.launch { dependencies.presenter.getCountryCode() }
+        }
+
+        command.execute(listener.playbackStateListener, dependencies(RecordingPresenter(), listener))
+
+        val failure = assertThrows(AssertionError::class.java) { listener.settle() }
+        assertEquals(RecordingCommandListener.COROUTINE_FAILED, failure.message)
+        assertEquals(UNEXPECTED_CALL, failure.cause?.message)
+    }
+
+    /**
+     * The result arrives first and the coroutine fails after it, which is the case an await of the
+     * result alone would wave through.
+     */
+    @Test
+    fun awaitingTheResultFailsWhenTheCoroutineThrowsAfterAnswering() {
+        val listener = RecordingCommandListener()
+        val command = MediaItemCommand { _, dependencies ->
+            dependencies.mScope.launch {
+                dependencies.resultListener.onResult()
+                dependencies.presenter.getCountryCode()
+            }
+        }
+
+        command.execute(listener.playbackStateListener, dependencies(RecordingPresenter(), listener))
+
+        val failure = assertThrows(AssertionError::class.java) { listener.awaitResult() }
+        assertEquals(RecordingCommandListener.COROUTINE_FAILED, failure.message)
+        assertEquals(1, listener.results)
+    }
+
+    /**
+     * Holds the test for the full await, by design: the claim is that a coroutine never outlives
+     * the test that launched it, which can only be shown by one that would.
+     */
+    @Test
+    fun settlingFailsByNameAndCancelsACoroutineThatNeverFinishes() {
+        val listener = RecordingCommandListener()
+        val endless = listener.scope.launch { awaitCancellation() }
+
+        val failure = assertThrows(AssertionError::class.java) { listener.settle() }
+
+        assertEquals(RecordingCommandListener.COROUTINE_STILL_RUNNING, failure.message)
+        runBlocking { endless.join() }
+        assertTrue("The coroutine that outlived the await was not cancelled", endless.isCancelled)
+    }
+
+    /**
+     * An error that arrives later than any fixed settle period would have waited is still seen,
+     * because the no-error claim waits for the coroutine that would report it.
+     */
+    @Test
+    fun theNoErrorAssertionSeesAnErrorReportedLate() {
+        val listener = RecordingCommandListener()
+        val command = MediaItemCommand { playbackStateListener, dependencies ->
+            dependencies.mScope.launch {
+                delay(LATE_MILLIS)
+                playbackStateListener.updatePlaybackState(STRING_RESOURCE)
+            }
+        }
+
+        command.execute(listener.playbackStateListener, dependencies(RecordingPresenter(), listener))
+
+        assertThrows(AssertionError::class.java) { listener.assertNoError() }
+        assertEquals(1, listener.errors)
+    }
+
     private companion object {
+
+        /**
+         * Long enough that a coroutine delayed by it has certainly not run when the code that
+         * launched it returns, and longer than the fixed settle period the no-error assertion used
+         * to wait.
+         */
+        const val LATE_MILLIS = 300L
+
+        const val ANSWERED_TWICE = "A restored instance answered more than once"
+
+        const val UNEXPECTED_CALL = "Browse command reached a presenter call it has no business making"
 
         const val ANSWERED_ELSEWHERE = "A restored instance did not answer on the thread that called execute"
 

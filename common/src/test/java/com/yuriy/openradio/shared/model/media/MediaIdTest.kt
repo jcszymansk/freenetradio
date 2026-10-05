@@ -35,6 +35,19 @@ class MediaIdTest {
         assertEquals("US", MediaId.getCountryCode("unknown", "US"))
     }
 
+    /**
+     * The phone keeps the search marker on its own browse stack and never sends it to the service,
+     * so it must resolve to no browse node, unlike [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE].
+     */
+    @Test
+    fun theClientSideSearchMarkerResolvesToNoBrowseNode() {
+        assertEquals("", MediaId.getId(MediaId.MEDIA_ID_SEARCH_FROM_APP, "US"))
+        assertEquals(
+            MediaId.MEDIA_ID_SEARCH_FROM_SERVICE,
+            MediaId.getId(MediaId.MEDIA_ID_SEARCH_FROM_SERVICE, "US")
+        )
+    }
+
     @Test
     fun classifiesSortableIds() {
         assertTrue(MediaId.isSortable(MediaId.MEDIA_ID_FAVORITES_LIST))

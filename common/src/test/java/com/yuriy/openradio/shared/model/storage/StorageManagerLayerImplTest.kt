@@ -211,7 +211,7 @@ class StorageManagerLayerImplTest {
      */
     private fun exported(vararg stations: RadioStation): String {
         val context = preferencesContext()
-        val donor = FavoritesStorage(WeakReference(context))
+        val donor = FavoritesStorage(StrongContextReference(context))
         donor.addAll(stations.toSet())
         return donor.getAllAsString()
     }

@@ -36,18 +36,25 @@ import com.yuriy.openradio.shared.utils.AppUtils
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Proxy
 import java.util.TreeSet
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 
 /**
  * Shared scaffolding for the [MediaItemCommand] tests: a context that answers resource lookups,
- * a recording presenter, a listener that can be awaited, and station fixtures.
+ * a recording presenter, a listener that owns the command's coroutine scope and can be awaited,
+ * and station fixtures.
  */
 
 internal const val DEFAULT_COUNTRY_CODE = "PL"
@@ -126,16 +133,37 @@ internal fun dependencies(
         isSameCatalogue,
         isSavedInstance,
         options,
-        CoroutineScope(Dispatchers.IO),
+        listener.scope,
         listener
     )
 }
 
 /**
- * Records what a command delivered. Commands answer from a background coroutine, so every
- * assertion is preceded by awaiting the signal the command under test is expected to send.
+ * Records what a command delivered, and owns the scope the command launches its work in.
+ *
+ * Commands answer from a background coroutine, so every assertion is preceded by awaiting the
+ * signal the command under test is expected to send and then [settle]-ing the scope. Settling is
+ * what makes the counts exact: once every coroutine the command launched has finished, nothing is
+ * left that could still deliver a second result, report an error or ask the presenter for more.
  */
 internal class RecordingCommandListener : OpenRadioService.ResultListener {
+
+    /**
+     * Failures of the coroutines launched in [scope]. Without the handler they would reach the
+     * thread's uncaught exception handler on an IO thread, where the test that caused them never
+     * sees them.
+     */
+    private val mCoroutineFailures = ConcurrentLinkedQueue<Throwable>()
+
+    private val mScopeJob = SupervisorJob()
+
+    /**
+     * The scope handed to the command through [dependencies]. A supervisor, so one failed
+     * coroutine is reported rather than silently cancelling the others.
+     */
+    val scope = CoroutineScope(
+        mScopeJob + Dispatchers.IO + CoroutineExceptionHandler { _, failure -> mCoroutineFailures.add(failure) }
+    )
 
     private val mResultLatch = CountDownLatch(1)
 
@@ -204,21 +232,83 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
         mResultLatch.countDown()
     }
 
+    /**
+     * Waits for the first result, then [settle]s, so what the listener holds afterwards is final.
+     *
+     * @return This listener, for chaining.
+     */
     fun awaitResult(): RecordingCommandListener {
-        assertTrue(RESULT_MISSING, mResultLatch.await(AWAIT_MILLIS, TimeUnit.MILLISECONDS))
+        awaitSignal(mResultLatch, RESULT_MISSING)
         return this
     }
 
+    /**
+     * Waits for the first error report, then [settle]s, so what the listener holds afterwards is
+     * final.
+     *
+     * @return This listener, for chaining.
+     */
     fun awaitError(): RecordingCommandListener {
-        assertTrue(ERROR_MISSING, mErrorLatch.await(AWAIT_MILLIS, TimeUnit.MILLISECONDS))
+        awaitSignal(mErrorLatch, ERROR_MISSING)
         return this
     }
 
+    /**
+     * Asserts that no error was reported. The result and the error come from the same coroutine,
+     * so once [settle] has joined it, a count of zero is the final word rather than a guess about
+     * whether an error was still on its way.
+     */
     fun assertNoError() {
-        assertFalse(
-            "Command reported an error it was not expected to",
-            mErrorLatch.await(SETTLE_MILLIS, TimeUnit.MILLISECONDS)
-        )
+        settle()
+        assertEquals("Command reported an error it was not expected to", 0, errors)
+    }
+
+    /**
+     * Waits until every coroutine launched in [scope] has finished, and fails the test with the
+     * first failure any of them raised. A coroutine may launch another before it finishes, so the
+     * children are read again until none is left running.
+     *
+     * A coroutine still running after [AWAIT_MILLIS] fails the test by name, and the scope is
+     * cancelled first so that it does not outlive the test that started it.
+     */
+    fun settle() {
+        val finished = runBlocking {
+            withTimeoutOrNull(AWAIT_MILLIS) {
+                while (true) {
+                    val running = mScopeJob.children.filterNot { it.isCompleted }.toList()
+                    if (running.isEmpty()) {
+                        break
+                    }
+                    running.joinAll()
+                }
+            }
+        }
+        if (finished == null) {
+            scope.cancel()
+            throw withCoroutineFailures(AssertionError(COROUTINE_STILL_RUNNING))
+        }
+        if (mCoroutineFailures.isNotEmpty()) {
+            throw withCoroutineFailures(AssertionError(COROUTINE_FAILED))
+        }
+    }
+
+    private fun awaitSignal(latch: CountDownLatch, missing: String) {
+        if (latch.await(AWAIT_MILLIS, TimeUnit.MILLISECONDS).not()) {
+            scope.cancel()
+            throw withCoroutineFailures(AssertionError(missing))
+        }
+        settle()
+    }
+
+    /**
+     * Attaches the recorded coroutine failures to [failure], the first as its cause, so a signal
+     * that never came because the coroutine meant to send it threw says why.
+     */
+    private fun withCoroutineFailures(failure: AssertionError): AssertionError {
+        val recorded = mCoroutineFailures.toList()
+        recorded.firstOrNull()?.let { failure.initCause(it) }
+        recorded.drop(1).forEach { failure.addSuppressed(it) }
+        return failure
     }
 
     /**
@@ -242,22 +332,26 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
      * That the result was delivered inline is the whole claim. An empty result on its own is bit
      * for bit what a command that never ran delivers, and so is one a coroutine delivers later.
      *
-     * The inline delivery is read off the thread rather than off a counter or a flag, because both
-     * of those would only be asserting that a coroutine had not got there yet - true most of the
-     * time and therefore a guard that decides races rather than settling them. The thread cannot
-     * race: every command that does its work launches it on [Dispatchers.IO], which never runs a
-     * block on the thread that launched it, so the caller's own thread delivering the result is
-     * something only the branch that returns before the launch can produce. Call this from the
-     * thread that called `execute`.
+     * The inline delivery is read off the thread, which cannot race: every command that does its
+     * work launches it on [Dispatchers.IO], which never runs a block on the thread that launched
+     * it, so the caller's own thread delivering the result is something only the branch that
+     * returns before the launch can produce. Call this from the thread that called `execute`.
+     *
+     * The scope is [settle]d before anything is counted, so a command that answers inline and then
+     * launches its fetch anyway has finished that fetch by the time the single result is asserted,
+     * and the caller's presenter counters, read after this returns, are final too. The second
+     * answer is checked for before the thread, because it overwrites the thread the first one
+     * was delivered on.
      */
     fun assertAnsweredFromCacheBeforeReturning() {
+        settle()
+        assertTrue("A restored instance answered more than once", results <= 1)
         assertSame(
             "A restored instance did not answer on the thread that called execute, so it did not " +
                 "answer before execute returned",
             Thread.currentThread(),
             resultThread
         )
-        assertEquals("A restored instance answered more than once", 1, results)
         assertEquals("A restored instance built media items of its own", emptyList<String>(), mediaIds)
         assertEquals("A restored instance carried radio stations of its own", emptySet<RadioStation>(), radioStations)
         assertEquals("A restored instance did not answer for the first page", UrlLayer.FIRST_PAGE_INDEX, pageNumber)
@@ -279,15 +373,18 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
 
         private const val ERROR_MISSING = "Command did not report an error"
 
-        private const val UPDATE_PLAYBACK_STATE = "updatePlaybackState"
+        const val COROUTINE_STILL_RUNNING = "A coroutine the command launched was still running after $AWAIT_MILLIS ms"
 
-        private const val SETTLE_MILLIS = 250L
+        const val COROUTINE_FAILED = "A coroutine the command launched failed"
+
+        private const val UPDATE_PLAYBACK_STATE = "updatePlaybackState"
     }
 }
 
 /**
  * Canned answers plus a record of what the command asked for. Anything a browse command is not
- * meant to touch throws, so an unexpected call fails the test that made it.
+ * meant to touch throws, and [RecordingCommandListener.settle] hands a throw from the command's
+ * coroutine back to the test that made the call.
  */
 internal class RecordingPresenter(
     private val mCategories: Set<Category> = emptySet(),

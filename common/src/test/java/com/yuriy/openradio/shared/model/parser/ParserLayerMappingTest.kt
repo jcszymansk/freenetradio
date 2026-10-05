@@ -1,7 +1,11 @@
 package com.yuriy.openradio.shared.model.parser
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.res.Resources
 import android.net.Uri
 import com.yuriy.openradio.shared.model.filter.FilterImpl
+import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamBitrate
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
@@ -189,11 +193,14 @@ class ParserLayerMappingTest {
         val radioBrowserCategories = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCategories(
             """[{"name":"rock","stationcount":4},{"name":"jazz","stationcount":2}]"""
         ).toList()
+        val context = stationsContext()
         assertEquals(2, radioBrowserCategories.size)
         assertEquals("rock", radioBrowserCategories[0].id)
         assertEquals("Rock", radioBrowserCategories[0].title)
+        assertEquals("4 $STATIONS", radioBrowserCategories[0].getDescription(context))
         assertEquals("jazz", radioBrowserCategories[1].id)
         assertEquals("Jazz", radioBrowserCategories[1].title)
+        assertEquals("2 $STATIONS", radioBrowserCategories[1].getDescription(context))
 
         val webRadioCategories = ParserLayerWebRadioImpl(emptySet()).getAllCategories(
             """{"radio-one":{"Genre":["Rock","Jazz"]},"radio-two":{"Genre":["Rock"]}}"""
@@ -201,8 +208,10 @@ class ParserLayerMappingTest {
         assertEquals(2, webRadioCategories.size)
         assertEquals("Rock", webRadioCategories[0].id)
         assertEquals("Rock", webRadioCategories[0].title)
+        assertEquals("2 $STATIONS", webRadioCategories[0].getDescription(context))
         assertEquals("Jazz", webRadioCategories[1].id)
         assertEquals("Jazz", webRadioCategories[1].title)
+        assertEquals("1 $STATIONS", webRadioCategories[1].getDescription(context))
     }
 
     @Test
@@ -217,7 +226,6 @@ class ParserLayerMappingTest {
         )
         assertEquals(setOf(Country("Poland", "PL")), webRadioCountries)
     }
-
 
     @Test
     fun webRadioFiltersByCategoryCountryAndCaseInsensitiveSearch() {
@@ -359,5 +367,31 @@ class ParserLayerMappingTest {
             RadioStation.INVALID_INSTANCE,
             parser.getRadioStation("[]", MediaIdBuilderDefault(), Uri.parse(""))
         )
+    }
+
+    private companion object {
+
+        /**
+         * What every string resource resolves to in [stationsContext]. The generated test R class
+         * numbers every resource zero, so the singular and plural labels cannot be told apart here;
+         * the count, which [Category.getDescription] writes in front of the label, can.
+         */
+        const val STATIONS = "stations"
+
+        /**
+         * @return a context whose string lookups answer [STATIONS], so that a category's
+         *         description can be read on the JVM.
+         */
+        @Suppress("DEPRECATION")
+        fun stationsContext(): Context {
+            val resources = object : Resources(null, null, null) {
+
+                override fun getString(id: Int): String = STATIONS
+            }
+            return object : ContextWrapper(null) {
+
+                override fun getResources(): Resources = resources
+            }
+        }
     }
 }
