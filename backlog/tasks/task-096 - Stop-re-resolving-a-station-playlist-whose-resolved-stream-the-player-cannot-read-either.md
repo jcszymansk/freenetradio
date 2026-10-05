@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-05 09:32'
-updated_date: '2026-10-05 13:58'
+updated_date: '2026-10-05 14:14'
 labels: []
 milestone: m-0
 dependencies: []
@@ -38,3 +38,15 @@ When ExoPlayer raises UnrecognizedInputFormatException, OpenRadioService.onHandl
 4. Wire OpenRadioService to it: key everything on the current media item id, read the station url from the browse tree for that id instead of mActiveRS, and drop the race where a late resolution replaced whatever item was current.
 5. JVM tests own PlaylistFallback (list it in gradle/pure-core-coverage.tsv); an instrumented test in OpenRadioServiceRecoveryTest pins that a playlist whose stream is unreadable is fetched once and ends on the new subtitle, failing on the current behaviour.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+The loop was not literally unbounded: PlaybackErrorClassifier counts an unrecognised format against its error budget, so the seventh lap was classified Unrecoverable and showed 'Error'. Measured on the emulator before the fix: a playlist whose only stream is unreadable was requested 7 times (the player's own read plus six resolutions). A lap that reached READY would have refilled the budget, and the budget is not reset between stations, so it was a bound by accident.
+
+Decision (AC #2): the remaining urls are tried in order, then playback stops with the 'Unplayable Stream' subtitle (R.string.media_stream_unplayable), which the phone UI and Android Auto show under the station name. Playlists list mirrors of one stream, so a second entry is worth trying; a playlist that names nothing ends the same way.
+
+A play request starts with any controller command that starts, stops or changes playback (PlaylistFallback.isPlayRequest, consulted in ServiceCallback.onPlayerCommandRequest). The service's own restarts after a network or Bluetooth reconnect are not requests, so they meet the exhausted state and give up without reading the playlist again.
+
+Also fixed on the way, because the same code did it: a resolution that arrived after the user moved to another station replaced whichever item was current, and the station url came from mActiveRS, which is set asynchronously; it now comes from the browse tree for the failing media id. The withTimeout around the resolution was removed: NetUtils.extractUrlsFromPlaylist blocks without suspending, so it could never fire. An empty url in the resolution (TASK-043) is still played as given.
+<!-- SECTION:NOTES:END -->
