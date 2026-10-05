@@ -171,8 +171,9 @@ Run policy:
 #### What "critical pure-core" means
 
 The gate measures a named set of classes, not the repository. The set lives in
-`gradle/pure-core-coverage.tsv`, one row per class with the JVM test that owns it, and
-`./gradlew verifyPureCoreCoverage` reads it. A class belongs to the set when all five hold:
+`gradle/pure-core-coverage.tsv`, one row per class with the JVM test that owns it.
+`./gradlew verifyPureCoreCoverage` reads it, and `./gradlew check` runs it. A class belongs to the
+set when all five hold:
 
 1. It is production source in `:common` or `:common-ui`. `:app` is the phone shell and
    `:android-jvm-stubs` is test infrastructure.
@@ -199,32 +200,46 @@ roadmap rules out in its opening paragraph.
 | Branch coverage across the set | at least 70% |
 | Line coverage of any one class | at least 60% |
 | Listed classes missing from the report | none |
+| Unjudged classes with a branch or 20 lines in a watched package | none |
 
 The per-class floor exists because an aggregate hides zeroes. Measured on 2026-09-21 the set scored
 83.7% line and 77.2% branch across 49 classes while four of them sat at 0%, and dropping those four
-raises the rest to 88.2%. The floor is 60% provisionally. It catches seven classes today: the four
-at 0%, plus `RadioStationToAdd` at 33.3%, `ASXPlaylistParser` at 52.6% and
-`RadioStationManagerLayerImpl` at 55.6%.
+raised the rest to 88.2%. The floor is 60% provisionally; on that first run it caught seven classes,
+the four at 0% plus three between 33% and 56%.
 
-The owner column is what criterion 5 turns on, and it catches what a percentage cannot. `JsonUtils`
-sits at 81.6% line, comfortably over the floor, and has no owner: every line of it is executed by
-serializers that were testing something else, so nothing would miss it if it broke.
+The owner column is what criterion 5 turns on, and it catches what a percentage cannot. On the
+first run `JsonUtils` sat at 81.6% line, comfortably over the floor, with no owner: every line of
+it was executed by serializers that were testing something else, so nothing would have missed it
+if it broke. `./gradlew verifyPureCoreAttribution` re-runs each owner alone to confirm it carries
+what it owns. It costs a Gradle invocation per owner, a few minutes in all, which is why `check`
+does not run it.
 
-The set is a hand-maintained list, which it has to be while rules 2 to 5 take judgement, and that
-leaves a hole worth knowing about: moving untested code into an unlisted class raises the
-aggregate. Splitting `getConnectionUrl` out of the URL layer did exactly that, carrying 30
-uncovered lines of mirror lookup into `DnsMirrorUrlResolver` and lifting the aggregate by three
-points. That particular move is right, because rule 3 puts anything that reaches a name server
-outside the set and the reason to extract it was that no test may call it. The general shape is
-not right. Until the check can also ask whether an unlisted class in these packages is big enough
-to deserve a row, the list has to be read as well as run.
+Kotlin compiles lambdas, `launch` blocks, companions and inner classes into `Outer$...` classes.
+The gate folds them into the class whose source they come from, because leaving them out left whole
+coroutine bodies unmeasured: about 360 lines inside listed classes, measured on 2026-10-05. Folding
+counts a line twice where a lambda opens on a line of outer code, such as `launch {`, which shifts
+the numbers by about 30 lines across the set; exact attribution would need line ranges per class
+and is not worth it at that size.
+
+A hand-maintained list rewards moving untested code into an unlisted class. Splitting
+`getConnectionUrl` out of the URL layer did exactly that by accident, carrying 30 uncovered lines
+of mirror lookup into `DnsMirrorUrlResolver` and lifting the aggregate by three points. The move
+itself was right, since rule 3 puts anything that reaches a name server outside the set, but
+nothing would have noticed if it had not been. So every package holding a listed class is watched:
+a class there with a branch, or with 20 lines, has to be listed, or carry an `EXCLUDED` row naming
+the rule that keeps it out. Branches are the main signal because rule 2 is about decisions; the
+line count catches straight-line code big enough to hide a computed return. The exclusion rows
+also keep each rule 3 or rule 5 judgement next to the class it is about. What the check cannot see
+is a class moved into a package that holds nothing listed; a new package in `:common` or
+`:common-ui` still has to be read.
 
 Two consequences are the point rather than side effects. A decision worth gating that sits inside a
 class the rule excludes gets extracted, rather than the class admitted: `PlaybackErrorClassifier`
-came out of the player that way and `DnsMirrorUrlResolver` out of the URL layer, and
-`MediaPresenterImpl.handleChildrenLoaded` is the next candidate. And a class that passes the rule
-but whose test needs a device means the test is misplaced, not the rule: that is the URL layer, and
-`StorageManagerLayerImpl` after it.
+came out of the player that way and `DnsMirrorUrlResolver` out of the URL layer.
+`MediaPresenterImpl.handleChildrenLoaded` is the next candidate, and the exclusion reasons for
+`AppUtils` and `NetUtils` point at pure helpers that would follow. And a
+class that passes the rule but whose test needs a device means the test is misplaced, not the rule:
+that was the URL layer, and `StorageManagerLayerImpl` after it.
 
 ## Android Auto boundary — `TASK-008`
 
