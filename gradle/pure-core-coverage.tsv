@@ -147,7 +147,7 @@ com/yuriy/openradio/shared/service/player/OpenRadioPlayer$ComponentListener	EXCL
 com/yuriy/openradio/shared/utils/AppUtils	EXCLUDED	rule 3: most of it asks PackageManager, PowerManager, Build and display metrics; its few pure helpers are extraction candidates.
 com/yuriy/openradio/shared/utils/ImageFilePath	EXCLUDED	rule 3: it resolves paths through ContentResolver and DocumentsContract.
 com/yuriy/openradio/shared/utils/IntentUtils	EXCLUDED	rule 3: it starts activities and registers activity results.
-com/yuriy/openradio/shared/utils/MediaItemBuilder	EXCLUDED	rule 2: it has no branch and only copies fields and Context string resources into MediaItem builders.
+com/yuriy/openradio/shared/utils/MediaItemBuilder	EXCLUDED	rule 3: its only decision picks the singular or plural station label from Context string resources; everything else copies fields into MediaItem builders.
 com/yuriy/openradio/shared/utils/NetUtils	EXCLUDED	rule 3: it opens HttpURLConnections and probes urls over the network; its pure helpers are extraction candidates.
 com/yuriy/openradio/shared/utils/SafeToast	EXCLUDED	rule 5: it shows Toasts.
 com/yuriy/openradio/shared/utils/UiUtils	EXCLUDED	rule 5: it removes dialog fragments through a FragmentManager.

@@ -16,10 +16,9 @@
 
 package com.yuriy.openradio.shared.model.media
 
-import com.yuriy.openradio.shared.model.media.item.STRING_RESOURCE
-import com.yuriy.openradio.shared.model.media.item.testContext
 import java.util.TreeSet
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CategoryTest {
@@ -58,33 +57,47 @@ class CategoryTest {
     }
 
     @Test
+    fun titleDecidesBeforeId() {
+        assertBrowseOrder(
+            listOf("z", "a"),
+            Category("a", "Zed", 1),
+            Category("z", "Alpha", 1)
+        )
+    }
+
+    /**
+     * Case-insensitive yet not locale aware: the comparison is per character, so an accented title
+     * sorts after the whole unaccented alphabet whatever language the device is set to.
+     */
+    @Test
+    fun titlesAreComparedByCharacterNotByLocaleCollation() {
+        assertBrowseOrder(
+            listOf("zouk", "électro"),
+            Category("électro", "Électro", 4),
+            Category("zouk", "Zouk", 4)
+        )
+    }
+
+    @Test
     fun aSortedSetKeepsEveryDistinctCategoryWithTheSameCount() {
         val categories = TreeSet(Category.BROWSE_ORDER)
 
-        assertEquals(true, categories.add(Category("rock", "Rock", 3)))
-        assertEquals(true, categories.add(Category("jazz", "Jazz", 3)))
-        assertEquals(true, categories.add(Category("Rock", "Rock", 3)))
+        assertTrue(categories.add(Category("rock", "Rock", 3)))
+        assertTrue(categories.add(Category("jazz", "Jazz", 3)))
+        assertTrue(categories.add(Category("Rock", "Rock", 3)))
 
         assertEquals(listOf("jazz", "Rock", "rock"), categories.map { it.id })
     }
 
     @Test
-    fun onlyACategoryAgreeingOnCountTitleAndIdComparesEqual() {
+    fun onlyTheSameCountIdAndCaseFoldedTitleCompareEqual() {
         val rock = Category("rock", "Rock", 3)
 
         assertEquals(0, Category.BROWSE_ORDER.compare(rock, Category("rock", "Rock", 3)))
+        assertEquals(0, Category.BROWSE_ORDER.compare(rock, Category("rock", "ROCK", 3)))
         assertEquals(1, Integer.signum(Category.BROWSE_ORDER.compare(rock, Category("rock", "Rock", 4))))
         assertEquals(-1, Integer.signum(Category.BROWSE_ORDER.compare(rock, Category("rock", "Rocks", 3))))
         assertEquals(1, Integer.signum(Category.BROWSE_ORDER.compare(rock, Category("Rock", "Rock", 3))))
-    }
-
-    @Test
-    fun theDescriptionLeadsWithTheStationCount() {
-        val context = testContext()
-
-        assertEquals("0 $STRING_RESOURCE", Category("none", "None", 0).getDescription(context))
-        assertEquals("1 $STRING_RESOURCE", Category("one", "One", 1).getDescription(context))
-        assertEquals("2 $STRING_RESOURCE", Category("two", "Two", 2).getDescription(context))
     }
 
     private fun assertBrowseOrder(expectedIds: List<String>, vararg categories: Category) {

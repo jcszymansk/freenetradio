@@ -110,6 +110,7 @@ class ParserLayerRadioBrowserImpl(private val mFilter: Filter) : ParserLayer {
             return emptySet()
         }
         val result = TreeSet(Category.BROWSE_ORDER)
+        val ids = HashSet<String>()
         for (i in 0 until array.length()) {
             val jsonObject = try {
                 array[i] as JSONObject
@@ -119,15 +120,16 @@ class ParserLayerRadioBrowserImpl(private val mFilter: Filter) : ParserLayer {
             }
             if (jsonObject.has(KEY_NAME)) {
                 val id = jsonObject.getString(KEY_NAME)
-                val title = jsonObject.getString(KEY_NAME)
-                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
                 var stationsCount = 0
                 if (jsonObject.has(KEY_STATIONS_COUNT)) {
                     stationsCount = jsonObject.getInt(KEY_STATIONS_COUNT)
                 }
-                if (!result.add(Category(id, title, stationsCount))) {
+                if (!ids.add(id)) {
                     AppLogger.w("$TAG get AC, repeated category $id with $stationsCount stations dropped")
+                    continue
                 }
+                val title = id.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+                result.add(Category(id, title, stationsCount))
             }
         }
         return result

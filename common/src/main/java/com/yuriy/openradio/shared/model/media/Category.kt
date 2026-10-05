@@ -15,42 +15,35 @@
  */
 package com.yuriy.openradio.shared.model.media
 
-import android.content.Context
-import com.yuriy.openradio.R
-
 /**
  * Created by Yuriy Chernyshov
  * At Android Studio
  * On 12/15/14
  * E-Mail: chernyshov.yuriy@gmail.com
  *
- * [Category] is a value object that holds data related to category of Radio Stations.
+ * [Category] holds a category of Radio Stations as a provider lists it.
+ *
+ * @property id What the provider is asked for when the category is browsed.
+ * @property title What the user reads.
+ * @property stationsCount How many stations the provider reports in the category.
  */
 class Category(
     val id: String,
     val title: String,
-    private val mStationsCount: Int
+    val stationsCount: Int
 ) {
-
-    fun getDescription(context: Context): String {
-        var desc = mStationsCount.toString()
-        desc += if (mStationsCount == 0 || mStationsCount > 1) {
-            " " + context.getString(R.string.radio_stations)
-        } else {
-            " " + context.getString(R.string.radio_station)
-        }
-        return desc
-    }
 
     companion object {
 
         /**
-         * The order the category list is browsed in: most stations first, ties broken by title as the
-         * user reads it, ignoring case, and then by id. Two categories compare equal only when count,
-         * title and id all agree, so a sorted set built with this order never merges distinct categories.
+         * The order the category list is browsed in: most stations first, ties broken by title
+         * ignoring case, compared character by character rather than by locale collation so the order
+         * does not move with the device language, and then by id. Two categories compare equal only
+         * when count, id and the case-folded title all agree, so a sorted set built with this order
+         * never merges categories with different ids.
          */
         val BROWSE_ORDER: Comparator<Category> =
-            compareByDescending<Category> { it.mStationsCount }
+            compareByDescending<Category> { it.stationsCount }
                 .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
                 .thenBy { it.id }
     }

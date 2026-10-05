@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-05 05:22'
-updated_date: '2026-10-05 15:01'
+updated_date: '2026-10-05 15:09'
 labels: []
 milestone: m-1
 dependencies: []
@@ -29,8 +29,14 @@ Both parsers collect categories into a TreeSet<Category> (ParserLayerRadioBrowse
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1. Replace Category's count-only natural ordering with an explicit BROWSE_ORDER comparator: station count descending, then title case-insensitively, then id, so only categories with the same id are treated as one.
-2. Build both parsers' sets with that comparator; log a duplicate category id from Radio Browser instead of dropping it silently.
-3. JVM tests: CategoryTest for the order, ParserLayerMappingTest for equal counts from both providers.
-4. Category gains logic, so move it from EXCLUDED to an owner test in gradle/pure-core-coverage.tsv.
+1. Replace Category's count-only natural ordering with an explicit BROWSE_ORDER comparator: station count descending, then title case-insensitively by character (not locale collation), then id, so a sorted set never merges categories with different ids.
+2. Build both parsers' sets with that comparator. Radio Browser keeps the first entry of a repeated tag name, since the id becomes the child's media id; WebRadio's ids are map keys and cannot repeat.
+3. Move the singular/plural label lookup from Category into MediaItemBuilder.buildChildCategory, its only caller, so Category holds no resource lookup and can join the pure-core set (rule 3) with CategoryTest as owner.
+4. JVM tests: CategoryTest for the order and its precedence, ParserLayerMappingTest for equal counts and repeated ids from both providers, MediaItemAllCategoriesTest for equal counts reaching the browse children.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Decided: Radio Browser tags that differ only in case (rock, Rock) stay two entries with the same title, ordered by id. The ids differ, which is what AC1 protects, and the old code already listed both whenever their counts differed. Whether they should be merged is a product question left open. Plurals for the station label and a malformed stationcount aborting the whole parse are pre-existing and tracked as TASK-098 and TASK-099.
+<!-- SECTION:NOTES:END -->
