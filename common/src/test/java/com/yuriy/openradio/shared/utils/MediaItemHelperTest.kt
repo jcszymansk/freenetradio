@@ -58,7 +58,9 @@ class MediaItemHelperTest {
 
     @Test
     fun settingADrawableIdOnNoBundleIsIgnored() {
-        MediaItemHelper.setDrawableId(null, DRAWABLE)
+        val failure = runCatching { MediaItemHelper.setDrawableId(null, DRAWABLE) }.exceptionOrNull()
+
+        assertNull("Setting a drawable id on no bundle threw instead of being ignored", failure)
     }
 
     @Test
@@ -130,7 +132,9 @@ class MediaItemHelperTest {
 
     @Test
     fun settingTheFavoriteFlagOnNoMetadataIsIgnored() {
-        MediaItemHelper.updateFavoriteField(null as MediaMetadata?, true)
+        val failure = runCatching { MediaItemHelper.updateFavoriteField(null as MediaMetadata?, true) }.exceptionOrNull()
+
+        assertNull("Setting the favorite flag on no metadata threw instead of being ignored", failure)
     }
 
     @Test

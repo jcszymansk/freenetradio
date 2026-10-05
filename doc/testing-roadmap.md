@@ -171,7 +171,8 @@ Run policy:
 #### What "critical pure-core" means
 
 The gate measures a named set of classes, not the repository. The set lives in
-`gradle/pure-core-coverage.tsv`, one row per class with the JVM test that owns it.
+`gradle/pure-core-coverage.tsv`. A listed row names a class in the set and the JVM test that owns
+it; an `EXCLUDED` row names a class judged out of the set, with the rule below that keeps it out.
 `./gradlew verifyPureCoreCoverage` reads it, and `./gradlew check` runs it. A class belongs to the
 set when all five hold:
 

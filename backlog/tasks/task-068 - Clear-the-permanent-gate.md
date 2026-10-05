@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 20:03'
-updated_date: '2026-10-05 06:27'
+updated_date: '2026-10-05 06:40'
 labels: []
 milestone: m-0
 dependencies:
@@ -98,6 +98,8 @@ Production code is unchanged since 8ab2329, the build TASK-008 recorded Android 
 Residue judged: callWhenSearchReady's bad-value branch is unreachable and becomes TASK-087; the validator and artwork paths that skip the connectivity gate become TASK-088; the mirror resolver test that would reach DNS if the prefix check regressed becomes TASK-090; the test-file hygiene items, now including 21 missing Apache headers, become TASK-091. The TASK-027 and TASK-029 records are corrected in notes on those tasks. New weak assertions found by the audit joined TASK-055 and the incomplete onActivity inventory joined TASK-056. Defects found while writing tests became TASK-092 (categories with equal station counts merge in a TreeSet) and TASK-094 (description fallback treats null and empty differently), and the end-of-list identity comparison was added to TASK-078.
 
 Final pass at fc3213f: ./gradlew test --rerun-tasks, 399 tests per variant (:common 369, :common-ui 7, :android-jvm-stubs 23), 0 failures, 0 skipped. verifyPureCoreCoverage, 53 listed classes, 96.1% line (1727/1797), 85.7% branch (816/952), thinnest CoroutineTimerTask at 80.0%. verifyPureCoreAttribution, all 37 owners carry their classes alone. Instrumented on the API 34 emulator with wifi and data off, no active network and the app cleared: 217 tests, 0 failures, 0 skipped, including all 28 journey tests.
+
+Review round 1: two MediaItemHelperTest cases only invoked the call they named, which criterion 8 rules out; they now assert the call raises nothing. A scan of every @Test body across the four test source sets for a missing assertion finds nothing else. AGENTS.md now states the thresholds and the watched-package boundary of the unlisted-class check, and the roadmap describes both row kinds of the class list.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

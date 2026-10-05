@@ -34,9 +34,10 @@ export ANDROID_HOME=$HOME/Android/Sdk
 ./gradlew verifyPureCoreAttribution             # re-runs each pure-core owner test alone, a few minutes
 ```
 
-A class added to a package that holds a pure-core class fails `verifyPureCoreCoverage` until
-`gradle/pure-core-coverage.tsv` says whether it belongs to the set; `doc/testing-roadmap.md` has
-the rules.
+A class with at least one branch or 20 lines, added to a package that already holds a listed
+pure-core class, fails `verifyPureCoreCoverage` until `gradle/pure-core-coverage.tsv` lists it or
+excludes it with a rule. Smaller classes and classes in packages with nothing listed are not
+checked, so those still have to be judged by reading; `doc/testing-roadmap.md` has the rules.
 
 Instrumented tests must run with emulator networking disabled, against a device that is not
 carrying application data from earlier use:
