@@ -91,6 +91,29 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
     }
 
     /**
+     * Waits until the adapter holds no items at all, which is what a node the service emptied
+     * renders.
+     *
+     * [awaitRows] cannot see this state: [rows] answers empty both for a list that emptied and for
+     * one still being laid out, and it skips the second. The adapter tells them apart.
+     *
+     * @param expectation what the list was being waited for, so a timeout names it.
+     */
+    fun awaitEmptied(expectation: String) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(LIST_TIMEOUT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            if (adapterItemCount() == 0) {
+                return
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+        throw AssertionError(
+            "The browse list did not empty to show $expectation within $LIST_TIMEOUT_SECONDS " +
+                "seconds. It last showed ${rows()}. " + describe()
+        )
+    }
+
+    /**
      * Asserts the list still shows [expected] and goes on doing so.
      *
      * A list that is about to change has not changed yet, so a single read cannot tell "nothing
