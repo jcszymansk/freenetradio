@@ -114,6 +114,46 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
     }
 
     /**
+     * Waits until the adapter holds [itemCount] children of the node [parentId].
+     *
+     * This is for a node longer than the screen, which [awaitRows] cannot wait for: [rows] answers
+     * empty for as long as some of the adapter's items are not laid out, and in such a list most
+     * of them never are.
+     *
+     * @param parentId the node the list has to be rendering.
+     * @param itemCount how many children of it the adapter has to hold.
+     */
+    fun awaitRendered(parentId: String, itemCount: Int) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(LIST_TIMEOUT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            if (renderedNode() == parentId && adapterItemCount() == itemCount) {
+                return
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+        throw AssertionError(
+            "The browse list did not render $itemCount children of $parentId within " +
+                "$LIST_TIMEOUT_SECONDS seconds. It last rendered ${renderedNode()}. " + describe()
+        )
+    }
+
+    /**
+     * @return the node whose children the adapter was last handed, or an empty string while the
+     *   Activity carries no browse list. The presenter's stack says where the user is; this says
+     *   what the screen shows, and the two part when an answer for one node is rendered while the
+     *   user stands in another.
+     */
+    fun renderedNode(): String {
+        val result = AtomicReference("")
+        mScenario.onActivity { activity ->
+            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
+            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            result.set(adapter.parentId)
+        }
+        return result.get()
+    }
+
+    /**
      * Asserts the list still shows [expected] and goes on doing so.
      *
      * A list that is about to change has not changed yet, so a single read cannot tell "nothing

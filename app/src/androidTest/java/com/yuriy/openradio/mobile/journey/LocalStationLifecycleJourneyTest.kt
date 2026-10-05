@@ -27,9 +27,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
+import com.yuriy.openradio.shared.model.storage.makeStation
 import com.yuriy.openradio.shared.permission.grantImageReadPermission
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
@@ -148,8 +150,7 @@ class LocalStationLifecycleJourneyTest {
      * while silently discarding everything the user did not retype.
      *
      * The locals list the edit was made from has to show the new name before the case walks back
-     * to the root. That is the refresh the dialog asked for arriving, and walking back while it is
-     * still in flight lets it land on top of the root, as [JourneyNavigation.returnToRoot] says.
+     * to the root, which is the refresh the dialog asked for arriving.
      */
     @Test
     fun editingAStationThroughTheDialogRewritesWhatIsStored() {
@@ -215,8 +216,7 @@ class LocalStationLifecycleJourneyTest {
      * Removing the only station the user has takes the whole node away, which is the one part of
      * the edit and remove path that is visible from where an offline user is standing.
      *
-     * The locals list empties first, and the case waits for it before walking back for the same
-     * reason the edit case waits for the new name.
+     * The locals list empties first, which is the refresh the dialog asked for arriving.
      */
     @Test
     fun removingTheLastStationTakesTheLocalsNodeOffTheRootList() {
@@ -257,6 +257,55 @@ class LocalStationLifecycleJourneyTest {
             "The station is off the root list but still in the store",
             mProfile.storages.freshLocals().getAll().isEmpty()
         )
+    }
+
+    /**
+     * Walking back while a refresh of the locals list is still in flight has to end on the root.
+     *
+     * Every refresh makes the service push a change for the root and for the locals node, and the
+     * Activity's media browser answers a push for the node it is subscribed to by fetching that
+     * node's children, without checking again when they come back. The case walks back as soon as
+     * the service has acknowledged a refresh, so the locals fetch the push started is still
+     * running when the root is asked for.
+     *
+     * Whether that fetch lands before or after the root depends on which answer the service sends
+     * back first. The store is filled with a page of stations so that the locals answer, which
+     * carries every one of them, takes longer than the root, which carries six rows. A locals
+     * answer rendered after the root would leave the list showing the locals rows under a
+     * presenter standing at the root, with the add button that follows the rendered node hidden.
+     */
+    @Test
+    fun walkingBackWhileTheLocalsListRefreshesEndsOnTheRootList() {
+        val locals = mProfile.storages.locals
+        repeat(LOCALS_PAGE) { index ->
+            locals.add(makeStation(locals.getId(), name = "Bulk local $index", isLocal = true))
+        }
+        mProfile.refreshTree()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val list = BrowseListView(scenario)
+            val navigation = JourneyNavigation(scenario)
+            val root = mProfile.cleanInstallRoot() + mProfile.localsRow()
+            list.awaitRows("the root with the locals node") { it == root }
+
+            try {
+                navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+                list.awaitRendered(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST, LOCALS_PAGE)
+                mProfile.refreshTree()
+            } finally {
+                navigation.returnToRoot()
+            }
+
+            list.awaitRows("the root list") { it == root }
+            list.assertRowsStay(root, "A locals refresh that was in flight during the walk back replaced the root")
+            assertEquals("The list renders a node other than the root", MediaId.MEDIA_ID_ROOT, list.renderedNode())
+            scenario.onActivity { activity ->
+                assertEquals(
+                    "The add-station button follows the rendered node and is hidden at the root",
+                    View.VISIBLE,
+                    activity.findViewById<View>(R.id.add_station_btn).visibility
+                )
+            }
+        }
     }
 
     /**
@@ -519,5 +568,11 @@ class LocalStationLifecycleJourneyTest {
         const val STORE_TIMEOUT_SECONDS = 20L
 
         const val POLL_MILLIS = 50L
+
+        /**
+         * One full page of the locals list, the most a single answer carries. The more rows the
+         * locals answer carries, the longer it takes to arrive after the root.
+         */
+        const val LOCALS_PAGE = DependencyRegistryCommon.PAGE_SIZE
     }
 }
