@@ -37,11 +37,27 @@ def formatPercent = { double value ->
     String.format(Locale.ROOT, '%5.1f%%', value)
 }
 
+def excludedMarker = 'EXCLUDED'
+def membershipRulePattern = ~/\brule [1-5]\b/
+
+// Rule 2 admits a class for deciding something, so any branch at all is
+// enough to ask whether an unlisted class belongs. The line count is the
+// fallback for straight-line code: big enough to hide computed returns that
+// JaCoCo cannot see as branches.
+def minBranchesToFlagUnlisted = 1
+def minLinesToFlagUnlisted = 20
+
+/**
+ * Reads the class list into its two row kinds: listed classes, measured
+ * against the floors, and excluded ones, which only answer the unlisted-class
+ * check and are never measured.
+ */
 def readPureCoreList = { File source ->
     if (!source.exists()) {
         throw new GradleException("Pure-core class list is missing: ${source}")
     }
-    def rows = []
+    def listed = []
+    def excluded = []
     def seen = [:]
     def lineNumber = 0
     source.eachLine('UTF-8') { String raw ->
@@ -55,24 +71,39 @@ def readPureCoreList = { File source ->
             throw new GradleException(
                     "${source.name}:${lineNumber}: expected 3 tab-separated columns, got: ${raw}")
         }
-        def row = [
-                className  : columns[0],
-                ownerTest  : columns[1],
-                ownerModule: columns[2],
-                lineNumber : lineNumber
-        ]
-        if (row.className.contains('$')) {
+        def className = columns[0]
+        def isExcluded = columns[1] == excludedMarker
+        if (className.contains('$')) {
             throw new GradleException(
-                    "${source.name}:${lineNumber}: inner and synthetic classes are outside the set: ${row.className}")
+                    "${source.name}:${lineNumber}: inner and synthetic classes are folded into their outer class " +
+                            "and must not be named: ${className}")
         }
-        if (seen.containsKey(row.className)) {
-            throw new GradleException(
-                    "${source.name}:${lineNumber}: ${row.className} is already listed on line ${seen[row.className]}")
+        def earlier = seen[className]
+        if (earlier != null) {
+            def conflict = earlier.excluded == isExcluded ?
+                    "is already ${isExcluded ? 'excluded' : 'listed'} on line ${earlier.lineNumber}" :
+                    "is both listed and excluded (other row on line ${earlier.lineNumber})"
+            throw new GradleException("${source.name}:${lineNumber}: ${className} ${conflict}")
         }
-        seen[row.className] = lineNumber
-        rows << row
+        seen[className] = [lineNumber: lineNumber, excluded: isExcluded]
+        if (isExcluded) {
+            def reason = columns[2]
+            if (!(reason =~ membershipRulePattern)) {
+                throw new GradleException(
+                        "${source.name}:${lineNumber}: the reason for excluding ${className} must name the " +
+                                "membership rule (rule 1 to rule 5) that keeps it out, got: ${reason}")
+            }
+            excluded << [className: className, reason: reason, lineNumber: lineNumber]
+        } else {
+            listed << [className: className, ownerTest: columns[1], ownerModule: columns[2], lineNumber: lineNumber]
+        }
     }
-    rows
+    [listed: listed, excluded: excluded]
+}
+
+def packageOf = { String className ->
+    def slash = className.lastIndexOf('/')
+    slash < 0 ? '' : className.substring(0, slash)
 }
 
 def parseCoverageReport = { File report ->
@@ -84,26 +115,32 @@ def parseCoverageReport = { File report ->
     def root = slurper.parse(report)
     def classes = [:]
     root.'package'.'class'.each { cls ->
-        def className = cls.@name.text()
-        if (className.contains('$')) {
-            return
+        // Kotlin compiles lambdas, launch blocks, companions and inner classes
+        // into Outer$... classes. Their code is the outer class's code as far
+        // as anyone reading the source can tell, so it is measured there;
+        // dropping it would leave whole coroutine bodies unmeasured.
+        def className = cls.@name.text().split('\\$', 2)[0]
+        def totals = classes.computeIfAbsent(className) {
+            [lineCovered: 0, lineTotal: 0, branchCovered: 0, branchTotal: 0]
         }
         // A <class> repeats its counters after its <method> children, so a
         // recursive search would add every method total to the class total.
         // GPath child access reaches direct children only, which is what the
         // class-level numbers are.
-        def counters = [:]
         cls.counter.each { counter ->
             def missed = counter.@missed.text() as int
             def covered = counter.@covered.text() as int
-            counters[counter.@type.text()] = [covered: covered, total: missed + covered]
+            switch (counter.@type.text()) {
+                case 'LINE':
+                    totals.lineCovered += covered
+                    totals.lineTotal += missed + covered
+                    break
+                case 'BRANCH':
+                    totals.branchCovered += covered
+                    totals.branchTotal += missed + covered
+                    break
+            }
         }
-        classes[className] = [
-                lineCovered  : counters.LINE?.covered ?: 0,
-                lineTotal    : counters.LINE?.total ?: 0,
-                branchCovered: counters.BRANCH?.covered ?: 0,
-                branchTotal  : counters.BRANCH?.total ?: 0
-        ]
     }
     classes
 }
@@ -147,7 +184,9 @@ tasks.register('verifyPureCoreCoverage') {
     dependsOn 'localCoverageReport'
 
     doLast {
-        def rows = readPureCoreList(pureCoreListFile)
+        def pureCoreList = readPureCoreList(pureCoreListFile)
+        def rows = pureCoreList.listed
+        def exclusions = pureCoreList.excluded
         def coverage = collectCoverage(coverageReports, logger)
 
         def unowned = []
@@ -179,6 +218,22 @@ tasks.register('verifyPureCoreCoverage') {
             }
         }
 
+        // Only packages that hold a listed class are watched. Views, dialogs and
+        // the other packages with nothing in the set stay out by package;
+        // watching them too would turn the list into an inventory of the code.
+        def watchedPackages = rows.collect { packageOf(it.className) }.toSet()
+        def judged = (rows*.className + exclusions*.className).toSet()
+        def unlisted = coverage.findAll { className, classCoverage ->
+            watchedPackages.contains(packageOf(className)) &&
+                    !judged.contains(className) &&
+                    (classCoverage.branchTotal >= minBranchesToFlagUnlisted ||
+                            classCoverage.lineTotal >= minLinesToFlagUnlisted)
+        }
+        def staleExclusions = exclusions.findAll {
+            def classCoverage = coverage[it.className]
+            classCoverage == null || classCoverage.lineTotal == 0 || !watchedPackages.contains(packageOf(it.className))
+        }
+
         def lineCovered = measured.sum(0) { it.lineCovered }
         def lineTotal = measured.sum(0) { it.lineTotal }
         def branchCovered = measured.sum(0) { it.branchCovered }
@@ -187,7 +242,8 @@ tasks.register('verifyPureCoreCoverage') {
         def aggregateBranch = percent(branchCovered, branchTotal)
 
         def report = new StringBuilder()
-        report.append("Pure-core coverage over ${rows.size()} listed classes (${measured.size()} measured)\n")
+        report.append("Pure-core coverage over ${rows.size()} listed classes (${measured.size()} measured), " +
+                "${exclusions.size()} excluded, ${watchedPackages.size()} watched packages\n")
         report.append("  line   ${formatPercent(aggregateLine)}  (${lineCovered}/${lineTotal}, floor ${formatPercent(aggregateLineFloor)})\n")
         report.append("  branch ${formatPercent(aggregateBranch)}  (${branchCovered}/${branchTotal}, floor ${formatPercent(aggregateBranchFloor)})\n")
 
@@ -211,6 +267,19 @@ tasks.register('verifyPureCoreCoverage') {
                     belowFloor.sort { it.linePercent }.collect {
                         "    ${formatPercent(it.linePercent)}  ${it.className}  (${it.lineCovered}/${it.lineTotal} lines)"
                     }.join('\n')
+        }
+        if (unlisted) {
+            failures << "${unlisted.size()} class(es) in watched packages are neither listed nor excluded and have " +
+                    "at least ${minBranchesToFlagUnlisted} branch or ${minLinesToFlagUnlisted} lines. Judge each " +
+                    'against the membership rules and add a row, listed with its owner or EXCLUDED with the rule:\n' +
+                    unlisted.sort { it.key }.collect { className, classCoverage ->
+                        "    ${className}  (${classCoverage.lineTotal} lines, ${classCoverage.branchTotal} branches)"
+                    }.join('\n')
+        }
+        if (staleExclusions) {
+            failures << "${staleExclusions.size()} exclusion(s) name a class that is not in the coverage reports " +
+                    'or not in a watched package, so they exclude nothing:\n' +
+                    staleExclusions.collect { "    ${it.className}  (${pureCoreListFile.name}:${it.lineNumber})" }.join('\n')
         }
         if (aggregateLine < aggregateLineFloor) {
             failures << "Aggregate line coverage ${formatPercent(aggregateLine)} is below the ${formatPercent(aggregateLineFloor)} floor."
@@ -238,7 +307,7 @@ tasks.register('verifyPureCoreAttribution') {
     description = 'Runs each owning test class alone and checks it still covers the classes it owns.'
 
     doLast {
-        def rows = readPureCoreList(pureCoreListFile).findAll { it.ownerTest != 'NONE' }
+        def rows = readPureCoreList(pureCoreListFile).listed.findAll { it.ownerTest != 'NONE' }
         def owners = rows.groupBy { it.ownerTest }.sort { it.key }
         if (owners.isEmpty()) {
             throw new GradleException("No owned classes listed in ${pureCoreListFile.name}; nothing to attribute.")

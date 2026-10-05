@@ -39,3 +39,12 @@ tasks.register('instrumentedCoverageReport') {
 }
 
 apply from: "gradle/pure-core-coverage.gradle"
+
+// The root project applies no plugin that would give it a check lifecycle
+// task, so `./gradlew check` would only reach the modules' own checks and
+// never the pure-core gate.
+tasks.register('check') {
+    group = 'verification'
+    description = 'Runs the root project checks, which is the pure-core coverage gate.'
+    dependsOn 'verifyPureCoreCoverage'
+}
