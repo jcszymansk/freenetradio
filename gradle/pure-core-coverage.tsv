@@ -101,6 +101,7 @@ com/yuriy/openradio/shared/service/PlaylistFallback$Exhausted	com.yuriy.openradi
 com/yuriy/openradio/shared/service/PlaylistFallback$Resolving	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback$Trying	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/player/PlaybackErrorClassifier	com.yuriy.openradio.shared.service.player.PlaybackErrorClassifierTest	:common
+com/yuriy/openradio/shared/service/player/NetworkRecovery	com.yuriy.openradio.shared.service.player.NetworkRecoveryTest	:common
 com/yuriy/openradio/shared/utils/JsonUtils	com.yuriy.openradio.shared.utils.JsonUtilsTest	:common
 com/yuriy/openradio/shared/utils/SortUtils	com.yuriy.openradio.shared.utils.SortUtilsTest	:common
 com/yuriy/openradio/shared/utils/RadioStationValidatorImpl	com.yuriy.openradio.shared.utils.RadioStationValidatorImplTest	:common

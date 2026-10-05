@@ -122,7 +122,7 @@ class OpenRadioService : MediaLibraryService() {
             }
 
             override fun onDisconnected() {
-                callPause()
+                handlePauseRequest()
             }
         }
     )
@@ -130,7 +130,7 @@ class OpenRadioService : MediaLibraryService() {
 
         object : BecomingNoisyReceiver.Listener {
             override fun onAudioBecomingNoisy() {
-                callPause()
+                handlePauseRequest()
             }
         }
     )
@@ -495,14 +495,24 @@ class OpenRadioService : MediaLibraryService() {
         handlePlayRequest()
     }
 
-    private fun callPause() {
-        handlePauseRequest()
+    /**
+     * Pauses because playback over the mobile network is disabled, which leaves a station the
+     * network stopped waiting for a network it may use.
+     */
+    private fun handleMobileNetworkBlocked() {
+        SafeToast.showAnyThread(
+            applicationContext,
+            getString(R.string.mobile_network_disabled)
+        )
+        mUiScope.launch { mPlayer.pauseForNetworkPolicy() }
     }
 
     private fun callPlayFromNetworkConnected() {
-        if (mPlayer.isStoppedByNetwork().not()) {
+        if (mPlayer.resumesOnReconnect().not()) {
+            AppLogger.d("$TAG network connected, nothing to resume")
             return
         }
+        AppLogger.i("$TAG network connected, resume the station the network stopped")
         handlePlayRequest()
     }
 
@@ -604,11 +614,7 @@ class OpenRadioService : MediaLibraryService() {
                 return
             }
             if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
-                SafeToast.showAnyThread(
-                    applicationContext,
-                    getString(R.string.mobile_network_disabled)
-                )
-                callPause()
+                handleMobileNetworkBlocked()
                 return
             }
             callPlayFromNetworkConnected()
@@ -913,11 +919,7 @@ class OpenRadioService : MediaLibraryService() {
             return when (customCommand.customAction) {
                 CMD_NET_CHANGED -> {
                     if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
-                        SafeToast.showAnyThread(
-                            applicationContext,
-                            getString(R.string.mobile_network_disabled)
-                        )
-                        handlePauseRequest()
+                        handleMobileNetworkBlocked()
                     }
                     return mSessionCmdSuccess
                 }

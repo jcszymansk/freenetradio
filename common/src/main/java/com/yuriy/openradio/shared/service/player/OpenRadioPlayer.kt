@@ -112,8 +112,11 @@ class OpenRadioPlayer(
      */
     private val mErrorClassifier = PlaybackErrorClassifier()
 
-    @Volatile
-    private var mStoppedByNetwork = false
+    /**
+     * Whether a regained network should restart the stream. The player's listener writes it and the
+     * connectivity receiver reads it, both on the main thread.
+     */
+    private var mNetworkRecovery = NetworkRecovery.IDLE
 
     private val mExoPlayer: Player by lazy {
         AppLogger.i("Init ExoPlayer")
@@ -176,6 +179,7 @@ class OpenRadioPlayer(
     }
 
     override fun pause() {
+        updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "pause")
         mPlayer.pause()
     }
 
@@ -343,6 +347,9 @@ class OpenRadioPlayer(
     }
 
     override fun setPlayWhenReady(playWhenReady: Boolean) {
+        if (playWhenReady.not()) {
+            updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "play when ready off")
+        }
         mPlayer.playWhenReady = playWhenReady
     }
 
@@ -483,6 +490,7 @@ class OpenRadioPlayer(
     }
 
     override fun stop() {
+        updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "stop")
         mPlayer.stop()
     }
 
@@ -758,11 +766,36 @@ class OpenRadioPlayer(
      */
     fun reset() {
         AppLogger.d("$TAG reset")
+        updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "reset")
         stopCurrentPlayer()
     }
 
-    fun isStoppedByNetwork(): Boolean {
-        return mStoppedByNetwork
+    /**
+     * Pauses because the current network may not be used for playback. The network, not the user,
+     * stopped the station, so a stream that was waiting for the network keeps waiting for one it
+     * may use.
+     */
+    fun pauseForNetworkPolicy() {
+        AppLogger.d("$TAG pause for network policy, recovery stays $mNetworkRecovery")
+        mPlayer.pause()
+    }
+
+    /**
+     * Whether a regained network connection should start playback again, which it should only for
+     * a station the network stopped while the user wanted it playing.
+     */
+    fun resumesOnReconnect(): Boolean {
+        return mNetworkRecovery.resumesOnReconnect
+    }
+
+    private fun updateNetworkRecovery(next: NetworkRecovery, event: String) {
+        val previous = mNetworkRecovery
+        mNetworkRecovery = next
+        if (previous != next) {
+            AppLogger.i("$TAG network recovery $previous -> $next on $event")
+        } else {
+            AppLogger.d("$TAG network recovery stays $next on $event")
+        }
     }
 
     private fun stopCurrentPlayer() {
@@ -833,6 +866,7 @@ class OpenRadioPlayer(
             when (playerState) {
                 Player.STATE_READY -> {
                     mErrorClassifier.reset()
+                    updateNetworkRecovery(mNetworkRecovery.onPlaybackReady(), "ready")
                 }
 
                 Player.STATE_BUFFERING -> {
@@ -867,7 +901,9 @@ class OpenRadioPlayer(
             AppLogger.e("$TAG onPlayerError", exception)
             when (val decision = mErrorClassifier.classify(exception)) {
                 PlaybackErrorDecision.NetworkLost -> {
-                    mStoppedByNetwork = true
+                    updateNetworkRecovery(
+                        mNetworkRecovery.onNetworkLost(mPlayer.playWhenReady), "network lost"
+                    )
                     updateStreamMetadata(mContext.getString(R.string.media_stream_network_failed))
                 }
 
