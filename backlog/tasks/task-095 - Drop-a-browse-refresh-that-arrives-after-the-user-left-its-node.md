@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-05 06:19'
-updated_date: '2026-10-05 18:53'
+updated_date: '2026-10-05 19:11'
 labels: []
 milestone: m-1
 dependencies: []
@@ -33,6 +33,12 @@ Editing or removing a local station sends CMD_UPDATE_TREE, and the service notif
 1. Make the presenter's browse stack the single record of the node being shown: addMediaItemToStack moves an id already on the stack to the top, so the top is always the node last asked for.
 2. Hand MediaResourcesManager a presenter-owned subscription instead of the activity callback. It forwards an answer (children or error) only when its parent id is the top of the stack, and logs the dropped one. Both fetch paths (subscribe, and onChildrenChanged, which reuses the callback given to subscribe) then pass through it, and so does every side effect MainActivity's callback has (progress bar, add button, empty message).
 3. JVM tests in common-ui: a late answer for a node that was left is dropped after a back press and after navigating forward; the shown node's answer still renders; errors follow the same rule; re-adding an id already on the stack moves it to the top.
-4. Journey: remove or edit a local station from the locals list and walk back without waiting for the refresh; assert the root list and the add button.
-5. Run JVM tests, coverage gate, and the instrumented suite offline.
+4. Journey: fill the locals store with a full page of stations so the locals answer reliably arrives after the root, open the locals list, ask for a refresh and walk back as soon as it is acknowledged; assert the root rows, the rendered node and the add button. A single seeded station and a refresh burst never lost the race, and walk-back cycles caught it in one run of three.
+5. Run JVM tests, the coverage gate, and the instrumented suite offline.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified: ./gradlew test and verifyPureCoreCoverage pass; full :app:connectedDebugAndroidTest offline, 221 tests, pass. The new journey case failed 3/3 against the pre-fix presenter (add button hidden at the root) and passed 3/3 with the fix. MediaPresenterShownNodeTest: 7 of 9 cases fail with the guard disabled; askingAgainForANodeDeeperInTheStackShowsThatNode fails without the move-to-top.
+<!-- SECTION:NOTES:END -->

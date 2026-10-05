@@ -82,6 +82,7 @@ A typical browse request follows this path:
 8. Selecting a playable item causes the service to prepare and play it through `OpenRadioPlayer`.
 
 `MediaResourcesManager.kt` is the client-side Media3 wrapper. It connects to the service with a `SessionToken`, requests library roots and children, listens for player state and metadata, and sends custom session commands.
+The children it fetches reach the Activity only through `MediaPresenterImpl`, which drops an answer for any node but the top of its browse stack: a fetch can come back after the user has walked to another node.
 
 ## Browsable content model
 
