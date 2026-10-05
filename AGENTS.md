@@ -30,7 +30,14 @@ export ANDROID_HOME=$HOME/Android/Sdk
 ./gradlew :app:assembleDebugAndroidTest         # compile instrumentation tests without a device
 ./gradlew localCoverageReport                   # JaCoCo for :common and :common-ui unit tests
 ./gradlew instrumentedCoverageReport            # JaCoCo for :app instrumentation tests
+./gradlew verifyPureCoreCoverage                # the pure-core coverage gate; ./gradlew check runs it too
+./gradlew verifyPureCoreAttribution             # re-runs each pure-core owner test alone, a few minutes
 ```
+
+A class with at least one branch or 20 lines, added to a package that already holds a listed
+pure-core class, fails `verifyPureCoreCoverage` until `gradle/pure-core-coverage.tsv` lists it or
+excludes it with a rule. Smaller classes and classes in packages with nothing listed are not
+checked, so those still have to be judged by reading; `doc/testing-roadmap.md` has the rules.
 
 Instrumented tests must run with emulator networking disabled, against a device that is not
 carrying application data from earlier use:

@@ -146,6 +146,10 @@ class LocalStationLifecycleJourneyTest {
      * storage to fill its fields. Asserting what it loaded first is what separates an edit from a
      * blind overwrite: a dialog that showed the user empty fields would pass the rest of this test
      * while silently discarding everything the user did not retype.
+     *
+     * The locals list the edit was made from has to show the new name before the case walks back
+     * to the root. That is the refresh the dialog asked for arriving, and walking back while it is
+     * still in flight lets it land on top of the root, as [JourneyNavigation.returnToRoot] says.
      */
     @Test
     fun editingAStationThroughTheDialogRewritesWhatIsStored() {
@@ -159,7 +163,8 @@ class LocalStationLifecycleJourneyTest {
             list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
 
             try {
-                val settings = openStationSettings(scenario, list, storedStation())
+                val station = storedStation()
+                val settings = openStationSettings(scenario, list, station)
                 val edit = openFromSettings(
                     scenario, settings, DialogR.id.dialog_rs_settings_edit_btn, EditStationDialog.DIALOG_TAG
                 )
@@ -178,6 +183,9 @@ class LocalStationLifecycleJourneyTest {
                     dialogs.field<EditText>(edit, DialogR.id.add_edit_station_name_edit).setText(EDITED_NAME)
                     dialogs.field<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).setText(editedUrl)
                     dialogs.field<View>(edit, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
+                }
+                list.awaitRows("the station's row under its new name") {
+                    it == listOf(BrowseRow(station.id, EDITED_NAME))
                 }
             } finally {
                 JourneyNavigation(scenario).returnToRoot()
@@ -206,6 +214,9 @@ class LocalStationLifecycleJourneyTest {
     /**
      * Removing the only station the user has takes the whole node away, which is the one part of
      * the edit and remove path that is visible from where an offline user is standing.
+     *
+     * The locals list empties first, and the case waits for it before walking back for the same
+     * reason the edit case waits for the new name.
      */
     @Test
     fun removingTheLastStationTakesTheLocalsNodeOffTheRootList() {
@@ -230,6 +241,7 @@ class LocalStationLifecycleJourneyTest {
                     )
                     dialogs.field<View>(remove, DialogR.id.remove_station_dialog_add_btn_view).performClick()
                 }
+                list.awaitEmptied("the locals list without the removed station")
             } finally {
                 JourneyNavigation(scenario).returnToRoot()
             }

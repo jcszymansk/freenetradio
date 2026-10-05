@@ -16,12 +16,42 @@
 # invent an owner to silence the gate, and never record one that
 # verifyPureCoreAttribution has not confirmed.
 #
-# Format: three tab-separated columns, comments and blank lines ignored.
-#   1. class         JaCoCo class name, slash form, no package-less shorthand.
-#                    Inner and synthetic classes (names containing '$') are
-#                    outside the set and must not be listed.
-#   2. owner_test    fully qualified JVM test class, dot form, or NONE.
-#   3. owner_module  Gradle path of the module holding owner_test, or - for NONE.
+# Not every class in a package the list reaches into belongs to it, so each
+# one the check can see has to be judged once. verifyPureCoreCoverage watches
+# every package that holds a listed class and fails on any class there that
+# is neither listed nor excluded and has a branch or 20 lines. Without that,
+# moving untested code into a new class in the same package would raise the
+# aggregate instead of failing it. An exclusion records the judgement: which
+# of the five membership rules in doc/testing-roadmap.md keeps the class out.
+# Excluded classes are not measured, and an exclusion naming a class that is
+# gone from the coverage reports, or that sits outside every watched
+# package, fails the check as stale.
+#
+# A nested class declared in the source (Outer$Inner) is a class of its own
+# and is judged on its own row, because membership is a question about each
+# class. Code the compiler splits out of a class (lambdas, launch blocks and
+# anonymous objects such as Outer$run$1, $$inlined$ copies, classes local to
+# a function, WhenMappings, DefaultImpls) and the companion object, whatever
+# it is named, are folded into the nearest declared class they came from, so
+# Outer$Inner$run$1 counts as Outer$Inner. The gate tells the two apart from
+# what the compiler recorded in each class file, not from the name;
+# classFoldingOf in pure-core-coverage.gradle has the rule.
+#
+# Format: tab-separated, comments and blank lines ignored. Two row kinds:
+#
+#   Listed row, measured against the floors:
+#     1. class         JaCoCo class name, slash form, no package-less shorthand.
+#                      A declared nested class keeps its '$'; a generated one or
+#                      a companion object is rejected. Top-level Kotlin functions live in the file
+#                      facade class, such as RadioStationKt.
+#     2. owner_test    fully qualified JVM test class, dot form, or NONE.
+#     3. owner_module  Gradle path of the module holding owner_test, or - for NONE.
+#
+#   Excluded row, judged out of the set:
+#     1. class         as above.
+#     2. EXCLUDED      literally.
+#     3. reason        a sentence naming the rule, as "rule N", and saying
+#                      what about the class breaks it.
 #
 # class	owner_test	owner_module
 
@@ -32,10 +62,13 @@ com/yuriy/openradio/shared/model/media/MediaId	com.yuriy.openradio.shared.model.
 com/yuriy/openradio/shared/model/media/BrowseTree	com.yuriy.openradio.shared.model.media.BrowseTreeTest	:common
 com/yuriy/openradio/shared/model/media/RadioStation	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
 com/yuriy/openradio/shared/model/media/MediaStream	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
+com/yuriy/openradio/shared/model/media/MediaStream$Variant	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
+com/yuriy/openradio/shared/model/media/RadioStationKt	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
+com/yuriy/openradio/shared/model/media/PlaybackState	com.yuriy.openradio.shared.model.media.PlaybackStateTest	:common
 com/yuriy/openradio/shared/model/media/RadioStationToAdd	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/RadioStationManagerLayerImpl	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/item/IndexableMediaItemCommand	com.yuriy.openradio.shared.model.media.item.IndexableMediaItemCommandTest	:common
-com/yuriy/openradio/shared/model/media/item/MediaItemCommandImpl	com.yuriy.openradio.shared.model.media.item.MediaItemCountryStationsTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemCommandImpl	com.yuriy.openradio.shared.model.media.item.MediaItemCommandImplTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemAllCategories	com.yuriy.openradio.shared.model.media.item.MediaItemAllCategoriesTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemChildCategories	com.yuriy.openradio.shared.model.media.item.MediaItemChildCategoriesTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCountriesList	com.yuriy.openradio.shared.model.media.item.MediaItemCountriesListTest	:common
@@ -63,10 +96,11 @@ com/yuriy/openradio/shared/model/timer/SleepTimerImpl	com.yuriy.openradio.shared
 com/yuriy/openradio/shared/model/timer/CoroutineTimerTask	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/player/PlaybackErrorClassifier	com.yuriy.openradio.shared.service.player.PlaybackErrorClassifierTest	:common
-com/yuriy/openradio/shared/service/location/Country	com.yuriy.openradio.shared.model.parser.ParserLayerMappingTest	:common
 com/yuriy/openradio/shared/utils/JsonUtils	com.yuriy.openradio.shared.utils.JsonUtilsTest	:common
 com/yuriy/openradio/shared/utils/SortUtils	com.yuriy.openradio.shared.utils.SortUtilsTest	:common
 com/yuriy/openradio/shared/utils/RadioStationValidatorImpl	com.yuriy.openradio.shared.utils.RadioStationValidatorImplTest	:common
+com/yuriy/openradio/shared/utils/MediaItemHelper	com.yuriy.openradio.shared.utils.MediaItemHelperTest	:common
+com/yuriy/openradio/shared/utils/PlayerUtils	com.yuriy.openradio.shared.utils.PlayerUtilsTest	:common
 wseemann/media/jplaylistparser/parser/AutoDetectParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/AbstractParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/m3u/M3UPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
@@ -75,3 +109,42 @@ wseemann/media/jplaylistparser/parser/pls/PLSPlaylistParser	wseemann.media.jplay
 wseemann/media/jplaylistparser/parser/asx/ASXPlaylistParser	wseemann.media.jplaylistparser.parser.asx.ASXPlaylistParserTest	:common
 wseemann/media/jplaylistparser/parser/xspf/XSPFPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/mime/MediaType	wseemann.media.jplaylistparser.mime.MediaTypeTest	:common
+
+com/yuriy/openradio/shared/model/media/Category	EXCLUDED	rule 3: its only decision picks the singular or plural label from Context string resources.
+com/yuriy/openradio/shared/model/media/MediaResourcesManager	EXCLUDED	rule 3: its behaviour is a Media3 MediaBrowser session connected to the service.
+com/yuriy/openradio/shared/model/media/MediaResourcesManager$BrowserListener	EXCLUDED	rule 3: it answers Media3 MediaBrowser callbacks by re-reading the browser's children.
+com/yuriy/openradio/shared/model/media/MediaResourcesManager$PlayerListener	EXCLUDED	rule 3: it relays Media3 Player events and reads the player's state.
+com/yuriy/openradio/shared/model/net/DnsMirrorUrlResolver	EXCLUDED	rule 3: it asks a name server for the Radio Browser mirrors.
+com/yuriy/openradio/shared/model/net/HTTPDownloaderImpl	EXCLUDED	rule 3: its observable behaviour is the HTTP stack opening connections and reading responses.
+com/yuriy/openradio/shared/model/net/HTTPDownloaderImpl$BytesDownloader	EXCLUDED	rule 3: its retries and content type filter act on HttpURLConnection responses.
+com/yuriy/openradio/shared/model/net/NetworkLayerImpl	EXCLUDED	rule 3: every answer comes from ConnectivityManager.
+com/yuriy/openradio/shared/model/storage/AbstractStorage	EXCLUDED	rule 3: every method reads or writes SharedPreferences.
+com/yuriy/openradio/shared/model/storage/AbstractRadioStationsStorage	EXCLUDED	rule 3: it keeps stations in SharedPreferences through AbstractStorage.
+com/yuriy/openradio/shared/model/storage/AppPreferencesManager	EXCLUDED	rule 3: every method reads or writes the default SharedPreferences.
+com/yuriy/openradio/shared/model/storage/DeviceLocalsStorage	EXCLUDED	rule 3: it keeps local stations and their id counter in SharedPreferences.
+com/yuriy/openradio/shared/model/storage/FavoritesStorage	EXCLUDED	rule 3: it keeps favorites in SharedPreferences through AbstractStorage.
+com/yuriy/openradio/shared/model/storage/FileStoreManager	EXCLUDED	rule 3: it launches document pickers and reads the result through Activity and Fragment callbacks.
+com/yuriy/openradio/shared/model/storage/LatestRadioStationStorage	EXCLUDED	rule 3: it keeps the last station in SharedPreferences through AbstractStorage.
+com/yuriy/openradio/shared/model/storage/cache/api/PersistentApiCache	EXCLUDED	rule 3: every answer comes from the Room cache database.
+com/yuriy/openradio/shared/model/storage/cache/api/PersistentApiCacheDao_Impl	EXCLUDED	rule 2: it is Room generated code.
+com/yuriy/openradio/shared/model/storage/cache/api/PersistentApiDb	EXCLUDED	rule 3: it opens the Room database.
+com/yuriy/openradio/shared/model/storage/cache/api/PersistentApiDb_Impl	EXCLUDED	rule 2: it is Room generated code.
+com/yuriy/openradio/shared/model/timer/SleepTimerModelImpl	EXCLUDED	rule 3: its state is read from and written to SleepTimerStorage, which is SharedPreferences.
+com/yuriy/openradio/shared/model/timer/SleepTimerModelImpl$SleepTimerListenerImpl	EXCLUDED	rule 3: it writes the timer state to SleepTimerStorage, which is SharedPreferences.
+com/yuriy/openradio/shared/service/OpenRadioService	EXCLUDED	rule 3: it is the Media3 MediaLibraryService and lives by the Service lifecycle.
+com/yuriy/openradio/shared/service/OpenRadioService$NetworkMonitorListenerImpl	EXCLUDED	rule 3: it pauses or resumes the service's player and shows a Toast on connectivity changes.
+com/yuriy/openradio/shared/service/OpenRadioService$PlayerListener	EXCLUDED	rule 3: it runs on the service's coroutine scopes and publishes the active station to the media session.
+com/yuriy/openradio/shared/service/OpenRadioService$ServiceCallback	EXCLUDED	rule 3: it is the Media3 MediaLibrarySession.Callback and answers from the running service.
+com/yuriy/openradio/shared/service/OpenRadioService$SleepTimerListenerImpl	EXCLUDED	rule 3: it closes the service when the sleep timer fires.
+com/yuriy/openradio/shared/service/OpenRadioStore	EXCLUDED	rule 2: its branches are null guards around Bundle puts and gets; it decides nothing.
+com/yuriy/openradio/shared/service/player/ExoPlayerUtils	EXCLUDED	rule 3: it builds ExoPlayer renderers, data sources and an on-device cache.
+com/yuriy/openradio/shared/service/player/OpenRadioPlayer	EXCLUDED	rule 3: it wraps ExoPlayer and answers from its state.
+com/yuriy/openradio/shared/service/player/OpenRadioPlayer$ComponentListener	EXCLUDED	rule 3: it is the ExoPlayer Player.Listener and reads string resources; its metadata title extraction is an extraction candidate.
+com/yuriy/openradio/shared/utils/AppUtils	EXCLUDED	rule 3: most of it asks PackageManager, PowerManager, Build and display metrics; its few pure helpers are extraction candidates.
+com/yuriy/openradio/shared/utils/ImageFilePath	EXCLUDED	rule 3: it resolves paths through ContentResolver and DocumentsContract.
+com/yuriy/openradio/shared/utils/IntentUtils	EXCLUDED	rule 3: it starts activities and registers activity results.
+com/yuriy/openradio/shared/utils/MediaItemBuilder	EXCLUDED	rule 2: it has no branch and only copies fields and Context string resources into MediaItem builders.
+com/yuriy/openradio/shared/utils/NetUtils	EXCLUDED	rule 3: it opens HttpURLConnections and probes urls over the network; its pure helpers are extraction candidates.
+com/yuriy/openradio/shared/utils/SafeToast	EXCLUDED	rule 5: it shows Toasts.
+com/yuriy/openradio/shared/utils/UiUtils	EXCLUDED	rule 5: it removes dialog fragments through a FragmentManager.
+com/yuriy/openradio/shared/utils/UiUtilsKt	EXCLUDED	rule 5: it is View lookup and View state extensions.

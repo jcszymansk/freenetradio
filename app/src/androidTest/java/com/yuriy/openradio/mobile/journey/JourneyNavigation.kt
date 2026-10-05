@@ -65,6 +65,13 @@ internal class JourneyNavigation(private val mScenario: ActivityScenario<MainAct
      * and sends `CMD_STOP_SERVICE`, which ends in `Process.killProcess` and would take the whole
      * run with it.
      *
+     * A case that changed the node it is standing in has to wait for that node's refresh to
+     * render before calling this. `MediaResourcesManager.onChildrenChanged` checks the subscribed
+     * node when the push arrives, not when the children it then fetches come back, and the
+     * presenter renders whatever node it is handed. A refresh still in flight when the walk back
+     * starts can therefore land after the root and put the node's children back on screen under
+     * a presenter that stands at the root.
+     *
      * This asserts nothing, because it is meant to be called from a `finally` and an assertion
      * there would replace whatever failure sent the case into it. A failure to get back out is
      * caught by the case's own root-list assertion, and one that escaped the case entirely by the

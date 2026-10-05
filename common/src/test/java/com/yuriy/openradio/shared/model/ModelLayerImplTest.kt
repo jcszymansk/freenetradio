@@ -116,6 +116,7 @@ class ModelLayerImplTest {
         assertEquals(1, memoryCache.operations)
         assertEquals(0, downloader.calls)
     }
+
     @Test
     fun persistentHitIsPromotedToMemory() {
         val data = """[{"name":"rock","stationcount":1}]"""
@@ -143,6 +144,7 @@ class ModelLayerImplTest {
         assertEquals(1, memoryCache.puts)
         assertEquals(0, downloader.calls)
     }
+
     @Test
     fun emptyAndArrayCacheValuesAreMisses() {
         val data = """[{"name":"rock","stationcount":1}]"""
@@ -170,6 +172,7 @@ class ModelLayerImplTest {
             assertEquals(data, memoryCache.lastPutData)
         }
     }
+
     @Test
     fun successfulDownloadReplacesBothCaches() {
         val data = """[{"name":"rock","stationcount":1}]"""
@@ -197,6 +200,7 @@ class ModelLayerImplTest {
         assertEquals(1, memoryCache.puts)
         assertEquals(data, memoryCache.lastPutData)
     }
+
     @Test
     fun emptyDownloadsAreNotCached() {
         for (downloadedData in listOf("", "[]")) {
@@ -223,6 +227,7 @@ class ModelLayerImplTest {
             assertEquals(0, memoryCache.puts)
         }
     }
+
     @Test
     fun parserReceivesExactlyDownloadedResponse() {
         val data = "selected response"
@@ -266,12 +271,6 @@ class ModelLayerImplTest {
 
         override fun getAllCountries(data: String): Set<Country> = emptySet()
     }
-
-
-
-
-
-
 
     private class RecordingNetworkLayer(private val connected: Boolean) : NetworkLayer {
         var connectivityChecks = 0

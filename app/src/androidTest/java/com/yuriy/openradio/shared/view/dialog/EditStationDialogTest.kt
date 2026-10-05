@@ -84,6 +84,7 @@ class EditStationDialogTest {
     fun tearDown() {
         mLocals.clear()
         mFavorites.clear()
+        ServiceBrowser.invalidateTheBrowseTree()
     }
 
     /**

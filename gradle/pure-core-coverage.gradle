@@ -1,4 +1,10 @@
+import groovy.io.FileType
 import groovy.xml.XmlSlurper
+import kotlinx.metadata.jvm.JvmMetadataUtil
+import kotlinx.metadata.jvm.KotlinClassMetadata
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.Opcodes
+import org.objectweb.asm.tree.ClassNode
 
 /**
  * The machine-checkable half of the TASK-007 test gate.
@@ -15,6 +21,23 @@ import groovy.xml.XmlSlurper
  * executed a line. The .exec file keeps session ids but not per-session probes.
  * Running the owner alone is the only honest mechanism available here.
  */
+
+// An applied script does not see the root project's buildscript classpath,
+// where AGP already brings ASM, so it declares its own. The version is the
+// one AGP resolves, so the build downloads nothing new.
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.ow2.asm:asm-tree:9.2'
+        // Which member class is the companion object is recorded only in the
+        // protobuf-encoded kotlin.Metadata, so JetBrains' reader decodes it.
+        // 0.9.0 is the last release under this name and reads metadata up to
+        // Kotlin 2.0, which covers the 1.9 compiler in constants.gradle.
+        classpath 'org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.9.0'
+    }
+}
 
 def rootDirectory = rootProject.projectDir
 def pureCoreListFile = rootProject.file('gradle/pure-core-coverage.tsv')
@@ -37,11 +60,182 @@ def formatPercent = { double value ->
     String.format(Locale.ROOT, '%5.1f%%', value)
 }
 
+def excludedMarker = 'EXCLUDED'
+def membershipRulePattern = ~/\brule [1-5]\b/
+
+// Membership is judged per declared class: a nested class written in the
+// source is its own row, while code the compiler splits out of a class is
+// measured as that class. JaCoCo names both Outer$..., and the name cannot
+// tell them apart, since Kotlin accepts a class named child and a function
+// named Run. The class file can: a class that is not top-level carries an
+// InnerClasses entry for itself, which says whether the source declared it
+// as a member of another class.
+//
+//   class file            own InnerClasses entry   declared on its own?
+//   --------------------  -----------------------  -------------------------
+//   Outer                 none                     yes, top-level
+//   Outer$child           child, member of Outer   yes, when Outer is
+//   Outer$run$1           no outer, no name        no, lambda, launch block
+//                                                  or object expression
+//   Outer$run$Local       Local, no outer          no, local to a function
+//   Outer$WhenMappings    member of Outer          no, ACC_SYNTHETIC
+//   Outer$DefaultImpls    member of Outer          no, kotlin.Metadata k=3
+//   Outer$Companion       member of Outer          no, the companion object
+//                                                  Outer's kotlin.Metadata names
+//
+// The compiler marks most of the member classes it invents: WhenMappings is
+// ACC_SYNTHETIC, and DefaultImpls, like every lambda, carries kotlin.Metadata
+// kind 3, "synthetic class". A companion object is written in the source, but
+// it holds the class's static members, so it is part of its class whatever it
+// is named. Only the outer class's Kotlin metadata says which member is the
+// companion. A static field named and typed after a member proves nothing,
+// since a companion may keep an instance of a nested class under that class's
+// name, and a Java class, which has no Kotlin metadata, has no companion. A
+// class local to a function lands in the class that declares the function,
+// like the rest of that function body. Everything not declared on its own
+// folds into the longest prefix of its name that is.
+def kotlinMetadataDescriptor = 'Lkotlin/Metadata;'
+
+/**
+ * Decodes one class's kotlin.Metadata annotation. Metadata that cannot be
+ * read fails the gate, because guessing would let a declared class fold
+ * unjudged or a companion stand as a row of its own.
+ *
+ * @param className JVM internal name of the annotated class, for the error
+ * @param annotation the kotlin.Metadata AnnotationNode as ASM read it
+ * @return the decoded KotlinClassMetadata
+ */
+def readKotlinMetadata = { String className, annotation ->
+    // AnnotationNode.values alternates element names and their values, and
+    // holds array elements as lists. An element left at its default is absent,
+    // which the Metadata factory takes as null.
+    def values = annotation.values.collate(2).collectEntries { [(it[0]): it[1]] }
+    def header = JvmMetadataUtil.Metadata(
+            values.k as Integer, values.mv as int[], values.d1 as String[], values.d2 as String[],
+            values.xs as String, values.pn as String, values.xi as Integer)
+    try {
+        KotlinClassMetadata.readStrict(header)
+    } catch (IllegalArgumentException failure) {
+        throw new GradleException("The Kotlin metadata of ${className} cannot be read, so the gate cannot tell " +
+                "which of its members is its companion object: ${failure.message}", failure)
+    }
+}
+
+/**
+ * Reads what one class file records about where its class sits in the
+ * source. A pure function of the bytes. The placement is TOP_LEVEL, MEMBER
+ * (with outerName and simpleName) or LOCAL_OR_ANONYMOUS. companionName is the
+ * simple name of the class's companion object, null when it has none.
+ */
+def readClassOrigin = { byte[] bytes ->
+    def node = new ClassNode()
+    new ClassReader(bytes).accept(node, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
+    def ownEntry = node.innerClasses.find { it.name == node.name }
+    def annotation = (node.visibleAnnotations ?: []).find { it.desc == kotlinMetadataDescriptor }
+    def kotlinMetadata = annotation == null ? null : readKotlinMetadata(node.name, annotation)
+    def origin = [
+            name           : node.name,
+            synthetic      : (node.access & Opcodes.ACC_SYNTHETIC) != 0,
+            kotlinSynthetic: kotlinMetadata instanceof KotlinClassMetadata.SyntheticClass,
+            companionName  : kotlinMetadata instanceof KotlinClassMetadata.Class ?
+                    kotlinMetadata.kmClass.companionObject : null
+    ]
+    if (ownEntry == null) {
+        return origin + [placement: 'TOP_LEVEL']
+    }
+    if (ownEntry.outerName == null) {
+        return origin + [placement: 'LOCAL_OR_ANONYMOUS']
+    }
+    origin + [placement: 'MEMBER', outerName: ownEntry.outerName, simpleName: ownEntry.innerName]
+}
+
+/**
+ * Reads the origin of every class file under the given directories, keyed by
+ * JVM internal name, which is also the name JaCoCo reports.
+ */
+def readClassOrigins = { Iterable<File> directories ->
+    def origins = [:]
+    directories.findAll { it.isDirectory() }.each { directory ->
+        directory.eachFileRecurse(FileType.FILES) { file ->
+            if (file.name.endsWith('.class')) {
+                def origin = readClassOrigin(file.bytes)
+                origins[origin.name] = origin
+            }
+        }
+    }
+    origins
+}
+
+/**
+ * Returns the names of the classes declared on their own: top-level classes,
+ * and source-declared members of a class that is itself declared on its own.
+ */
+def declaredClassesAmong = { Map<String, Map> origins ->
+    def isOwnMember = { Map member ->
+        def outer = origins[member.outerName]
+        if (outer == null) {
+            throw new GradleException("${member.name} is a member of ${member.outerName}, which has no class file " +
+                    'beside it, so the class directories the coverage report read are incomplete')
+        }
+        def isCompanion = outer.companionName != null && outer.companionName == member.simpleName
+        !member.synthetic && !member.kotlinSynthetic && !isCompanion
+    }
+    origins.keySet().findAll { String className ->
+        def origin = origins[className]
+        while (origin.placement == 'MEMBER') {
+            if (!isOwnMember(origin)) {
+                return false
+            }
+            origin = origins[origin.outerName]
+        }
+        origin.placement == 'TOP_LEVEL'
+    }.toSet()
+}
+
+/**
+ * Builds the folding for one module's class files: a closure that returns the
+ * declared class whose source compiled into a JaCoCo class, which is the class
+ * itself when it is declared on its own, otherwise the longest prefix of its
+ * name that is.
+ */
+def classFoldingOf = { Map<String, Map> origins ->
+    def declaredClasses = declaredClassesAmong(origins)
+    return { String className ->
+        if (!origins.containsKey(className)) {
+            if (className.contains('$')) {
+                throw new GradleException("${className} is in a coverage report but has no class file in the " +
+                        'directories the report read, so it cannot be told apart from generated code')
+            }
+            return className
+        }
+        def segments = className.split('\\$', -1)
+        def declaredPrefix = (segments.size()..1).collect { segments.take(it).join('$') }
+                .find { declaredClasses.contains(it) }
+        if (declaredPrefix == null) {
+            throw new GradleException("No class declared on its own encloses ${className}")
+        }
+        declaredPrefix
+    }
+}
+
+// Rule 2 admits a class for deciding something, so any branch at all is
+// enough to ask whether an unlisted class belongs. The line count is the
+// fallback for straight-line code: big enough to hide computed returns that
+// JaCoCo cannot see as branches.
+def minBranchesToFlagUnlisted = 1
+def minLinesToFlagUnlisted = 20
+
+/**
+ * Reads the class list into its two row kinds: listed classes, measured
+ * against the floors, and excluded ones, which only answer the unlisted-class
+ * check and are never measured.
+ */
 def readPureCoreList = { File source ->
     if (!source.exists()) {
         throw new GradleException("Pure-core class list is missing: ${source}")
     }
-    def rows = []
+    def listed = []
+    def excluded = []
     def seen = [:]
     def lineNumber = 0
     source.eachLine('UTF-8') { String raw ->
@@ -55,27 +249,87 @@ def readPureCoreList = { File source ->
             throw new GradleException(
                     "${source.name}:${lineNumber}: expected 3 tab-separated columns, got: ${raw}")
         }
-        def row = [
-                className  : columns[0],
-                ownerTest  : columns[1],
-                ownerModule: columns[2],
-                lineNumber : lineNumber
-        ]
-        if (row.className.contains('$')) {
-            throw new GradleException(
-                    "${source.name}:${lineNumber}: inner and synthetic classes are outside the set: ${row.className}")
+        def className = columns[0]
+        def isExcluded = columns[1] == excludedMarker
+        def earlier = seen[className]
+        if (earlier != null) {
+            def conflict = earlier.excluded == isExcluded ?
+                    "is already ${isExcluded ? 'excluded' : 'listed'} on line ${earlier.lineNumber}" :
+                    "is both listed and excluded (other row on line ${earlier.lineNumber})"
+            throw new GradleException("${source.name}:${lineNumber}: ${className} ${conflict}")
         }
-        if (seen.containsKey(row.className)) {
-            throw new GradleException(
-                    "${source.name}:${lineNumber}: ${row.className} is already listed on line ${seen[row.className]}")
+        seen[className] = [lineNumber: lineNumber, excluded: isExcluded]
+        if (isExcluded) {
+            def reason = columns[2]
+            if (!(reason =~ membershipRulePattern)) {
+                throw new GradleException(
+                        "${source.name}:${lineNumber}: the reason for excluding ${className} must name the " +
+                                "membership rule (rule 1 to rule 5) that keeps it out, got: ${reason}")
+            }
+            excluded << [className: className, reason: reason, lineNumber: lineNumber]
+        } else {
+            listed << [className: className, ownerTest: columns[1], ownerModule: columns[2], lineNumber: lineNumber]
         }
-        seen[row.className] = lineNumber
-        rows << row
     }
-    rows
+    [listed: listed, excluded: excluded]
 }
 
-def parseCoverageReport = { File report ->
+// AGP's JaCoCo report task keeps the class directories it reads in
+// classFileCollection, which is not public API. Reading it anyway keeps the
+// folding on exactly the bytes the report describes, and an AGP upgrade that
+// drops it fails here by name instead of quietly reading stale paths.
+def jacocoClassFiles = { String module ->
+    def reportTask = project(module).tasks.getByName('createDebugUnitTestCoverageReport')
+    if (!reportTask.hasProperty('classFileCollection')) {
+        throw new GradleException("${reportTask.path} no longer exposes classFileCollection, so the pure-core " +
+                'gate cannot find the class files that tell declared classes from generated code')
+    }
+    reportTask.classFileCollection
+}
+
+/**
+ * Reads the origin of every class the coverage reports can name. One map for
+ * all modules is safe because a class name in two of them would already be a
+ * duplicate class when the app is dexed.
+ */
+def readReportedClassOrigins = { ->
+    def origins = [:]
+    coverageReports.keySet().each { module ->
+        readClassOrigins(jacocoClassFiles(module).files).each { className, origin ->
+            if (origins.containsKey(className)) {
+                throw new GradleException("${className} has a class file in more than one module")
+            }
+            origins[className] = origin
+        }
+    }
+    origins
+}
+
+/**
+ * Fails on a row naming code the compiler generated, which is measured as
+ * part of a declared class and so never has a row of its own. A row naming a
+ * class with no class file is left to the absent and stale checks, which say
+ * more about it.
+ */
+def rejectRowsNamingGeneratedCode = { Map pureCoreList, Map<String, Map> origins, Closure declaredClassOf ->
+    def generated = (pureCoreList.listed + pureCoreList.excluded)
+            .sort { it.lineNumber }
+            .find { origins.containsKey(it.className) && declaredClassOf(it.className) != it.className }
+    if (generated != null) {
+        def declaredClass = declaredClassOf(generated.className)
+        throw new GradleException(
+                "${pureCoreListFile.name}:${generated.lineNumber}: ${generated.className} is compiler-generated " +
+                        "code or a companion object, which is measured as part of ${declaredClass}; name " +
+                        "${declaredClass} instead")
+    }
+}
+
+def packageOf = { String className ->
+    def slash = className.lastIndexOf('/')
+    slash < 0 ? '' : className.substring(0, slash)
+}
+
+def parseCoverageReport = { File report, Closure declaredClassOf ->
     def slurper = new XmlSlurper(false, false)
     // The report references report.dtd, which Gradle would try to fetch over
     // the network and which the test gate must never depend on.
@@ -84,37 +338,41 @@ def parseCoverageReport = { File report ->
     def root = slurper.parse(report)
     def classes = [:]
     root.'package'.'class'.each { cls ->
-        def className = cls.@name.text()
-        if (className.contains('$')) {
-            return
+        // Dropping generated classes instead would leave whole coroutine
+        // bodies unmeasured.
+        def className = declaredClassOf(cls.@name.text())
+        def totals = classes.computeIfAbsent(className) {
+            [lineCovered: 0, lineTotal: 0, branchCovered: 0, branchTotal: 0]
         }
         // A <class> repeats its counters after its <method> children, so a
         // recursive search would add every method total to the class total.
         // GPath child access reaches direct children only, which is what the
         // class-level numbers are.
-        def counters = [:]
         cls.counter.each { counter ->
             def missed = counter.@missed.text() as int
             def covered = counter.@covered.text() as int
-            counters[counter.@type.text()] = [covered: covered, total: missed + covered]
+            switch (counter.@type.text()) {
+                case 'LINE':
+                    totals.lineCovered += covered
+                    totals.lineTotal += missed + covered
+                    break
+                case 'BRANCH':
+                    totals.branchCovered += covered
+                    totals.branchTotal += missed + covered
+                    break
+            }
         }
-        classes[className] = [
-                lineCovered  : counters.LINE?.covered ?: 0,
-                lineTotal    : counters.LINE?.total ?: 0,
-                branchCovered: counters.BRANCH?.covered ?: 0,
-                branchTotal  : counters.BRANCH?.total ?: 0
-        ]
     }
     classes
 }
 
-def collectCoverage = { Map<String, File> reports, Logger logger ->
+def collectCoverage = { Map<String, File> reports, Closure declaredClassOf, Logger logger ->
     def merged = [:]
     reports.each { module, report ->
         if (!report.exists()) {
             throw new GradleException("Coverage report is missing: ${report}")
         }
-        parseCoverageReport(report).each { className, coverage ->
+        parseCoverageReport(report, declaredClassOf).each { className, coverage ->
             def existing = merged[className]
             if (existing == null) {
                 merged[className] = coverage + [module: module]
@@ -147,8 +405,13 @@ tasks.register('verifyPureCoreCoverage') {
     dependsOn 'localCoverageReport'
 
     doLast {
-        def rows = readPureCoreList(pureCoreListFile)
-        def coverage = collectCoverage(coverageReports, logger)
+        def pureCoreList = readPureCoreList(pureCoreListFile)
+        def origins = readReportedClassOrigins()
+        def declaredClassOf = classFoldingOf(origins)
+        rejectRowsNamingGeneratedCode(pureCoreList, origins, declaredClassOf)
+        def rows = pureCoreList.listed
+        def exclusions = pureCoreList.excluded
+        def coverage = collectCoverage(coverageReports, declaredClassOf, logger)
 
         def unowned = []
         def unknownOwnerSource = []
@@ -179,6 +442,22 @@ tasks.register('verifyPureCoreCoverage') {
             }
         }
 
+        // Only packages that hold a listed class are watched. Views, dialogs and
+        // the other packages with nothing in the set stay out by package;
+        // watching them too would turn the list into an inventory of the code.
+        def watchedPackages = rows.collect { packageOf(it.className) }.toSet()
+        def judged = (rows*.className + exclusions*.className).toSet()
+        def unlisted = coverage.findAll { className, classCoverage ->
+            watchedPackages.contains(packageOf(className)) &&
+                    !judged.contains(className) &&
+                    (classCoverage.branchTotal >= minBranchesToFlagUnlisted ||
+                            classCoverage.lineTotal >= minLinesToFlagUnlisted)
+        }
+        def staleExclusions = exclusions.findAll {
+            def classCoverage = coverage[it.className]
+            classCoverage == null || classCoverage.lineTotal == 0 || !watchedPackages.contains(packageOf(it.className))
+        }
+
         def lineCovered = measured.sum(0) { it.lineCovered }
         def lineTotal = measured.sum(0) { it.lineTotal }
         def branchCovered = measured.sum(0) { it.branchCovered }
@@ -187,7 +466,8 @@ tasks.register('verifyPureCoreCoverage') {
         def aggregateBranch = percent(branchCovered, branchTotal)
 
         def report = new StringBuilder()
-        report.append("Pure-core coverage over ${rows.size()} listed classes (${measured.size()} measured)\n")
+        report.append("Pure-core coverage over ${rows.size()} listed classes (${measured.size()} measured), " +
+                "${exclusions.size()} excluded, ${watchedPackages.size()} watched packages\n")
         report.append("  line   ${formatPercent(aggregateLine)}  (${lineCovered}/${lineTotal}, floor ${formatPercent(aggregateLineFloor)})\n")
         report.append("  branch ${formatPercent(aggregateBranch)}  (${branchCovered}/${branchTotal}, floor ${formatPercent(aggregateBranchFloor)})\n")
 
@@ -211,6 +491,19 @@ tasks.register('verifyPureCoreCoverage') {
                     belowFloor.sort { it.linePercent }.collect {
                         "    ${formatPercent(it.linePercent)}  ${it.className}  (${it.lineCovered}/${it.lineTotal} lines)"
                     }.join('\n')
+        }
+        if (unlisted) {
+            failures << "${unlisted.size()} class(es) in watched packages are neither listed nor excluded and have " +
+                    "at least ${minBranchesToFlagUnlisted} branch or ${minLinesToFlagUnlisted} lines. Judge each " +
+                    'against the membership rules and add a row, listed with its owner or EXCLUDED with the rule:\n' +
+                    unlisted.sort { it.key }.collect { className, classCoverage ->
+                        "    ${className}  (${classCoverage.lineTotal} lines, ${classCoverage.branchTotal} branches)"
+                    }.join('\n')
+        }
+        if (staleExclusions) {
+            failures << "${staleExclusions.size()} exclusion(s) name a class that is not in the coverage reports " +
+                    'or not in a watched package, so they exclude nothing:\n' +
+                    staleExclusions.collect { "    ${it.className}  (${pureCoreListFile.name}:${it.lineNumber})" }.join('\n')
         }
         if (aggregateLine < aggregateLineFloor) {
             failures << "Aggregate line coverage ${formatPercent(aggregateLine)} is below the ${formatPercent(aggregateLineFloor)} floor."
@@ -236,9 +529,16 @@ tasks.register('verifyPureCoreCoverage') {
 tasks.register('verifyPureCoreAttribution') {
     group = 'verification'
     description = 'Runs each owning test class alone and checks it still covers the classes it owns.'
+    // The rows are checked against the class files before the first isolated
+    // run, so they have to exist even on a clean tree.
+    dependsOn { coverageReports.keySet().collect { jacocoClassFiles(it) } }
 
     doLast {
-        def rows = readPureCoreList(pureCoreListFile).findAll { it.ownerTest != 'NONE' }
+        def pureCoreList = readPureCoreList(pureCoreListFile)
+        def origins = readReportedClassOrigins()
+        def declaredClassOf = classFoldingOf(origins)
+        rejectRowsNamingGeneratedCode(pureCoreList, origins, declaredClassOf)
+        def rows = pureCoreList.listed.findAll { it.ownerTest != 'NONE' }
         def owners = rows.groupBy { it.ownerTest }.sort { it.key }
         if (owners.isEmpty()) {
             throw new GradleException("No owned classes listed in ${pureCoreListFile.name}; nothing to attribute.")
@@ -280,7 +580,7 @@ tasks.register('verifyPureCoreAttribution') {
                 return
             }
 
-            def isolated = parseCoverageReport(coverageReports[module])
+            def isolated = parseCoverageReport(coverageReports[module], declaredClassOf)
             def offenders = ownedRows.collect { row ->
                 def classCoverage = isolated[row.className]
                 def covered = classCoverage?.lineCovered ?: 0

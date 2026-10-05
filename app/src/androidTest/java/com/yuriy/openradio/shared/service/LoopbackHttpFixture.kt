@@ -36,8 +36,9 @@ import java.util.concurrent.Executors
  * refuses is classified from the status code it refused with, which needs a server willing to
  * refuse. Everything else the playback tests do is a local file, per the testing roadmap.
  *
- * The socket is bound to [InetAddress.getLoopbackAddress], so it is reachable with the device's
- * networking disabled and unreachable from anywhere else.
+ * The socket is bound to the address literal `127.0.0.1`, the same one every url it hands out
+ * names, so it is reachable with the device's networking disabled and unreachable from anywhere
+ * else.
  */
 internal class LoopbackHttpFixture {
 

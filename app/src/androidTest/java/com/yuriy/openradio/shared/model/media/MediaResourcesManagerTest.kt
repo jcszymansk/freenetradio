@@ -25,14 +25,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.MediaStream.Companion.BIT_RATE_DEFAULT
 import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
-import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
-import com.yuriy.openradio.shared.model.storage.FavoritesStorage
-import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
-import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
+import com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.ServiceBrowser
+import com.yuriy.openradio.shared.service.ServiceStorages
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +42,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.lang.ref.WeakReference
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -54,28 +51,23 @@ import java.util.concurrent.TimeUnit
 class MediaResourcesManagerTest {
 
     private lateinit var context: Context
-    private lateinit var favoritesStorage: FavoritesStorage
-    private lateinit var localsStorage: DeviceLocalsStorage
-    private lateinit var latestRadioStationStorage: LatestRadioStationStorage
-    private lateinit var sleepTimerStorage: SleepTimerStorage
+
+    /**
+     * The service's own storages, because the service is what answers these browses. Clearing a
+     * parallel instance would wipe the files and leave the service's cached favorites and latest
+     * station in place, and a service started after that would adopt the cached station.
+     */
+    private lateinit var storages: ServiceStorages
     private lateinit var apiCache: PersistentApiCache
     private var resourcesManager: MediaResourcesManager? = null
 
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
-        val contextRef = WeakReference(context)
-        latestRadioStationStorage = LatestRadioStationStorage(contextRef)
-        favoritesStorage = FavoritesStorage(contextRef)
-        localsStorage = DeviceLocalsStorage(
-            contextRef,
-            favoritesStorage,
-            latestRadioStationStorage
-        )
-        sleepTimerStorage = SleepTimerStorage(contextRef)
+        storages = ServiceStorages(context)
         apiCache = PersistentApiCache(context, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         clearState()
-        ServiceBrowser.assertABrowseCannotStartPlayback()
+        ServiceBrowser.invalidateTheBrowseTree()
     }
 
     @After
@@ -86,12 +78,14 @@ class MediaResourcesManagerTest {
         clearState()
     }
 
+    /**
+     * A persistent hit is promoted into the in-memory cache, whose map is static, so the search
+     * fixture would otherwise keep answering for every later class that searches the same query.
+     */
     private fun clearState() {
         apiCache.clear()
-        sleepTimerStorage.clear()
-        latestRadioStationStorage.clear()
-        localsStorage.clear()
-        favoritesStorage.clear()
+        InMemoryApiCache().clear()
+        storages.clear()
     }
 
     @Test
@@ -106,11 +100,11 @@ class MediaResourcesManagerTest {
         assertTrue("Initial root load must replace the spinner state", initial.replace)
         assertFalse(initial.containsLocals())
 
-        val station = RadioStation.makeDefaultInstance(localsStorage.getId())
+        val station = RadioStation.makeDefaultInstance(storages.locals.getId())
         station.name = "Regression station"
         station.setVariant(BIT_RATE_DEFAULT, "$UNREACHABLE_ORIGIN/stream")
         station.isLocal = true
-        localsStorage.add(station)
+        storages.locals.add(station)
 
         val commandSent = runBlocking(Dispatchers.Main) {
             manager.sendCommand(OpenRadioService.CMD_UPDATE_TREE, Bundle())

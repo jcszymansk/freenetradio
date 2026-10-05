@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 
 /**
  * The browse list an [ActivityScenario] is showing, read the way a user reads it.
@@ -86,6 +87,29 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
         throw AssertionError(
             "The browse list did not show $expectation within $LIST_TIMEOUT_SECONDS seconds. " +
                 "It last showed $last. " + describe()
+        )
+    }
+
+    /**
+     * Waits until the adapter holds no items at all, which is what a node the service emptied
+     * renders.
+     *
+     * [awaitRows] cannot see this state: [rows] answers empty both for a list that emptied and for
+     * one still being laid out, and it skips the second. The adapter tells them apart.
+     *
+     * @param expectation what the list was being waited for, so a timeout names it.
+     */
+    fun awaitEmptied(expectation: String) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(LIST_TIMEOUT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            if (adapterItemCount() == 0) {
+                return
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+        throw AssertionError(
+            "The browse list did not empty to show $expectation within $LIST_TIMEOUT_SECONDS " +
+                "seconds. It last showed ${rows()}. " + describe()
         )
     }
 
@@ -249,28 +273,39 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
 
     /**
      * Reads the rendered row whose adapter position holds [mediaId], handing [read] both the row
-     * on screen and the item the adapter bound it from.
+     * on screen and the item the adapter bound it from, and fails when the adapter holds that
+     * media id more than once: a tap would then reach whichever row came first, and a read would
+     * describe one of two rows the user cannot tell apart.
+     *
+     * The row is looked up by adapter position rather than by walking the laid out children. A
+     * change animation keeps the outgoing view of a rebound row attached next to its replacement,
+     * so for a moment two children report the same position, and only
+     * [RecyclerView.findViewHolderForAdapterPosition] prefers the one that is staying.
      *
      * @return what [read] answered, or null when no such row was on screen at all, which is the
      *   difference between a control that did not react and a row the list never laid out.
      */
     private fun <T> inRow(mediaId: String, read: (View, MediaItem) -> T): T? {
         val result = AtomicReference<T?>(null)
+        val positions = AtomicReference(emptyList<Int>())
         mScenario.onActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
             val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
-            for (index in 0 until listView.childCount) {
-                val child = listView.getChildAt(index)
-                val position = listView.getChildAdapterPosition(child)
-                if (position == RecyclerView.NO_POSITION) {
-                    continue
-                }
-                val item = adapter.getItem(position) ?: continue
-                if (item.mediaId != mediaId) {
-                    continue
-                }
-                result.set(read(child, item))
+            val matching = (0 until adapter.itemCount).filter { position ->
+                adapter.getItem(position)?.mediaId == mediaId
             }
+            positions.set(matching)
+            val position = matching.singleOrNull() ?: return@onActivity
+            val item = adapter.getItem(position) ?: return@onActivity
+            val row = listView.findViewHolderForAdapterPosition(position)?.itemView
+                ?: return@onActivity
+            result.set(read(row, item))
+        }
+        if (positions.get().size > 1) {
+            fail(
+                "The adapter holds the media id $mediaId at positions ${positions.get()}, so a " +
+                    "row for it is ambiguous. " + describe()
+            )
         }
         return result.get()
     }

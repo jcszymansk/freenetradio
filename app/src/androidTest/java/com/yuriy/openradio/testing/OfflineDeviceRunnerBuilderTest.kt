@@ -47,7 +47,7 @@ import org.junit.runners.Suite
  * then be refused along with every other, so they hand the builder a network instead.
  */
 @RunWith(AndroidJUnit4::class)
-open class OfflineDeviceRunnerBuilderTest {
+class OfflineDeviceRunnerBuilderTest {
 
     @Test
     fun anOnlineDeviceFailsATestClassWithoutRunningIt() {

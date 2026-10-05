@@ -4,7 +4,7 @@ title: Collapse the duplicated end of list guard in the children loaded path
 status: To Do
 assignee: []
 created_date: '2026-09-22 15:13'
-updated_date: '2026-09-22 15:13'
+updated_date: '2026-10-05 05:39'
 labels:
   - browse
 milestone: m-0
@@ -38,3 +38,9 @@ Found while reviewing task-058, which covered the surviving guard but deliberate
 - [ ] #3 A JVM test in common-ui drives handleChildrenLoaded with an ended page for a node other than the one already loaded, then a normal page for that same node, and asserts the second page replaces rather than appends
 - [ ] #4 The test fails if mCurrentParentId is assigned above the surviving guard
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Found on TASK-068 while writing PlayerUtilsTest: isEndOfList recognises the end marker by reference, mediaId === the marker's id, so a marker whose id is equal but a different String instance, which is what arrives after a Bundle crosses a Binder, reads as an ordinary page. It is latent only because no production code builds the marker; the live end-of-list cases are a null list and a list holding one null. isEndOfList(emptyList()) is false while null and [null] are true. PlayerUtilsTest pins all three as current behaviour, so whoever settles the guard here should decide them and update the test.
+<!-- SECTION:NOTES:END -->

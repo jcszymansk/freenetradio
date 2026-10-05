@@ -46,6 +46,7 @@ import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
+import com.yuriy.openradio.shared.model.storage.StrongContextReference
 import com.yuriy.openradio.shared.model.storage.cache.api.ApiCache
 import com.yuriy.openradio.shared.model.storage.preferencesContext
 import com.yuriy.openradio.shared.model.storage.images.ImagesPersistenceLayer
@@ -54,8 +55,6 @@ import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
-import com.yuriy.openradio.shared.utils.AppUtils
-import java.lang.ref.WeakReference
 import java.util.Date
 import java.util.TreeSet
 import org.junit.Assert.assertEquals
@@ -112,10 +111,6 @@ class OpenRadioServicePresenterImplTest {
     fun theSearchMarkerThePhoneKeepsOnItsStackReachesNoBrowseCommand() {
         for (presenter in listOf(presenter(isCar = false), presenter(isCar = true))) {
             assertNull(presenter.getMediaItemCommand(MediaId.MEDIA_ID_SEARCH_FROM_APP))
-            assertEquals(
-                AppUtils.EMPTY_STRING,
-                MediaId.getId(MediaId.MEDIA_ID_SEARCH_FROM_APP, Country.COUNTRY_CODE_DEFAULT)
-            )
         }
     }
 
@@ -267,22 +262,34 @@ class OpenRadioServicePresenterImplTest {
         assertEquals(0, images.deleteAllCalls)
     }
 
+    /**
+     * Starting and stopping go to the network layer one call each, with the caller's own context
+     * and listener. Each call is checked before the next one is made, and the two get different
+     * contexts, so a presenter that crossed start and stop over cannot pass. Whether the network
+     * is mobile is the other question the layer answers; the presenter only ever asks it on behalf
+     * of [onlyAnUnwantedMobileNetworkBlocksPlayback], which pins both answers.
+     */
     @Test
-    fun networkQuestionsAreForwardedToTheNetworkLayer() {
-        val networkLayer = RecordingNetworkLayer(mobile = true)
+    fun monitoringRequestsAreForwardedToTheNetworkLayer() {
+        val networkLayer = RecordingNetworkLayer()
         val presenter = presenter(networkLayer = networkLayer)
-        val context = ContextWrapper(null)
+        val startContext = ContextWrapper(null)
+        val stopContext = ContextWrapper(null)
         val listener = object : NetworkMonitorListener {
 
             override fun onConnectivityChange(isConnected: Boolean) = Unit
         }
 
-        presenter.startNetworkMonitor(context, listener)
-        presenter.stopNetworkMonitor(context)
+        presenter.startNetworkMonitor(startContext, listener)
 
-        assertEquals(1, networkLayer.monitorsStarted)
-        assertEquals(1, networkLayer.monitorsStopped)
+        assertEquals(listOf<Context>(startContext), networkLayer.startContexts)
         assertSame(listener, networkLayer.listener)
+        assertTrue(networkLayer.stopContexts.isEmpty())
+
+        presenter.stopNetworkMonitor(stopContext)
+
+        assertEquals(listOf<Context>(startContext), networkLayer.startContexts)
+        assertEquals(listOf<Context>(stopContext), networkLayer.stopContexts)
     }
 
     @Test
@@ -318,7 +325,7 @@ class OpenRadioServicePresenterImplTest {
 
     private fun gate(isMobile: Boolean, useMobile: Boolean): OpenRadioServicePresenter {
         val context = preferencesContext()
-        NetworkSettingsStorage(WeakReference(context)).setUseMobile(useMobile)
+        NetworkSettingsStorage(StrongContextReference(context)).setUseMobile(useMobile)
         return presenter(
             networkLayer = RecordingNetworkLayer(mobile = isMobile),
             settingsContext = context
@@ -350,7 +357,7 @@ class OpenRadioServicePresenterImplTest {
         countriesCache: TreeSet<Country> = TreeSet(),
         settingsContext: Context = ContextWrapper(null)
     ): OpenRadioServicePresenter {
-        val contextRef = WeakReference(settingsContext)
+        val contextRef = StrongContextReference(settingsContext)
         val favoritesStorage = FavoritesStorage(contextRef)
         val latestRadioStationStorage = LatestRadioStationStorage(contextRef)
         return OpenRadioServicePresenterImpl(
@@ -440,22 +447,20 @@ class OpenRadioServicePresenterImplTest {
 
     private class RecordingNetworkLayer(private val mobile: Boolean = false) : NetworkLayer {
 
-        var monitorsStarted = 0
-            private set
+        val startContexts = mutableListOf<Context>()
 
-        var monitorsStopped = 0
-            private set
+        val stopContexts = mutableListOf<Context>()
 
         var listener: NetworkMonitorListener? = null
             private set
 
         override fun startMonitor(context: Context, listener: NetworkMonitorListener) {
-            monitorsStarted++
+            startContexts.add(context)
             this.listener = listener
         }
 
         override fun stopMonitor(context: Context) {
-            monitorsStopped++
+            stopContexts.add(context)
         }
 
         override fun checkConnectivityAndNotify(context: Context) = true

@@ -319,11 +319,12 @@ class AutoDetectParserTest {
         AutoDetectParser(fetcher).parse(
             "https://example.com/outer.m3u",
             null,
-            ByteArrayInputStream("https://example.com/inner.pls\n".toByteArray()),
+            ByteArrayInputStream("https://example.com/inner.pls\nhttps://example.com/kept\n".toByteArray()),
             playlist
         )
 
-        assertTrue(playlist.playlistEntries.isEmpty())
+        assertEquals(listOf("https://example.com/inner.pls"), fetcher.reads)
+        assertEquals(listOf("https://example.com/kept"), uris(playlist))
     }
 
     @Test

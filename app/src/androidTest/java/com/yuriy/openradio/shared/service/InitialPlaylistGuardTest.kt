@@ -26,6 +26,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -151,15 +152,19 @@ class InitialPlaylistGuardTest {
 
     /**
      * A browser that never connected is what a teardown finds after a setup that failed first,
-     * and throwing there would replace that failure.
+     * and throwing there would replace that failure. Every player call [ServiceBrowser] makes
+     * without a connection throws, so parking that reached the player at all fails here.
      */
     @Test
     fun parkingThroughABrowserThatNeverConnectedDoesNothing() {
         val unconnected = ServiceBrowser()
 
-        LocalStationsFixture(mStorages, unconnected).parkThePlayer()
+        val parking = runCatching { LocalStationsFixture(mStorages, unconnected).parkThePlayer() }
 
-        assertFalse(unconnected.isConnected())
+        assertNull(
+            "Parking through a browser that never connected threw",
+            parking.exceptionOrNull()
+        )
     }
 
     private fun playThenStop() {
