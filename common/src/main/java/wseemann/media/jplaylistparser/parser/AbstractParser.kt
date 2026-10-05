@@ -29,12 +29,12 @@ import java.io.StringReader
 abstract class AbstractParser(private val mSession: AutoDetectParser) : Parser {
 
     /**
-     * Adds [playlistEntry] to [playlist] as a stream, or, when its url has a playlist extension,
-     * adds what that playlist names instead.
+     * Adds [playlistEntry] to [playlist] as a stream, or, when its url has a playlist extension
+     * other than HLS, adds what that playlist names instead. See [AutoDetectParser.isHlsUrl].
      */
     protected fun parseEntry(playlistEntry: PlaylistEntry, playlist: Playlist) {
         val uri = playlistEntry[PlaylistEntry.URI]
-        if (mSession.isPlaylistUrl(uri)) {
+        if (mSession.isFollowedEntryUrl(uri)) {
             mSession.follow(uri, playlist)
         } else {
             playlist.add(playlistEntry)
@@ -42,11 +42,18 @@ abstract class AbstractParser(private val mSession: AutoDetectParser) : Parser {
     }
 
     /**
-     * Adds what the playlist at [url] names to [playlist], whatever its extension. For a reference
-     * the playlist format declares to be a playlist, such as an ASX `ENTRYREF`.
+     * Adds what the playlist at [url] names to [playlist], for a reference the playlist format
+     * declares to be a playlist, such as an ASX `ENTRYREF`. Any extension is followed except HLS,
+     * which is added as a stream, see [AutoDetectParser.isHlsUrl].
      */
     protected fun follow(url: String, playlist: Playlist) {
-        mSession.follow(url, playlist)
+        if (mSession.isHlsUrl(url)) {
+            val playlistEntry = PlaylistEntry()
+            playlistEntry[PlaylistEntry.URI] = url
+            playlist.add(playlistEntry)
+        } else {
+            mSession.follow(url, playlist)
+        }
     }
 
     /**

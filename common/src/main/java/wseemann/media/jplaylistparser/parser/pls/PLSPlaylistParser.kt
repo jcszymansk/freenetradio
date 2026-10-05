@@ -20,7 +20,6 @@ import wseemann.media.jplaylistparser.mime.MediaType
 import wseemann.media.jplaylistparser.mime.MediaType.Companion.audio
 import wseemann.media.jplaylistparser.parser.AbstractParser
 import wseemann.media.jplaylistparser.parser.AutoDetectParser
-import wseemann.media.jplaylistparser.parser.m3u8.M3U8PlaylistParser
 import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.IOException
@@ -98,14 +97,7 @@ class PLSPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
     private fun savePlaylistFile(playlistEntry: PlaylistEntry, playlist: Playlist) {
         mNumberOfFiles += 1
         playlistEntry[PlaylistEntry.TRACK] = mNumberOfFiles.toString()
-        val uri: String = playlistEntry[PlaylistEntry.URI]
-        // Seems like ExoPlayer can handle m3u8 playlists now.
-        if (uri.contains(M3U8PlaylistParser.EXTENSION, ignoreCase = true)) {
-            playlist.add(playlistEntry)
-        } else {
-            // Otherwise, continue to parse playlist.
-            parseEntry(playlistEntry, playlist)
-        }
+        parseEntry(playlistEntry, playlist)
         mProcessingEntry = false
     }
 

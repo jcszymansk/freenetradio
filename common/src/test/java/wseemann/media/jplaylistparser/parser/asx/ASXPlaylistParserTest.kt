@@ -459,6 +459,47 @@ class ASXPlaylistParserTest {
         }
     }
 
+    /**
+     * ASX declares an `ENTRYREF` to be another playlist, but one naming HLS is kept as a stream
+     * like a `REF` is, so the player gets the live stream and not one of its segments.
+     */
+    @Test
+    fun refAndEntryRefNamingHlsAreKeptAsStreamsInDocumentOrder() {
+        val fetcher = RecordingFetcher(
+            "$HOST/ref.m3u8" to "#EXTM3U\n#EXTINF:10,\n$HOST/ref-segment.ts\n",
+            "$HOST/entryref.m3u8" to "#EXTM3U\n#EXTINF:10,\n$HOST/entryref-segment.ts\n"
+        )
+
+        val playlist = parse(
+            "<ASX>" +
+                    "<ENTRY><TITLE>Ref</TITLE><REF href=\"$HOST/ref.m3u8\"/></ENTRY>" +
+                    "<ENTRYREF href=\"$HOST/entryref.m3u8\"/>" +
+                    "</ASX>",
+            fetcher
+        )
+
+        assertEquals(listOf("$HOST/ref.m3u8", "$HOST/entryref.m3u8"), uris(playlist))
+        assertEquals("Ref", titles(playlist).first())
+        assertEquals(emptyList<String>(), fetcher.reads)
+    }
+
+    /**
+     * Only an extension that is exactly `.m3u8` marks HLS; one that merely starts with it is any
+     * other reference and is followed.
+     */
+    @Test
+    fun entryRefWhoseExtensionOnlyStartsWithM3u8IsFollowed() {
+        val reference = "$HOST/index.m3u8x"
+        val fetcher = RecordingFetcher(
+            reference to "<ASX><ENTRY><REF href=\"$HOST/from-m3u8x\"/></ENTRY></ASX>"
+        )
+
+        val playlist = parse("<ASX><ENTRYREF href=\"$reference\"/></ASX>", fetcher)
+
+        assertEquals(listOf(reference), fetcher.reads)
+        assertEquals(listOf("$HOST/from-m3u8x"), uris(playlist))
+    }
+
     @Test
     fun entriesAndEntryRefsInterleaveInDocumentOrder() {
         val fetcher = RecordingFetcher(

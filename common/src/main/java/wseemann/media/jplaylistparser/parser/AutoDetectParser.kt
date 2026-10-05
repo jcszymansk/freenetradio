@@ -45,7 +45,7 @@ import java.util.Locale
  *     │ dispatch on MIME type and extension, then content
  *     ▼
  *   parser ── entry with a playlist extension, or an ASX ENTRYREF
- *     │
+ *     │ except an address whose path ends in .m3u8, which is kept as a stream
  *     ▼
  *   follow(url) ── already followed, or depth limit ──► skipped
  *     │ fetcher.fetch(url)
@@ -91,12 +91,22 @@ class AutoDetectParser private constructor(
     }
 
     /**
-     * @return Whether [url] is dispatched on its extension alone, which is what makes an entry
-     * worth following rather than a stream.
+     * @return Whether an entry naming [url] is read as a playlist rather than kept as a stream:
+     * its extension is one this class dispatches on, and it is not HLS, see [isHlsUrl].
      */
-    internal fun isPlaylistUrl(url: String): Boolean {
+    internal fun isFollowedEntryUrl(url: String): Boolean {
         val extension = getFileExtension(url)
-        return PLAYLIST_EXTENSIONS.any { extension.equalsIgnoreCase(it) }
+        return !isHlsUrl(url) && PLAYLIST_EXTENSIONS.any { extension.equalsIgnoreCase(it) }
+    }
+
+    /**
+     * @return Whether [url] names an HLS playlist, which a playlist referring to it hands to the
+     * player as a stream instead of reading it. The player reads HLS itself, while reading it here
+     * would turn a master playlist into its variants and a media playlist into its segments, and
+     * the station would then play one segment instead of the live stream.
+     */
+    internal fun isHlsUrl(url: String): Boolean {
+        return getFileExtension(url).equalsIgnoreCase(M3U8PlaylistParser.EXTENSION)
     }
 
     /**
@@ -190,37 +200,18 @@ class AutoDetectParser private constructor(
         }
     }
 
+    /**
+     * The extension of the name in the last path segment of [uri], from its last dot, in the case
+     * it was written in. The query, the fragment and path parameters such as `;jsessionid=abc` are
+     * not part of the name, so a dot in any of them cannot hide the extension, and text appended
+     * to an extension makes it a different one: `.m3u8x` is not `.m3u8`.
+     *
+     * @return The extension with its dot, or an empty string when the name has no dot.
+     */
     fun getFileExtension(uri: String): String {
-        var fileExtension = AppUtils.EMPTY_STRING
-        var beginIndex = uri.lastIndexOf(".")
-        if (beginIndex != -1) {
-            var endIndex = uri.length
-            fileExtension = uri.substring(beginIndex, endIndex)
-            // Keep this order the same!
-            endIndex = when {
-                fileExtension.startsWith(PLSPlaylistParser.EXTENSION) -> {
-                    PLSPlaylistParser.EXTENSION.length
-                }
-                fileExtension.startsWith(M3U8PlaylistParser.EXTENSION) -> {
-                    M3U8PlaylistParser.EXTENSION.length
-                }
-                fileExtension.startsWith(M3UPlaylistParser.EXTENSION) -> {
-                    M3UPlaylistParser.EXTENSION.length
-                }
-                fileExtension.startsWith(XSPFPlaylistParser.EXTENSION) -> {
-                    XSPFPlaylistParser.EXTENSION.length
-                }
-                fileExtension.startsWith(ASXPlaylistParser.EXTENSION) -> {
-                    ASXPlaylistParser.EXTENSION.length
-                }
-                else -> {
-                    fileExtension.length
-                }
-            }
-            beginIndex = 0
-            fileExtension = fileExtension.substring(beginIndex, endIndex)
-        }
-        return fileExtension
+        val name = uri.substringBefore('#').substringBefore('?').substringAfterLast('/').substringBefore(';')
+        val dot = name.lastIndexOf('.')
+        return if (dot < 0) AppUtils.EMPTY_STRING else name.substring(dot)
     }
 
     companion object {

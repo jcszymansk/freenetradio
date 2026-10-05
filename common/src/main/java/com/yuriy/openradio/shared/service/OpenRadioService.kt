@@ -352,7 +352,7 @@ class OpenRadioService : MediaLibraryService() {
 
         mPlayer.currentMediaItem?.let {
             val curIndx = mPlayer.currentMediaItemIndex
-            val newItem = it.buildUpon().setUri(urls[0]).build()
+            val newItem = MediaItemBuilder.withStreamUrl(it, urls[0])
             mPlayer.replaceMediaItem(curIndx, newItem)
             handlePlayRequestUiThread()
         }

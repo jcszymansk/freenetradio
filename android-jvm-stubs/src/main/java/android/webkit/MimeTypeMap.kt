@@ -16,10 +16,12 @@
 
 package android.webkit
 
-
 /**
- * JVM replacement for the Android [MimeTypeMap]. Only the file extension lookup is modelled,
- * following the platform rule: the extension is what follows the last dot of the last path segment.
+ * JVM replacement for the Android [MimeTypeMap]. Only the file extension lookup is modelled, and
+ * it follows the platform code step by step: the url is cut at its last `#` and then at its last
+ * `?`, the file name is what follows the last `/`, and a name holding any character outside
+ * letters, digits, `_`, `.`, `-`, `(`, `)` and `%` has no extension at all. A path parameter such
+ * as `;jsessionid=abc` therefore hides the extension on a device, and has to here too.
  */
 class MimeTypeMap private constructor() {
 
@@ -30,21 +32,24 @@ class MimeTypeMap private constructor() {
             if (url.isNullOrEmpty()) {
                 return ""
             }
-            val withoutFragment = url.substringBefore('#')
-            val withoutQuery = withoutFragment.substringBefore('?')
-            val lastSegment = withoutQuery.substringAfterLast('/')
-            val dotIndex = lastSegment.lastIndexOf('.')
-            if (dotIndex < 0) {
+            val withoutFragment = cutAtLast(url, '#')
+            val withoutQuery = cutAtLast(withoutFragment, '?')
+            val fileName = withoutQuery.substringAfterLast('/')
+            if (fileName.isEmpty() || !fileName.matches(FILE_NAME_PATTERN)) {
                 return ""
             }
-            val extension = lastSegment.substring(dotIndex + 1)
-            return if (extension.matches(EXTENSION_PATTERN)) {
-                extension
-            } else {
-                ""
-            }
+            val dotIndex = fileName.lastIndexOf('.')
+            return if (dotIndex < 0) "" else fileName.substring(dotIndex + 1)
         }
 
-        private val EXTENSION_PATTERN = Regex("[a-zA-Z_0-9.\\-]+")
+        /**
+         * The platform cuts only when the separator is past the first character.
+         */
+        private fun cutAtLast(url: String, separator: Char): String {
+            val index = url.lastIndexOf(separator)
+            return if (index > 0) url.substring(0, index) else url
+        }
+
+        private val FILE_NAME_PATTERN = Regex("[a-zA-Z_0-9.\\-()%]+")
     }
 }
