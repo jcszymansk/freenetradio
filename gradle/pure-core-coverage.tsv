@@ -30,19 +30,19 @@
 # A nested class declared in the source (Outer$Inner) is a class of its own
 # and is judged on its own row, because membership is a question about each
 # class. Code the compiler splits out of a class (lambdas, launch blocks and
-# anonymous objects such as Outer$run$1, $$inlined$ copies, Companion,
-# WhenMappings, DefaultImpls) is folded into the nearest declared class it
-# came from, so Outer$Inner$run$1 counts as Outer$Inner. A segment declares a
-# class when it is an identifier starting with an upper-case letter other than
-# those three Kotlin names; declaredClassOf in pure-core-coverage.gradle has
-# the rule and its one known blind spot.
+# anonymous objects such as Outer$run$1, $$inlined$ copies, classes local to
+# a function, WhenMappings, DefaultImpls) and the companion object, whatever
+# it is named, are folded into the nearest declared class they came from, so
+# Outer$Inner$run$1 counts as Outer$Inner. The gate tells the two apart from
+# what the compiler recorded in each class file, not from the name;
+# classFoldingOf in pure-core-coverage.gradle has the rule.
 #
 # Format: tab-separated, comments and blank lines ignored. Two row kinds:
 #
 #   Listed row, measured against the floors:
 #     1. class         JaCoCo class name, slash form, no package-less shorthand.
-#                      A declared nested class keeps its '$'; a generated one is
-#                      rejected. Top-level Kotlin functions live in the file
+#                      A declared nested class keeps its '$'; a generated one or
+#                      a companion object is rejected. Top-level Kotlin functions live in the file
 #                      facade class, such as RadioStationKt.
 #     2. owner_test    fully qualified JVM test class, dot form, or NONE.
 #     3. owner_module  Gradle path of the module holding owner_test, or - for NONE.

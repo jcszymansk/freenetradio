@@ -221,9 +221,13 @@ leaving it out left whole coroutine bodies unmeasured: about 360 lines inside li
 measured on 2026-10-05. A nested class declared in the source, such as `MediaStream$Variant` or
 `HTTPDownloaderImpl$BytesDownloader`, is not folded: the rules are asked of each class, and folding
 let a nested class hide under an excluded outer or move an outer's percentage without anyone judging
-it. The two are told apart by name: a segment that is an upper-case identifier declares a class,
-except Kotlin's `Companion`, `WhenMappings` and `DefaultImpls`, while a lower-case, numeric or empty
-segment marks generated code. Folding
+it. The two are told apart by what the compiler recorded in the class files, because the name
+cannot do it: Kotlin accepts a nested class called `child`. A class is declared on its own when its
+`InnerClasses` entry makes it a member of a class that is itself declared, and the compiler did not
+invent it (`WhenMappings` is `ACC_SYNTHETIC`, `DefaultImpls` carries `kotlin.Metadata` kind 3) and
+it is not the companion object, which the outer class keeps in a static field named after it.
+Lambdas, anonymous objects and classes local to a function have no outer class in that entry. A
+companion holds its class's static members, so it folds into its class under any name. Folding
 counts a line twice where a lambda opens on a line of outer code, such as `launch {`, which shifts
 the numbers by about 30 lines across the set; exact attribution would need line ranges per class
 and is not worth it at that size.
