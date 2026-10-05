@@ -109,7 +109,7 @@ class OpenRadioService : MediaLibraryService() {
     /**
      * How far the current play request has got with a station url the player could not read.
      */
-    private var mPlaylistFallback: PlaylistFallback = PlaylistFallback.Idle
+    private var mPlaylistFallback: PlaylistFallback = PlaylistFallback.Idle()
     private val mUiScope: CoroutineScope
     private val mScope: CoroutineScope
     private val mCommandScope: CoroutineScope
@@ -329,7 +329,7 @@ class OpenRadioService : MediaLibraryService() {
         mPlaylistFallback = step.next
         when (val action = step.action) {
             PlaylistFallback.Action.Ignore -> Unit
-            is PlaylistFallback.Action.Resolve -> resolvePlaylist(action.mediaId)
+            is PlaylistFallback.Action.Resolve -> resolvePlaylist(action.resolution)
             is PlaylistFallback.Action.Play -> playResolvedStream(action.mediaId, action.streamUrl)
             is PlaylistFallback.Action.GiveUp -> {
                 mPlayer.stop()
@@ -339,23 +339,23 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     /**
-     * Reads the station url of [mediaId] as a playlist, because the player could not recognise
-     * what it serves as a stream.
+     * Reads the station url of the media item [resolution] names as a playlist, because the player
+     * could not recognise what it serves as a stream.
      */
     @MainThread
-    private fun resolvePlaylist(mediaId: String) {
+    private fun resolvePlaylist(resolution: PlaylistFallback.Resolution) {
         mPlayer.stop()
-        val playlistUrl = getStationUrl(mediaId)
+        val playlistUrl = getStationUrl(resolution.mediaId)
         if (playlistUrl.isEmpty()) {
-            AppLogger.e("$TAG no station url to resolve for $mediaId")
-            advancePlaylistFallback(mPlaylistFallback.onResolved(mediaId, emptyList()))
+            AppLogger.e("$TAG no station url to resolve for $resolution")
+            advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, emptyList()))
             return
         }
-        AppLogger.i("$TAG resolve playlist $playlistUrl of $mediaId")
+        AppLogger.i("$TAG resolve playlist $playlistUrl for $resolution")
         mScope.launch {
             val urls = NetUtils.extractUrlsFromPlaylist(applicationContext, mDownloader, playlistUrl).toList()
             mUiScope.launch {
-                advancePlaylistFallback(mPlaylistFallback.onResolved(mediaId, urls))
+                advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, urls))
             }
         }
     }
@@ -656,7 +656,7 @@ class OpenRadioService : MediaLibraryService() {
         ): Int {
             if (PlaylistFallback.isPlayRequest(playerCommand)) {
                 AppLogger.d("$TAG [$controller] play request $playerCommand, fallback was $mPlaylistFallback")
-                mPlaylistFallback = PlaylistFallback.Idle
+                mPlaylistFallback = mPlaylistFallback.newRequest()
             }
             return super.onPlayerCommandRequest(session, controller, playerCommand)
         }

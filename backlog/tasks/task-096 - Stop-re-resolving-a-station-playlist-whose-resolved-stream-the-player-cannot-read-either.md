@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-05 09:32'
-updated_date: '2026-10-05 14:14'
+updated_date: '2026-10-05 14:24'
 labels: []
 milestone: m-0
 dependencies: []
@@ -49,4 +49,6 @@ Decision (AC #2): the remaining urls are tried in order, then playback stops wit
 A play request starts with any controller command that starts, stops or changes playback (PlaylistFallback.isPlayRequest, consulted in ServiceCallback.onPlayerCommandRequest). The service's own restarts after a network or Bluetooth reconnect are not requests, so they meet the exhausted state and give up without reading the playlist again.
 
 Also fixed on the way, because the same code did it: a resolution that arrived after the user moved to another station replaced whichever item was current, and the station url came from mActiveRS, which is set asynchronously; it now comes from the browse tree for the failing media id. The withTimeout around the resolution was removed: NetUtils.extractUrlsFromPlaylist blocks without suspending, so it could never fire. An empty url in the resolution (TASK-043) is still played as given.
+
+Review round 1: a playlist read is matched by a numbered PlaylistFallback.Resolution, not by media id, because a second play request for the same station started while the first read was under way took that read as its own and ignored the one it asked for. The read count carries over into each new request (newRequest) so no earlier read can answer for it.
 <!-- SECTION:NOTES:END -->

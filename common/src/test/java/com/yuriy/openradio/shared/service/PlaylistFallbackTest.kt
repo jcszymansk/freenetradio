@@ -20,6 +20,7 @@ import androidx.media3.common.Player
 import com.yuriy.openradio.shared.service.PlaylistFallback.Action
 import com.yuriy.openradio.shared.service.PlaylistFallback.Exhausted
 import com.yuriy.openradio.shared.service.PlaylistFallback.Idle
+import com.yuriy.openradio.shared.service.PlaylistFallback.Resolution
 import com.yuriy.openradio.shared.service.PlaylistFallback.Resolving
 import com.yuriy.openradio.shared.service.PlaylistFallback.Step
 import com.yuriy.openradio.shared.service.PlaylistFallback.Trying
@@ -31,120 +32,169 @@ import org.junit.Test
 /**
  * The state machine that decides, for one play request, when a station playlist is read and which
  * of the streams it names is played next. A playlist is read at most once per request: a stream it
- * named failing never leads to reading it again.
+ * named failing never leads to reading it again, and a read only answers for the request that
+ * asked for it.
  */
 class PlaylistFallbackTest {
 
     @Test
     fun idleStartsResolvingTheStationThePlayerCouldNotRecognise() {
-        val step = Idle.onUnrecognized(STATION)
+        val step = Idle().onUnrecognized(STATION)
 
-        assertEquals(Step(Resolving(STATION), Action.Resolve(STATION)), step)
+        assertEquals(Step(Resolving(FIRST_READ), Action.Resolve(FIRST_READ)), step)
     }
 
     @Test
     fun idleIgnoresAResolutionNoRequestAskedFor() {
-        val step = Idle.onResolved(STATION, listOf(URL_A))
+        val step = Idle().onResolved(FIRST_READ, listOf(URL_A))
 
-        assertEquals(Step(Idle, Action.Ignore), step)
+        assertEquals(Step(Idle(), Action.Ignore), step)
+    }
+
+    @Test
+    fun eachReadGetsTheNumberAfterTheLastOneAskedFor() {
+        val step = Idle(resolutions = 41).onUnrecognized(STATION)
+
+        val read = Resolution(STATION, 42)
+        assertEquals(Step(Resolving(read), Action.Resolve(read)), step)
     }
 
     @Test
     fun resolvingPlaysTheFirstResolvedUrlAndKeepsTheRestInOrder() {
-        val step = Resolving(STATION).onResolved(STATION, listOf(URL_A, URL_B, URL_C))
+        val step = Resolving(FIRST_READ).onResolved(FIRST_READ, listOf(URL_A, URL_B, URL_C))
 
-        assertEquals(Step(Trying(STATION, listOf(URL_B, URL_C)), Action.Play(STATION, URL_A)), step)
+        assertEquals(Step(Trying(STATION, listOf(URL_B, URL_C), 1), Action.Play(STATION, URL_A)), step)
     }
 
     @Test
     fun resolvingASingleUrlPlaysItWithNothingLeft() {
-        val step = Resolving(STATION).onResolved(STATION, listOf(URL_A))
+        val step = Resolving(FIRST_READ).onResolved(FIRST_READ, listOf(URL_A))
 
-        assertEquals(Step(Trying(STATION, emptyList()), Action.Play(STATION, URL_A)), step)
+        assertEquals(Step(Trying(STATION, emptyList(), 1), Action.Play(STATION, URL_A)), step)
     }
 
     @Test
     fun resolvingAnEmptyPlaylistGivesUp() {
-        val step = Resolving(STATION).onResolved(STATION, emptyList())
+        val step = Resolving(FIRST_READ).onResolved(FIRST_READ, emptyList())
 
-        assertEquals(Step(Exhausted(STATION), Action.GiveUp(STATION)), step)
+        assertEquals(Step(Exhausted(STATION, 1), Action.GiveUp(STATION)), step)
     }
 
     @Test
-    fun resolvingIgnoresTheResolutionOfAnotherStation() {
-        val step = Resolving(STATION).onResolved(OTHER_STATION, listOf(URL_A))
+    fun resolvingIgnoresTheReadOfAnotherStation() {
+        val step = Resolving(FIRST_READ).onResolved(Resolution(OTHER_STATION, 1), listOf(URL_A))
 
-        assertEquals(Step(Resolving(STATION), Action.Ignore), step)
+        assertEquals(Step(Resolving(FIRST_READ), Action.Ignore), step)
+    }
+
+    @Test
+    fun resolvingIgnoresAnotherReadOfTheSameStation() {
+        val waiting = Resolving(Resolution(STATION, 2))
+
+        val step = waiting.onResolved(FIRST_READ, listOf(URL_A))
+
+        assertEquals(Step(waiting, Action.Ignore), step)
     }
 
     @Test
     fun resolvingIgnoresARepeatedFailureOfTheSameStation() {
-        val step = Resolving(STATION).onUnrecognized(STATION)
+        val step = Resolving(FIRST_READ).onUnrecognized(STATION)
 
-        assertEquals(Step(Resolving(STATION), Action.Ignore), step)
+        assertEquals(Step(Resolving(FIRST_READ), Action.Ignore), step)
     }
 
     @Test
     fun resolvingIgnoresEveryRepeatedFailureOfTheSameStation() {
         val (state, actions) = fold(
-            Resolving(STATION),
+            Resolving(FIRST_READ),
             Unrecognized(STATION),
             Unrecognized(STATION),
             Unrecognized(STATION),
         )
 
-        assertEquals(Resolving(STATION), state)
+        assertEquals(Resolving(FIRST_READ), state)
         assertEquals(listOf(Action.Ignore, Action.Ignore, Action.Ignore), actions)
     }
 
     @Test
     fun resolvingStartsOverForAFailureOfAnotherStation() {
-        val step = Resolving(STATION).onUnrecognized(OTHER_STATION)
+        val step = Resolving(FIRST_READ).onUnrecognized(OTHER_STATION)
 
-        assertEquals(Step(Resolving(OTHER_STATION), Action.Resolve(OTHER_STATION)), step)
+        val read = Resolution(OTHER_STATION, 2)
+        assertEquals(Step(Resolving(read), Action.Resolve(read)), step)
     }
 
     @Test
-    fun resolvingAbandonedForAnotherStationIgnoresTheLateResolutionOfTheFirst() {
+    fun resolvingAbandonedForAnotherStationIgnoresTheLateReadOfTheFirst() {
         val (state, actions) = fold(
-            Idle,
+            Idle(),
             Unrecognized(STATION),
             Unrecognized(OTHER_STATION),
-            Resolved(STATION, listOf(URL_A)),
+            Resolved(FIRST_READ, listOf(URL_A)),
         )
 
-        assertEquals(Resolving(OTHER_STATION), state)
+        val otherRead = Resolution(OTHER_STATION, 2)
+        assertEquals(Resolving(otherRead), state)
         assertEquals(
-            listOf(Action.Resolve(STATION), Action.Resolve(OTHER_STATION), Action.Ignore),
+            listOf(Action.Resolve(FIRST_READ), Action.Resolve(otherRead), Action.Ignore),
+            actions,
+        )
+    }
+
+    /**
+     * A station left for another and returned to within one request is read again, and the read
+     * it was abandoned with must not answer for the new one.
+     */
+    @Test
+    fun aStationReturnedToHearsOnlyItsLatestRead() {
+        val latest = Resolution(STATION, 3)
+        val (state, actions) = fold(
+            Idle(),
+            Unrecognized(STATION),
+            Unrecognized(OTHER_STATION),
+            Unrecognized(STATION),
+            Resolved(FIRST_READ, listOf(URL_A)),
+            Resolved(latest, listOf(URL_B)),
+        )
+
+        assertEquals(Trying(STATION, emptyList(), 3), state)
+        assertEquals(
+            listOf(
+                Action.Resolve(FIRST_READ),
+                Action.Resolve(Resolution(OTHER_STATION, 2)),
+                Action.Resolve(latest),
+                Action.Ignore,
+                Action.Play(STATION, URL_B),
+            ),
             actions,
         )
     }
 
     @Test
     fun tryingPlaysTheNextUrlWhenThePlayedOneFails() {
-        val step = Trying(STATION, listOf(URL_B, URL_C)).onUnrecognized(STATION)
+        val step = Trying(STATION, listOf(URL_B, URL_C), 1).onUnrecognized(STATION)
 
-        assertEquals(Step(Trying(STATION, listOf(URL_C)), Action.Play(STATION, URL_B)), step)
+        assertEquals(Step(Trying(STATION, listOf(URL_C), 1), Action.Play(STATION, URL_B)), step)
     }
 
     @Test
     fun tryingGivesUpWhenNoUrlIsLeft() {
-        val step = Trying(STATION, emptyList()).onUnrecognized(STATION)
+        val step = Trying(STATION, emptyList(), 1).onUnrecognized(STATION)
 
-        assertEquals(Step(Exhausted(STATION), Action.GiveUp(STATION)), step)
+        assertEquals(Step(Exhausted(STATION, 1), Action.GiveUp(STATION)), step)
     }
 
     @Test
     fun tryingPlaysEveryResolvedUrlInOrderAndThenGivesUpOnce() {
         val (state, actions) = fold(
-            Resolving(STATION),
-            Resolved(STATION, listOf(URL_A, URL_B, URL_C)),
+            Resolving(FIRST_READ),
+            Resolved(FIRST_READ, listOf(URL_A, URL_B, URL_C)),
             Unrecognized(STATION),
             Unrecognized(STATION),
             Unrecognized(STATION),
         )
 
-        assertEquals(Exhausted(STATION), state)
+        assertEquals(Exhausted(STATION, 1), state)
         assertEquals(
             listOf(
                 Action.Play(STATION, URL_A),
@@ -157,63 +207,111 @@ class PlaylistFallbackTest {
     }
 
     @Test
-    fun tryingIgnoresAResolutionOfTheSameStation() {
-        val trying = Trying(STATION, listOf(URL_B))
+    fun tryingIgnoresARepeatOfItsOwnRead() {
+        val trying = Trying(STATION, listOf(URL_B), 1)
 
-        val step = trying.onResolved(STATION, listOf(URL_C))
+        val step = trying.onResolved(FIRST_READ, listOf(URL_C))
 
         assertEquals(Step(trying, Action.Ignore), step)
     }
 
     @Test
-    fun tryingIgnoresAResolutionOfAnotherStation() {
-        val trying = Trying(STATION, listOf(URL_B))
+    fun tryingIgnoresTheReadOfAnotherStation() {
+        val trying = Trying(STATION, listOf(URL_B), 1)
 
-        val step = trying.onResolved(OTHER_STATION, listOf(URL_C))
+        val step = trying.onResolved(Resolution(OTHER_STATION, 2), listOf(URL_C))
 
         assertEquals(Step(trying, Action.Ignore), step)
     }
 
     @Test
     fun tryingStartsOverForAFailureOfAnotherStation() {
-        val step = Trying(STATION, listOf(URL_B)).onUnrecognized(OTHER_STATION)
+        val step = Trying(STATION, listOf(URL_B), 1).onUnrecognized(OTHER_STATION)
 
-        assertEquals(Step(Resolving(OTHER_STATION), Action.Resolve(OTHER_STATION)), step)
+        val read = Resolution(OTHER_STATION, 2)
+        assertEquals(Step(Resolving(read), Action.Resolve(read)), step)
     }
 
     @Test
     fun exhaustedGivesUpAgainWithoutResolvingTheSameStation() {
-        val step = Exhausted(STATION).onUnrecognized(STATION)
+        val step = Exhausted(STATION, 1).onUnrecognized(STATION)
 
-        assertEquals(Step(Exhausted(STATION), Action.GiveUp(STATION)), step)
+        assertEquals(Step(Exhausted(STATION, 1), Action.GiveUp(STATION)), step)
     }
 
     @Test
-    fun exhaustedIgnoresAResolution() {
-        val step = Exhausted(STATION).onResolved(STATION, listOf(URL_A))
+    fun exhaustedIgnoresARead() {
+        val step = Exhausted(STATION, 1).onResolved(FIRST_READ, listOf(URL_A))
 
-        assertEquals(Step(Exhausted(STATION), Action.Ignore), step)
+        assertEquals(Step(Exhausted(STATION, 1), Action.Ignore), step)
     }
 
     @Test
     fun exhaustedStartsOverForAFailureOfAnotherStation() {
-        val step = Exhausted(STATION).onUnrecognized(OTHER_STATION)
+        val step = Exhausted(STATION, 1).onUnrecognized(OTHER_STATION)
 
-        assertEquals(Step(Resolving(OTHER_STATION), Action.Resolve(OTHER_STATION)), step)
+        val read = Resolution(OTHER_STATION, 2)
+        assertEquals(Step(Resolving(read), Action.Resolve(read)), step)
+    }
+
+    @Test
+    fun aNewRequestStartsIdleAndKeepsTheReadCount() {
+        val states = listOf(
+            Idle(4),
+            Resolving(Resolution(STATION, 4)),
+            Trying(STATION, listOf(URL_A), 4),
+            Exhausted(STATION, 4),
+        )
+
+        for (state in states) {
+            assertEquals(state.toString(), Idle(4), state.newRequest())
+        }
+    }
+
+    @Test
+    fun aNewRequestReadsAnExhaustedStationAgain() {
+        val step = Exhausted(STATION, 1).newRequest().onUnrecognized(STATION)
+
+        val read = Resolution(STATION, 2)
+        assertEquals(Step(Resolving(read), Action.Resolve(read)), step)
+    }
+
+    /**
+     * The race review found in the first version, which matched a read by its media id: a request
+     * for the same station started while its first read was under way took that first read as its
+     * own, and then ignored the read it had asked for.
+     */
+    @Test
+    fun aReadStartedForAnEarlierRequestCannotAnswerForTheNextOne() {
+        val (start, _) = fold(Idle(), Unrecognized(STATION))
+        val secondRead = Resolution(STATION, 2)
+
+        val (state, actions) = fold(
+            start.newRequest(),
+            Unrecognized(STATION),
+            Resolved(FIRST_READ, listOf(URL_A)),
+            Resolved(secondRead, listOf(URL_B)),
+        )
+
+        assertEquals(Trying(STATION, emptyList(), 2), state)
+        assertEquals(
+            listOf(Action.Resolve(secondRead), Action.Ignore, Action.Play(STATION, URL_B)),
+            actions,
+        )
     }
 
     @Test
     fun aPlaylistWhoseOnlyStreamKeepsFailingIsResolvedExactlyOnce() {
         val failures = List(10) { Unrecognized(STATION) }
-        val events = listOf(failures.first(), Resolved(STATION, listOf(URL_A))) + failures.drop(1)
+        val events = listOf(failures.first(), Resolved(FIRST_READ, listOf(URL_A))) + failures.drop(1)
 
-        val (state, actions) = fold(Idle, *events.toTypedArray())
+        val (state, actions) = fold(Idle(), *events.toTypedArray())
 
-        assertEquals(Exhausted(STATION), state)
+        assertEquals(Exhausted(STATION, 1), state)
         assertEquals(1, actions.count { it is Action.Resolve })
         assertEquals(1, actions.count { it is Action.Play })
         assertEquals(
-            listOf(Action.Resolve(STATION), Action.Play(STATION, URL_A)) +
+            listOf(Action.Resolve(FIRST_READ), Action.Play(STATION, URL_A)) +
                 List(9) { Action.GiveUp(STATION) },
             actions,
         )
@@ -222,18 +320,18 @@ class PlaylistFallbackTest {
     @Test
     fun duplicateUrlsInAPlaylistAreEachTried() {
         val (state, actions) = fold(
-            Idle,
+            Idle(),
             Unrecognized(STATION),
-            Resolved(STATION, listOf(URL_A, URL_A, URL_B)),
+            Resolved(FIRST_READ, listOf(URL_A, URL_A, URL_B)),
             Unrecognized(STATION),
             Unrecognized(STATION),
             Unrecognized(STATION),
         )
 
-        assertEquals(Exhausted(STATION), state)
+        assertEquals(Exhausted(STATION, 1), state)
         assertEquals(
             listOf(
-                Action.Resolve(STATION),
+                Action.Resolve(FIRST_READ),
                 Action.Play(STATION, URL_A),
                 Action.Play(STATION, URL_A),
                 Action.Play(STATION, URL_B),
@@ -245,22 +343,23 @@ class PlaylistFallbackTest {
 
     @Test
     fun anotherStationFailingAfterTheFirstWasExhaustedGetsItsOwnSingleResolution() {
+        val otherRead = Resolution(OTHER_STATION, 2)
         val (state, actions) = fold(
-            Idle,
+            Idle(),
             Unrecognized(STATION),
-            Resolved(STATION, emptyList()),
+            Resolved(FIRST_READ, emptyList()),
             Unrecognized(OTHER_STATION),
-            Resolved(OTHER_STATION, listOf(URL_C)),
+            Resolved(otherRead, listOf(URL_C)),
             Unrecognized(OTHER_STATION),
             Unrecognized(OTHER_STATION),
         )
 
-        assertEquals(Exhausted(OTHER_STATION), state)
+        assertEquals(Exhausted(OTHER_STATION, 2), state)
         assertEquals(
             listOf(
-                Action.Resolve(STATION),
+                Action.Resolve(FIRST_READ),
                 Action.GiveUp(STATION),
-                Action.Resolve(OTHER_STATION),
+                Action.Resolve(otherRead),
                 Action.Play(OTHER_STATION, URL_C),
                 Action.GiveUp(OTHER_STATION),
                 Action.GiveUp(OTHER_STATION),
@@ -316,9 +415,9 @@ class PlaylistFallbackTest {
         override fun applyTo(state: PlaylistFallback) = state.onUnrecognized(mediaId)
     }
 
-    private data class Resolved(val mediaId: String, val urls: List<String>) : Event() {
+    private data class Resolved(val resolution: Resolution, val urls: List<String>) : Event() {
 
-        override fun applyTo(state: PlaylistFallback) = state.onResolved(mediaId, urls)
+        override fun applyTo(state: PlaylistFallback) = state.onResolved(resolution, urls)
     }
 
     /**
@@ -342,5 +441,7 @@ class PlaylistFallbackTest {
         const val URL_A = "http://stream.test/a"
         const val URL_B = "http://stream.test/b"
         const val URL_C = "http://stream.test/c"
+
+        val FIRST_READ = Resolution(STATION, 1)
     }
 }

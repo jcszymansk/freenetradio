@@ -24,16 +24,16 @@ import androidx.media3.common.Player
  * Such a url is usually a playlist. It is read once per play request, and the streams it names
  * are tried in the order it names them, because playlists commonly list mirrors of one stream.
  * Reading it again would only return the same streams, so when the last of them fails too the
- * request is over and the service gives up. A new play request starts from [Idle].
+ * request is over and the service gives up. A new play request starts over from [newRequest].
  *
- * Every state belongs to the media item of one station, named by its media id. An error or a
- * resolution for any other media item belongs to a different request.
+ * Every state belongs to the media item of one station, named by its media id. An error for any
+ * other media item belongs to a different request.
  *
  * ```
- *         unrecognised(m)                 resolved(m, [u1, u2, ...]), play u1
- *   Idle ───────────────▶ Resolving(m) ─────────────────────────────────────▶ Trying(m, [u2, ...])
+ *         unrecognised(m)                 resolved(#n, [u1, u2, ...]), play u1
+ *   Idle ───────────────▶ Resolving(#n) ────────────────────────────────────▶ Trying(m, [u2, ...])
  *                              │                                               │        ▲
- *                              │ resolved(m, []), give up                      └────────┘
+ *                              │ resolved(#n, []), give up                     └────────┘
  *                              ▼                                     unrecognised(m), play the next
  *                         Exhausted(m) ◀──────────────────────────────── Trying(m, [])
  *                     unrecognised(m):          unrecognised(m), give up
@@ -42,9 +42,20 @@ import androidx.media3.common.Player
  *
  * An unrecognised stream of any other media item, in any state, starts [Resolving] that one.
  *
+ * Reading a playlist takes long enough for its station to be asked for again meanwhile, so each
+ * read is a numbered [Resolution] and only the read a [Resolving] state is waiting for counts.
+ * Matching the media id alone would let a read the user has since restarted answer for the
+ * request that replaced it. The numbers carry over from one request to the next for that reason.
+ *
  * Each state is immutable: an event answers with the next state and what the service has to do.
  */
 sealed class PlaylistFallback {
+
+    /**
+     * How many playlist reads this machine has asked for, so that the next one gets a number no
+     * earlier read had.
+     */
+    abstract val resolutions: Long
 
     /**
      * Reacts to the player failing to recognise the stream of the media item [mediaId].
@@ -52,49 +63,62 @@ sealed class PlaylistFallback {
     abstract fun onUnrecognized(mediaId: String): Step
 
     /**
-     * Reacts to the playlist of the media item [mediaId] having been read into [urls], in the
-     * order the playlist names them.
+     * Reacts to the playlist read [resolution] having returned [urls], in the order the playlist
+     * names them.
      */
-    open fun onResolved(mediaId: String, urls: List<String>): Step {
+    open fun onResolved(resolution: Resolution, urls: List<String>): Step {
         return Step(this, Action.Ignore)
+    }
+
+    /**
+     * The state a new play request starts in: nothing resolved for it, and no earlier read able
+     * to answer for it.
+     */
+    fun newRequest(): PlaylistFallback {
+        return Idle(resolutions)
     }
 
     /**
      * Nothing has been resolved for the current play request.
      */
-    object Idle : PlaylistFallback() {
+    data class Idle(override val resolutions: Long = 0) : PlaylistFallback() {
 
         override fun onUnrecognized(mediaId: String): Step {
             return resolve(mediaId)
         }
-
-        override fun toString() = "Idle"
     }
 
     /**
-     * The playlist of [mediaId] is being read.
+     * The playlist read [resolution] is under way.
      */
-    data class Resolving(val mediaId: String) : PlaylistFallback() {
+    data class Resolving(val resolution: Resolution) : PlaylistFallback() {
+
+        override val resolutions: Long
+            get() = resolution.number
 
         override fun onUnrecognized(mediaId: String): Step {
-            if (mediaId == this.mediaId) {
+            if (mediaId == resolution.mediaId) {
                 return Step(this, Action.Ignore)
             }
             return resolve(mediaId)
         }
 
-        override fun onResolved(mediaId: String, urls: List<String>): Step {
-            if (mediaId != this.mediaId) {
+        override fun onResolved(resolution: Resolution, urls: List<String>): Step {
+            if (resolution != this.resolution) {
                 return Step(this, Action.Ignore)
             }
-            return tryFirst(mediaId, urls)
+            return tryFirst(resolution.mediaId, urls)
         }
     }
 
     /**
      * The streams the playlist of [mediaId] named are being tried; [remaining] have not been yet.
      */
-    data class Trying(val mediaId: String, val remaining: List<String>) : PlaylistFallback() {
+    data class Trying(
+        val mediaId: String,
+        val remaining: List<String>,
+        override val resolutions: Long
+    ) : PlaylistFallback() {
 
         override fun onUnrecognized(mediaId: String): Step {
             if (mediaId != this.mediaId) {
@@ -107,7 +131,7 @@ sealed class PlaylistFallback {
     /**
      * Every stream the playlist of [mediaId] named has failed, or it named none.
      */
-    data class Exhausted(val mediaId: String) : PlaylistFallback() {
+    data class Exhausted(val mediaId: String, override val resolutions: Long) : PlaylistFallback() {
 
         override fun onUnrecognized(mediaId: String): Step {
             if (mediaId != this.mediaId) {
@@ -116,6 +140,11 @@ sealed class PlaylistFallback {
             return Step(this, Action.GiveUp(mediaId))
         }
     }
+
+    /**
+     * One read of the playlist of [mediaId], told apart from every other read by its [number].
+     */
+    data class Resolution(val mediaId: String, val number: Long)
 
     /**
      * The state that follows an event, and what the service has to do about it.
@@ -137,9 +166,10 @@ sealed class PlaylistFallback {
         }
 
         /**
-         * Read the playlist at the station url of [mediaId].
+         * Read the playlist at the station url of the media item [resolution] names, and answer
+         * with [resolution].
          */
-        data class Resolve(val mediaId: String) : Action()
+        data class Resolve(val resolution: Resolution) : Action()
 
         /**
          * Play [streamUrl] in place of the stream of [mediaId].
@@ -181,13 +211,14 @@ sealed class PlaylistFallback {
     }
 
     protected fun resolve(mediaId: String): Step {
-        return Step(Resolving(mediaId), Action.Resolve(mediaId))
+        val resolution = Resolution(mediaId, resolutions + 1)
+        return Step(Resolving(resolution), Action.Resolve(resolution))
     }
 
     protected fun tryFirst(mediaId: String, urls: List<String>): Step {
         if (urls.isEmpty()) {
-            return Step(Exhausted(mediaId), Action.GiveUp(mediaId))
+            return Step(Exhausted(mediaId, resolutions), Action.GiveUp(mediaId))
         }
-        return Step(Trying(mediaId, urls.drop(1)), Action.Play(mediaId, urls.first()))
+        return Step(Trying(mediaId, urls.drop(1), resolutions), Action.Play(mediaId, urls.first()))
     }
 }
