@@ -40,6 +40,47 @@ def formatPercent = { double value ->
 def excludedMarker = 'EXCLUDED'
 def membershipRulePattern = ~/\brule [1-5]\b/
 
+// Membership is judged per declared class, so a nested class written in the
+// source is its own row, while code the compiler splits out of a class is
+// measured as that class. JaCoCo names both Outer$..., and only the segment
+// shape tells them apart:
+//
+//   Outer$Inner$run$1          Outer, Inner   declared (upper-case identifiers)
+//          ^^^^^ ^^^ ^         run, 1         generated (method name, counter)
+//                              => folds into Outer$Inner
+//
+// A segment declares a class when it is an identifier starting with an
+// upper-case letter. Lambdas, launch blocks and anonymous objects are named
+// after the function or property that holds them and a counter, and inline
+// copies leave empty segments ($$inlined$...), so a lower-case, numeric or
+// empty segment ends the declared run. Kotlin also emits these upper-case
+// names for code that belongs to the enclosing class: Companion holds its
+// static members, WhenMappings the ordinal tables of a when over an enum, and
+// DefaultImpls the default bodies of an interface. A class declared inside a
+// function (Outer$run$Local) lands in the class that declares the function,
+// like the rest of that function body. The rule misreads a function or
+// property whose name starts with an upper-case letter, which nothing in
+// these modules has.
+def kotlinSyntheticClassNames = ['Companion', 'WhenMappings', 'DefaultImpls'] as Set
+def declaredSegmentPattern = ~/[A-Z][A-Za-z0-9_]*/
+
+/**
+ * Returns the declared class whose source compiled into the given JaCoCo
+ * class: the class itself when every segment after the top-level name
+ * declares a class, otherwise the longest leading run of declaring segments.
+ */
+def declaredClassOf = { String className ->
+    def segments = className.split('\\$', -1)
+    def declared = [segments[0]]
+    for (segment in segments.drop(1)) {
+        if (!(segment ==~ declaredSegmentPattern) || kotlinSyntheticClassNames.contains(segment)) {
+            break
+        }
+        declared << segment
+    }
+    declared.join('$')
+}
+
 // Rule 2 admits a class for deciding something, so any branch at all is
 // enough to ask whether an unlisted class belongs. The line count is the
 // fallback for straight-line code: big enough to hide computed returns that
@@ -73,10 +114,11 @@ def readPureCoreList = { File source ->
         }
         def className = columns[0]
         def isExcluded = columns[1] == excludedMarker
-        if (className.contains('$')) {
+        def declaredClass = declaredClassOf(className)
+        if (declaredClass != className) {
             throw new GradleException(
-                    "${source.name}:${lineNumber}: inner and synthetic classes are folded into their outer class " +
-                            "and must not be named: ${className}")
+                    "${source.name}:${lineNumber}: ${className} is compiler-generated code, which is measured as " +
+                            "part of ${declaredClass}; name ${declaredClass} instead")
         }
         def earlier = seen[className]
         if (earlier != null) {
@@ -115,11 +157,9 @@ def parseCoverageReport = { File report ->
     def root = slurper.parse(report)
     def classes = [:]
     root.'package'.'class'.each { cls ->
-        // Kotlin compiles lambdas, launch blocks, companions and inner classes
-        // into Outer$... classes. Their code is the outer class's code as far
-        // as anyone reading the source can tell, so it is measured there;
-        // dropping it would leave whole coroutine bodies unmeasured.
-        def className = cls.@name.text().split('\\$', 2)[0]
+        // Dropping generated classes instead would leave whole coroutine
+        // bodies unmeasured.
+        def className = declaredClassOf(cls.@name.text())
         def totals = classes.computeIfAbsent(className) {
             [lineCovered: 0, lineTotal: 0, branchCovered: 0, branchTotal: 0]
         }

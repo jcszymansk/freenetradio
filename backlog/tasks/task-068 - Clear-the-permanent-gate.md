@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-09-21 20:03'
-updated_date: '2026-10-05 06:48'
+updated_date: '2026-10-05 07:07'
 labels: []
 milestone: m-0
 dependencies:
@@ -102,6 +102,8 @@ Final pass at fc3213f: ./gradlew test --rerun-tasks, 399 tests per variant (:com
 Review round 1: two MediaItemHelperTest cases only invoked the call they named, which criterion 8 rules out; they now assert the call raises nothing. A scan of every @Test body across the four test source sets for a missing assertion finds nothing else. AGENTS.md now states the thresholds and the watched-package boundary of the unlisted-class check, and the roadmap describes both row kinds of the class list.
 
 Review round 2: the command test listener and presenter fake counted with ++ on plain or volatile fields, which loses an increment when two IO coroutines report at once, the very duplicate the single-result assertions exist to catch. Their counters are now AtomicInteger and their request records synchronized lists.
+
+Review round 3: folding every Outer$... class into the top-level class also swallowed nested classes declared in the source, so a decision-bearing nested class under an excluded outer, such as HTTPDownloaderImpl$BytesDownloader, escaped the unlisted-class check. The gate now folds only compiler-generated classes, each into its nearest declared enclosing class, and rejects a row that names a generated class. The rule was checked against all 257 $ classes in both reports. MediaStream$Variant joined the set, owned by RadioStationTest, and nine nested listener and callback classes are excluded under rule 3. Gate after a fresh run: 54 listed, 38 excluded, 96.1% line (1722/1792), 85.7% branch (816/952); attribution passes for all 37 owners.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -112,4 +114,6 @@ The gate is clear: all nine criteria held in one pass at fc3213f. 399 JVM tests 
 Reaching that took more than re-running. The audit read all 96 test files and found tests that asserted but could not fail for their stated reason: race-decided cache counters in six command tests, storages whose context a GC could drop, single-station sort checks that renumbering always satisfies. Each now fails on the defect it names, proved by simulating that defect. One fixed defect, the XSPF external DTD, had no regression test and now has one. The gate also measured less than it claimed. Coroutine and lambda bodies were dropped from the report, and moving code out of the list went unseen. Both holes are closed: synthetic classes fold into their outer class, and watched packages must list or exclude every class with a decision, which brought four classes into the set with tests of their own. The gate now runs under ./gradlew check, which still fails on lint (TASK-093).
 
 Criterion 6 is checked on one judgement: TASK-080's read limit has its regression test on a device rather than the JVM, because a JVM test needs a production seam this run could not add. That move is TASK-089. Everything else that needs production code is filed (TASK-087, 088, 090, 092, 094, 095), and the test hygiene is TASK-091.
+
+Review round 3 separated declared nested classes from compiler-generated ones, so the set now holds 54 classes at 96.1% line and 85.7% branch.
 <!-- SECTION:FINAL_SUMMARY:END -->

@@ -215,9 +215,15 @@ if it broke. `./gradlew verifyPureCoreAttribution` re-runs each owner alone to c
 what it owns. It costs a Gradle invocation per owner, a few minutes in all, which is why `check`
 does not run it.
 
-Kotlin compiles lambdas, `launch` blocks, companions and inner classes into `Outer$...` classes.
-The gate folds them into the class whose source they come from, because leaving them out left whole
-coroutine bodies unmeasured: about 360 lines inside listed classes, measured on 2026-10-05. Folding
+Kotlin compiles lambdas, `launch` blocks, anonymous objects and companions into `Outer$...`
+classes. The gate folds that generated code into the nearest declared class it comes from, because
+leaving it out left whole coroutine bodies unmeasured: about 360 lines inside listed classes,
+measured on 2026-10-05. A nested class declared in the source, such as `MediaStream$Variant` or
+`HTTPDownloaderImpl$BytesDownloader`, is not folded: the rules are asked of each class, and folding
+let a nested class hide under an excluded outer or move an outer's percentage without anyone judging
+it. The two are told apart by name: a segment that is an upper-case identifier declares a class,
+except Kotlin's `Companion`, `WhenMappings` and `DefaultImpls`, while a lower-case, numeric or empty
+segment marks generated code. Folding
 counts a line twice where a lambda opens on a line of outer code, such as `launch {`, which shifts
 the numbers by about 30 lines across the set; exact attribution would need line ranges per class
 and is not worth it at that size.
