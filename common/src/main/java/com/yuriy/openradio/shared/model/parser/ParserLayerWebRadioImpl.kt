@@ -116,7 +116,7 @@ class ParserLayerWebRadioImpl(private val mCountriesCache:Set<Country>) : Parser
             AppLogger.e("$TAG to JSON, data:$data", e)
             return emptySet()
         }
-        val result = TreeSet<Category>()
+        val result = TreeSet(Category.BROWSE_ORDER)
         val tmp = TreeMap<String, Int>()
         for (i in jsonData.keys()) {
             val jsonObject = try {

@@ -29,9 +29,10 @@ class MediaItemAllCategoriesTest {
 
     @Test
     fun eachCategoryBecomesABrowsableChildNode() {
-        val categories = TreeSet<Category>()
+        val categories = TreeSet(Category.BROWSE_ORDER)
         categories.add(Category("rock", "Rock", 42))
         categories.add(Category("jazz", "Jazz", 7))
+        categories.add(Category("blues", "Blues", 7))
         val presenter = RecordingPresenter(mCategories = categories)
         val listener = RecordingCommandListener()
 
@@ -42,11 +43,14 @@ class MediaItemAllCategoriesTest {
 
         listener.awaitResult().assertMediaIds(
             MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock",
+            MediaId.MEDIA_ID_CHILD_CATEGORIES + "blues",
             MediaId.MEDIA_ID_CHILD_CATEGORIES + "jazz"
         )
         assertEquals(1, presenter.categoriesRequests)
         assertEquals("Rock", listener.items[0].mediaMetadata.title)
         assertEquals("42 $STRING_RESOURCE", listener.items[0].mediaMetadata.subtitle)
+        assertEquals("7 $STRING_RESOURCE", listener.items[1].mediaMetadata.subtitle)
+        assertEquals("7 $STRING_RESOURCE", listener.items[2].mediaMetadata.subtitle)
         for (item in listener.items) {
             assertTrue("${item.mediaId} is not browsable", item.mediaMetadata.isBrowsable == true)
             assertFalse("${item.mediaId} is playable", item.mediaMetadata.isPlayable == true)
