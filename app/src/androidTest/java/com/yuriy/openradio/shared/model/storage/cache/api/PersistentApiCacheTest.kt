@@ -122,15 +122,41 @@ class PersistentApiCacheTest {
     }
 
     @Test
-    fun writingTheSameKeyTwiceCurrentlyAppendsARowInsteadOfReplacingIt() {
-        // Pins the defect tracked as TASK-025: the table is keyed on an auto-generated id and the
-        // name column is unconstrained, so a second write adds a row and the read, which takes the
-        // first match, keeps serving the older payload. Update this test together with the fix.
+    fun writingTheSameKeyTwiceLeavesOneRow() {
         mCache.put(KEY, PAYLOAD)
         mCache.put(KEY, OTHER_PAYLOAD)
 
+        assertEquals(1, mDao.getCount())
+    }
+
+    @Test
+    fun aReadAfterASecondWriteReturnsTheValueWrittenLast() {
+        mCache.put(KEY, PAYLOAD)
+        mCache.put(KEY, OTHER_PAYLOAD)
+
+        assertEquals(OTHER_PAYLOAD, mCache[KEY])
+    }
+
+    @Test
+    fun aWriteReplacesAStaleRecordWithAFreshOne() {
+        insertAged(KEY, PAYLOAD, ageMillis = DAY_MILLIS + 60_000L)
+
+        mCache.put(KEY, OTHER_PAYLOAD)
+
+        assertEquals(OTHER_PAYLOAD, mCache[KEY])
+        assertEquals(1, mDao.getCount())
+    }
+
+    @Test
+    fun rewritingOneKeyLeavesTheOthersAlone() {
+        mCache.put(KEY, PAYLOAD)
+        mCache.put(OTHER_KEY, OTHER_PAYLOAD)
+
+        mCache.put(KEY, THIRD_PAYLOAD)
+
+        assertEquals(THIRD_PAYLOAD, mCache[KEY])
+        assertEquals(OTHER_PAYLOAD, mCache[OTHER_KEY])
         assertEquals(2, mDao.getCount())
-        assertEquals(PAYLOAD, mCache[KEY])
     }
 
     private fun insertAged(key: String, data: String, ageMillis: Long) {
@@ -150,6 +176,8 @@ class PersistentApiCacheTest {
         const val PAYLOAD = "[{\"name\":\"first\"}]"
 
         const val OTHER_PAYLOAD = "[{\"name\":\"second\"}]"
+
+        const val THIRD_PAYLOAD = "[{\"name\":\"third\"}]"
 
         const val DAY_MILLIS = 86_400_000L
 

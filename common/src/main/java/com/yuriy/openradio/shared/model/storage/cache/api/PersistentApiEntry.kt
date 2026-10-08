@@ -22,11 +22,10 @@ import androidx.room.PrimaryKey
 @Entity(tableName = PersistentApiContract.TABLE_NAME)
 data class PersistentApiEntry(
     /**
-     * Primary Key
+     * The request the response answers. Keying on it lets a write replace the earlier response
+     * for the same request.
      */
-    @PrimaryKey(autoGenerate = true) val id: Long? = null,
-
-    val name: String,
+    @PrimaryKey val name: String,
 
     val data: String,
 

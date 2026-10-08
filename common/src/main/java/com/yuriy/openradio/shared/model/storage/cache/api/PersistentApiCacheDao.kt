@@ -27,7 +27,7 @@ interface PersistentApiCacheDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(entry: PersistentApiEntry): Long
 
-    @Query("SELECT * FROM apicache WHERE name = :key LIMIT 1")
+    @Query("SELECT * FROM apicache WHERE name = :key")
     fun getRecord(key: String): PersistentApiEntry?
 
     @Query("SELECT COUNT(*) FROM apicache")

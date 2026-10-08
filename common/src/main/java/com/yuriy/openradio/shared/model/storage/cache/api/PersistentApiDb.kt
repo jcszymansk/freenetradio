@@ -22,11 +22,15 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 /**
- * The Room database for connected USB devices.
+ * The Room database behind [PersistentApiCache].
+ *
+ * Version 2 keys the table on the request instead of an auto-generated id. Version 1 files are
+ * discarded rather than migrated: they hold at most a day of responses, and the duplicate rows
+ * they accumulated would have to be resolved by guessing which one was meant.
  */
 @Database(
     entities = [PersistentApiEntry::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class PersistentApiDb : RoomDatabase() {
@@ -63,13 +67,14 @@ abstract class PersistentApiDb : RoomDatabase() {
             }
 
         /**
-         * Build database.
+         * Builds a database over [dbFileName] that is not shared with [getInstance], configured
+         * exactly as the shared one. The caller owns it and must close it.
          *
          * @param context Context of the callee.
          * @param dbFileName File name of the database.
          * @return [PersistentApiDb].
          */
-        private fun buildDatabase(context: Context, dbFileName: String): PersistentApiDb {
+        fun buildDatabase(context: Context, dbFileName: String): PersistentApiDb {
             return Room.databaseBuilder(
                 context,
                 PersistentApiDb::class.java, dbFileName
