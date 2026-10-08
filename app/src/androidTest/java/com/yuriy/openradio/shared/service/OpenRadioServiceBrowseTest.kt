@@ -553,10 +553,6 @@ class OpenRadioServiceBrowseTest {
     /**
      * Makes [response] the answer the provider would have given for [url], and drops the service's
      * cached children for [node] so the browse that follows has to read it.
-     *
-     * Seeding is the last thing a case does before browsing, on purpose. [PersistentApiCache]
-     * measures a row's age in milliseconds against a constant meant to be seconds, so a seeded row
-     * is served for 86 seconds rather than the intended day (TASK-024).
      */
     private fun seedResponse(url: String, response: String, node: String) {
         forgetCachedResponse(url)
