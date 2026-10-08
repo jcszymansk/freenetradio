@@ -37,8 +37,12 @@ class PersistentApiCache(context: Context, dbName: String) : ApiCache {
             AppLogger.d("$CLASS_NAME cache is empty for $key")
             return data
         }
-        if (System.currentTimeMillis() - record.timestamp <= SEC_IN_DAY) {
+        if (ApiCacheFreshness.isFresh(record.timestamp, System.currentTimeMillis())) {
             data = record.data
+        } else {
+            AppLogger.d(
+                "$CLASS_NAME cached response for '$key' written at ${record.timestamp} is stale"
+            )
         }
         AppLogger.d("$CLASS_NAME cached response for '$key' is '$data'")
         return data
@@ -66,6 +70,5 @@ class PersistentApiCache(context: Context, dbName: String) : ApiCache {
 
     companion object {
         private val CLASS_NAME = PersistentApiCache::class.java.simpleName
-        private const val SEC_IN_DAY = 86400
     }
 }
