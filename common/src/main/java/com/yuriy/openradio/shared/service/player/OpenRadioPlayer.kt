@@ -113,8 +113,8 @@ class OpenRadioPlayer(
     private val mErrorClassifier = PlaybackErrorClassifier()
 
     /**
-     * Whether a regained network should restart the stream. The player's listener writes it and the
-     * connectivity receiver reads it, both on the main thread.
+     * Whether a regained network should restart the stream. The player, its listener and the
+     * network policy pause write it and the connectivity receiver reads it, all on the main thread.
      */
     private var mNetworkRecovery = NetworkRecovery.IDLE
 
@@ -772,11 +772,16 @@ class OpenRadioPlayer(
 
     /**
      * Pauses because the current network may not be used for playback. The network, not the user,
-     * stopped the station, so a stream that was waiting for the network keeps waiting for one it
-     * may use.
+     * stopped the station, so a station the user wanted playing resumes once a network it may use
+     * connects, while a station the user had paused stays paused.
      */
     fun pauseForNetworkPolicy() {
-        AppLogger.d("$TAG pause for network policy, recovery stays $mNetworkRecovery")
+        updateNetworkRecovery(
+            mNetworkRecovery.onPolicyPause(
+                NetworkRecovery.isStreamPlayRequested(mPlayer.playWhenReady, mPlayer.playbackState)
+            ),
+            "network policy pause"
+        )
         mPlayer.pause()
     }
 
@@ -876,6 +881,12 @@ class OpenRadioPlayer(
                 else -> {
                     //
                 }
+            }
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (playWhenReady) {
+                updateNetworkRecovery(mNetworkRecovery.onPlayRequested(), "play requested")
             }
         }
 

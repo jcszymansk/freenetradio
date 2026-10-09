@@ -496,8 +496,8 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     /**
-     * Pauses because playback over the mobile network is disabled, which leaves a station the
-     * network stopped waiting for a network it may use.
+     * Pauses because playback over the mobile network is disabled. A station the user wanted
+     * playing resumes once a network it may use connects.
      */
     private fun handleMobileNetworkBlocked() {
         SafeToast.showAnyThread(
@@ -507,13 +507,21 @@ class OpenRadioService : MediaLibraryService() {
         mUiScope.launch { mPlayer.pauseForNetworkPolicy() }
     }
 
-    private fun callPlayFromNetworkConnected() {
-        if (mPlayer.resumesOnReconnect().not()) {
-            AppLogger.d("$TAG network connected, nothing to resume")
-            return
+    /**
+     * Resumes the station the network stopped, if it stopped one, once a network it may use is
+     * there: a connection that is not blocked, or the mobile one the user has just allowed. The
+     * decision runs on the same main-thread queue as [handleMobileNetworkBlocked]'s pause, so a
+     * usable network reported right after a blocked one sees the station that pause stopped.
+     */
+    private fun resumeStationTheNetworkStopped() {
+        mUiScope.launch {
+            if (mPlayer.resumesOnReconnect().not()) {
+                AppLogger.d("$TAG network usable, nothing to resume")
+                return@launch
+            }
+            AppLogger.i("$TAG network usable, resume the station the network stopped")
+            handlePlayRequestUiThread()
         }
-        AppLogger.i("$TAG network connected, resume the station the network stopped")
-        handlePlayRequest()
     }
 
     private fun setActiveRS(value: RadioStation) {
@@ -617,7 +625,7 @@ class OpenRadioService : MediaLibraryService() {
                 handleMobileNetworkBlocked()
                 return
             }
-            callPlayFromNetworkConnected()
+            resumeStationTheNetworkStopped()
         }
     }
 
@@ -920,6 +928,8 @@ class OpenRadioService : MediaLibraryService() {
                 CMD_NET_CHANGED -> {
                     if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
                         handleMobileNetworkBlocked()
+                    } else {
+                        resumeStationTheNetworkStopped()
                     }
                     return mSessionCmdSuccess
                 }
