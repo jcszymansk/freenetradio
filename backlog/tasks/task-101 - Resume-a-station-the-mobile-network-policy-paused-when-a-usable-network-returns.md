@@ -3,9 +3,11 @@ id: TASK-101
 title: >-
   Resume a station the mobile-network policy paused when a usable network
   returns
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-10-08 07:20'
+updated_date: '2026-10-09 07:26'
 labels: []
 dependencies: []
 type: bug
@@ -24,3 +26,12 @@ With playback over mobile data disabled, OpenRadioService pauses through OpenRad
 - [ ] #2 A station the user had paused before the policy pause stays paused when a usable network connects
 - [ ] #3 The decision is covered by a test that needs neither a network nor a real stream
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add a NetworkRecovery transition for a pause forced by the mobile-network policy: AWAITING_NETWORK when play was requested, otherwise keep the current state, so a second policy pause (listener and CMD_NET_CHANGED both fire, and the first one already cleared playWhenReady) does not forget the wait.
+2. Call it from OpenRadioPlayer.pauseForNetworkPolicy with playWhenReady read before pausing.
+3. Update the state diagram and the service/player KDoc.
+4. Cover the decision in NetworkRecoveryTest (JVM, no network or stream).
+<!-- SECTION:PLAN:END -->

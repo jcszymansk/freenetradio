@@ -496,8 +496,8 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     /**
-     * Pauses because playback over the mobile network is disabled, which leaves a station the
-     * network stopped waiting for a network it may use.
+     * Pauses because playback over the mobile network is disabled. A station the user wanted
+     * playing resumes once a network it may use connects.
      */
     private fun handleMobileNetworkBlocked() {
         SafeToast.showAnyThread(
