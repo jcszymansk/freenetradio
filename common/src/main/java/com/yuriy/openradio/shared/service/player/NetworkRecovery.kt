@@ -16,6 +16,8 @@
 
 package com.yuriy.openradio.shared.service.player
 
+import androidx.media3.common.Player
+
 /**
  * Whether a regained network connection should start playback again.
  *
@@ -121,5 +123,21 @@ enum class NetworkRecovery {
      */
     fun onStopRequested(): NetworkRecovery {
         return IDLE
+    }
+
+    companion object {
+
+        /**
+         * Whether a loaded stream is meant to be playing. playWhenReady alone does not say so: the
+         * player starts with it set, and neither a stop nor a failed stream clears it, so a
+         * station that was stopped, never started, or rejected would otherwise count as playing.
+         *
+         * @param playWhenReady The player's playWhenReady.
+         * @param playbackState The player's [Player.State].
+         */
+        fun isStreamPlayRequested(playWhenReady: Boolean, @Player.State playbackState: Int): Boolean {
+            return playWhenReady
+                    && (playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_READY)
+        }
     }
 }

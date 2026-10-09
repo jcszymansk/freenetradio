@@ -777,7 +777,10 @@ class OpenRadioPlayer(
      */
     fun pauseForNetworkPolicy() {
         updateNetworkRecovery(
-            mNetworkRecovery.onPolicyPause(mPlayer.playWhenReady), "network policy pause"
+            mNetworkRecovery.onPolicyPause(
+                NetworkRecovery.isStreamPlayRequested(mPlayer.playWhenReady, mPlayer.playbackState)
+            ),
+            "network policy pause"
         )
         mPlayer.pause()
     }

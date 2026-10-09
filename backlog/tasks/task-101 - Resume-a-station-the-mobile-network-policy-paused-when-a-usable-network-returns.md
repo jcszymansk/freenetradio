@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-08 07:20'
-updated_date: '2026-10-09 07:26'
+updated_date: '2026-10-09 07:37'
 labels: []
 dependencies: []
 type: bug
@@ -30,8 +30,8 @@ With playback over mobile data disabled, OpenRadioService pauses through OpenRad
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1. Add a NetworkRecovery transition for a pause forced by the mobile-network policy: AWAITING_NETWORK when play was requested, otherwise keep the current state, so a second policy pause (listener and CMD_NET_CHANGED both fire, and the first one already cleared playWhenReady) does not forget the wait.
-2. Call it from OpenRadioPlayer.pauseForNetworkPolicy with playWhenReady read before pausing.
-3. Update the state diagram and the service/player KDoc.
+1. Add NetworkRecovery state PAUSED_BY_NETWORK_POLICY, entered by onPolicyPause when a loaded stream is meant to play (playWhenReady while BUFFERING or READY; playWhenReady alone survives stop and failures). A paused player keeps loading, so onPlaybackReady and onNetworkLost keep the state; onPlayRequested (playWhenReady false->true) and onStopRequested end it. A policy pause while play is not requested keeps the current state, so a repeated policy pause does not forget the wait.
+2. Call it from OpenRadioPlayer.pauseForNetworkPolicy and hook onPlayWhenReadyChanged.
+3. In OpenRadioService run the resume decision on the same main-thread queue as the deferred policy pause, and also resume when CMD_NET_CHANGED finds playback no longer blocked (the user allowed mobile data).
 4. Cover the decision in NetworkRecoveryTest (JVM, no network or stream).
 <!-- SECTION:PLAN:END -->

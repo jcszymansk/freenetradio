@@ -16,6 +16,7 @@
 
 package com.yuriy.openradio.shared.service.player
 
+import androidx.media3.common.Player
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -246,5 +247,46 @@ class NetworkRecoveryTest {
             assertEquals("transitions from $state", next, actual)
             assertEquals("resume from $state", state != idle, state.resumesOnReconnect)
         }
+    }
+
+    @Test
+    fun bufferingOrReadyStreamThatShouldPlayIsPlayRequested() {
+        assertTrue(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_BUFFERING))
+        assertTrue(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_READY))
+    }
+
+    @Test
+    fun pausedStreamIsNotPlayRequested() {
+        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_BUFFERING))
+        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_READY))
+    }
+
+    @Test
+    fun stoppedFailedOrNeverStartedStreamIsNotPlayRequested() {
+        assertFalse(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE))
+        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_IDLE))
+    }
+
+    @Test
+    fun endedStreamIsNotPlayRequested() {
+        assertFalse(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_ENDED))
+    }
+
+    @Test
+    fun policyPauseOfAStoppedStationThatStillHasPlayWhenReadyDoesNotResume() {
+        val recovery = NetworkRecovery.IDLE
+            .onStopRequested()
+            .onPolicyPause(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE))
+
+        assertFalse(recovery.resumesOnReconnect)
+    }
+
+    @Test
+    fun policyPauseOfAStreamThatFailedForTheNetworkKeepsItWaiting() {
+        val recovery = NetworkRecovery.IDLE
+            .onNetworkLost(isPlayRequested = true)
+            .onPolicyPause(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE))
+
+        assertEquals(NetworkRecovery.AWAITING_NETWORK, recovery)
     }
 }
