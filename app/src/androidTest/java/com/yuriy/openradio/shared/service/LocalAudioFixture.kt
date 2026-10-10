@@ -57,6 +57,15 @@ internal class LocalAudioFixture(private val mContext: Context) {
     }
 
     /**
+     * The header of a WAV stream that never ends, for a server to follow with samples for as long
+     * as a client keeps reading. It declares the largest data size the format can, which is how a
+     * live source that cannot know its length is served as WAV.
+     */
+    fun endlessWavHeader(): ByteArray {
+        return header(ENDLESS_DATA_SIZE).array()
+    }
+
+    /**
      * Removes every file this fixture wrote. A url handed out before this is no longer readable.
      */
     fun delete() {
@@ -90,8 +99,13 @@ internal class LocalAudioFixture(private val mContext: Context) {
      * ```
      */
     private fun silence(seconds: Int): ByteArray {
-        val dataSize = seconds * SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE
-        val buffer = ByteBuffer.allocate(HEADER_SIZE + dataSize).order(ByteOrder.LITTLE_ENDIAN)
+        val dataSize = seconds * BYTES_PER_SECOND
+        val buffer = header(dataSize, HEADER_SIZE + dataSize)
+        return buffer.array()
+    }
+
+    private fun header(dataSize: Int, capacity: Int = HEADER_SIZE): ByteBuffer {
+        val buffer = ByteBuffer.allocate(capacity).order(ByteOrder.LITTLE_ENDIAN)
         buffer.put("RIFF".toByteArray(Charsets.US_ASCII))
         buffer.putInt(HEADER_SIZE - 8 + dataSize)
         buffer.put("WAVE".toByteArray(Charsets.US_ASCII))
@@ -100,12 +114,12 @@ internal class LocalAudioFixture(private val mContext: Context) {
         buffer.putShort(FORMAT_PCM)
         buffer.putShort(CHANNELS.toShort())
         buffer.putInt(SAMPLE_RATE)
-        buffer.putInt(SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE)
+        buffer.putInt(BYTES_PER_SECOND)
         buffer.putShort((CHANNELS * BYTES_PER_SAMPLE).toShort())
         buffer.putShort((BYTES_PER_SAMPLE * 8).toShort())
         buffer.put("data".toByteArray(Charsets.US_ASCII))
         buffer.putInt(dataSize)
-        return buffer.array()
+        return buffer
     }
 
     companion object {
@@ -124,7 +138,18 @@ internal class LocalAudioFixture(private val mContext: Context) {
 
         private const val BYTES_PER_SAMPLE = 2
 
+        /**
+         * How many bytes of samples one second of the fixture's audio takes.
+         */
+        const val BYTES_PER_SECOND = SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE
+
         private const val HEADER_SIZE = 44
+
+        /**
+         * The largest data size whose RIFF size, eight bytes of header smaller than the file,
+         * still fits a signed 32-bit field.
+         */
+        private const val ENDLESS_DATA_SIZE = Int.MAX_VALUE - HEADER_SIZE
 
         private const val FORMAT_PCM: Short = 1
     }

@@ -19,12 +19,15 @@ package com.yuriy.openradio.shared.service
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
+import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * An HTTP server bound to the loopback address, for the recovery paths where raw HTTP is the
@@ -43,6 +46,8 @@ import java.util.concurrent.Executors
 internal class LoopbackHttpFixture {
 
     private val mRoutes = ConcurrentHashMap<String, Response>()
+
+    private val mBroadcasts = ConcurrentHashMap<String, Broadcast>()
 
     private val mRequests = CopyOnWriteArrayList<String>()
 
@@ -84,6 +89,17 @@ internal class LoopbackHttpFixture {
     }
 
     /**
+     * Broadcasts at [path] the way a radio station does: [head] first, then zeroed bytes at
+     * [bytesPerSecond] for as long as the client keeps the connection open, with no length
+     * declared. The returned [Broadcast] counts what was sent and how many connections are open.
+     */
+    fun broadcast(path: String, contentType: String, head: ByteArray, bytesPerSecond: Int): Broadcast {
+        val broadcast = Broadcast(url(path), contentType, head, bytesPerSecond)
+        mBroadcasts[path] = broadcast
+        return broadcast
+    }
+
+    /**
      * Refuses [path] with [status] and returns the url that reaches it.
      */
     fun refuse(path: String, status: Int, reason: String): String {
@@ -120,7 +136,8 @@ internal class LoopbackHttpFixture {
      *
      * Every response says `Connection: close` and carries a `Content-Length`, so neither the
      * player's data source nor the playlist resolver has to guess where a body ends. Keeping one
-     * connection per request is what makes that safe to do.
+     * connection per request is what makes that safe to do. A [Broadcast] is the exception: it
+     * has no end to declare, and the connection closing is the end of its body.
      */
     private fun answer(socket: Socket) {
         socket.use {
@@ -134,6 +151,11 @@ internal class LoopbackHttpFixture {
             }
             val path = pathOf(requestLine)
             mRequests.add(path)
+            val broadcast = mBroadcasts[path]
+            if (broadcast != null) {
+                broadcast.transmit(it)
+                return
+            }
             val response = mRoutes[path] ?: Response(HTTP_NOT_FOUND, "Not Found", TEXT_PLAIN, ByteArray(0))
             val head = buildString {
                 append("HTTP/1.1 ${response.status} ${response.reason}\r\n")
@@ -153,6 +175,91 @@ internal class LoopbackHttpFixture {
     private fun pathOf(requestLine: String): String {
         val parts = requestLine.split(' ')
         return if (parts.size < 2) requestLine else parts[1]
+    }
+
+    /**
+     * One endless stream, and what has been sent of it over every connection that asked for it.
+     */
+    class Broadcast internal constructor(
+        val url: String,
+        private val mContentType: String,
+        private val mHead: ByteArray,
+        private val mBytesPerSecond: Int
+    ) {
+
+        private val mBytesSent = AtomicLong()
+
+        private val mOpenConnections = AtomicInteger()
+
+        private val mConnections = AtomicInteger()
+
+        /**
+         * Bytes written to every connection so far, head included. A write the client never read
+         * still counts once the socket accepted it.
+         */
+        fun bytesSent(): Long {
+            return mBytesSent.get()
+        }
+
+        /**
+         * Connections that are still being written to.
+         */
+        fun openConnections(): Int {
+            return mOpenConnections.get()
+        }
+
+        /**
+         * Connections ever made, open or closed.
+         */
+        fun connections(): Int {
+            return mConnections.get()
+        }
+
+        /**
+         * Writes the stream to [socket] until the client closes the connection or the thread is
+         * interrupted by [LoopbackHttpFixture.stop]. Writing into a socket the client closed fails
+         * once the client's reset arrives, which is how the end of the connection is noticed.
+         */
+        internal fun transmit(socket: Socket) {
+            mConnections.incrementAndGet()
+            mOpenConnections.incrementAndGet()
+            try {
+                val output = socket.getOutputStream()
+                val head = buildString {
+                    append("HTTP/1.1 $HTTP_OK OK\r\n")
+                    append("Content-Type: $mContentType\r\n")
+                    append("Accept-Ranges: none\r\n")
+                    append("Connection: close\r\n")
+                    append("\r\n")
+                }
+                write(output, head.toByteArray(Charsets.US_ASCII))
+                write(output, mHead)
+                val chunk = ByteArray(maxOf(1, mBytesPerSecond / CHUNKS_PER_SECOND))
+                while (Thread.currentThread().isInterrupted.not()) {
+                    write(output, chunk)
+                    Thread.sleep(MILLIS_PER_SECOND / CHUNKS_PER_SECOND)
+                }
+            } catch (exception: IOException) {
+                /* The client closed the connection, which is the only way a broadcast ends. */
+            } catch (exception: InterruptedException) {
+                /* The fixture is stopping. */
+            } finally {
+                mOpenConnections.decrementAndGet()
+            }
+        }
+
+        private fun write(output: OutputStream, bytes: ByteArray) {
+            output.write(bytes)
+            output.flush()
+            mBytesSent.addAndGet(bytes.size.toLong())
+        }
+
+        private companion object {
+
+            const val CHUNKS_PER_SECOND = 50
+
+            const val MILLIS_PER_SECOND = 1_000L
+        }
     }
 
     private class Response(
