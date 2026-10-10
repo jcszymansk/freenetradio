@@ -3,9 +3,11 @@ id: TASK-102
 title: >-
   Stop downloading over blocked mobile data while the policy holds a station
   paused
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-10-09 08:11'
+updated_date: '2026-10-10 06:59'
 labels: []
 milestone: m-1
 dependencies: []
@@ -26,3 +28,14 @@ When playback over mobile data is disabled, OpenRadioService pauses through Open
 - [ ] #3 Whether the playback notification survives the policy pause is decided and recorded on this task
 - [ ] #4 Covered by a test that needs neither a network nor a real stream
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. OpenRadioPlayer.pauseForNetworkPolicy records the policy pause as before, then pauses and stops the ExoPlayer without clearing its media items. STATE_IDLE releases the media source, which cancels the loader and closes the HTTP connection; a pause alone keeps loading until the LoadControl buffer is full, and a LoadControl gate in Media3 1.2.1 leaves the socket open and overshoots by up to 1 MiB.
+2. The resume path is unchanged: prepare() and play() re-prepare the kept media items on a fresh connection, and play() raising playWhenReady ends the policy pause in NetworkRecovery.
+3. A stopped player neither becomes ready nor fails, so NetworkRecovery drops the PAUSED_BY_NETWORK_POLICY exemptions in onPlaybackReady and onNetworkLost; update its diagram, KDoc and NetworkRecoveryTest.
+4. Notification: Media3 removes it in STATE_IDLE and the service already leaves foreground on pause; decided to let it go during the policy pause rather than override onUpdateNotification.
+5. Instrumented OpenRadioPlayer test against a paced endless WAV on LoopbackHttpFixture: after the policy pause the connection closes and no further bytes are sent; prepare()+play() opens a new connection and plays.
+6. Playlist fallback over mobile is split to a follow-up task.
+<!-- SECTION:PLAN:END -->

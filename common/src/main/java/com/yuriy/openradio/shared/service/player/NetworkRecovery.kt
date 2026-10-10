@@ -32,22 +32,24 @@ import androidx.media3.common.Player
  *         +-----------------------------------------------------+
  *         |                                                     v
  *       IDLE <------------------------------------------ AWAITING_NETWORK
- *       ^  |   playback ready, stop requested, or network      |
- *       |  |   lost while play is not requested                |
- *       |  |                                                   |
- *       |  | policy pause while               policy pause while
- *       |  | play is requested                play is requested
- *       |  v                                                   |
- *       |  PAUSED_BY_NETWORK_POLICY <--------------------------+
- *       |           |
- *       +-----------+
- *         play requested or stop requested
+ *       ^  |   playback ready, stop requested, or network      |    ^
+ *       |  |   lost while play is not requested                |    |
+ *       |  |                                                   |    |
+ *       |  | policy pause while               policy pause while    |
+ *       |  | play is requested                play is requested     |
+ *       |  v                                                   |    |
+ *       |  PAUSED_BY_NETWORK_POLICY <--------------------------+    |
+ *       |           |   |                                          |
+ *       +-----------+   +------------------------------------------+
+ *   play requested, playback ready,         network lost while play
+ *   stop requested, or network lost         is requested
+ *   while play is not requested
  * ```
  *
  * The policy pauses the player itself, so while it holds the station paused, play is not
- * requested because of the policy and not because of the user. That is why a ready stream or a
- * network failure leaves [PAUSED_BY_NETWORK_POLICY] alone: a paused player keeps loading, and
- * either can happen before a usable network returns.
+ * requested because of the policy and not because of the user. The policy also stops the player,
+ * so the stream neither becomes ready nor fails until someone prepares it again; whoever does
+ * has taken the station over, and a ready stream or a network failure after that is theirs.
  */
 enum class NetworkRecovery {
 
@@ -79,15 +81,10 @@ enum class NetworkRecovery {
      *
      * @param isPlayRequested Whether the player was asked to play when the stream failed. A stream
      * that fails while paused still loads, and the network taking it away must not turn the
-     * user's pause into playback once it comes back. A pause the policy holds is the network's,
-     * not the user's, so it is kept.
+     * user's pause into playback once it comes back.
      */
     fun onNetworkLost(isPlayRequested: Boolean): NetworkRecovery {
-        return when {
-            this == PAUSED_BY_NETWORK_POLICY -> PAUSED_BY_NETWORK_POLICY
-            isPlayRequested -> AWAITING_NETWORK
-            else -> IDLE
-        }
+        return if (isPlayRequested) AWAITING_NETWORK else IDLE
     }
 
     /**
@@ -111,11 +108,10 @@ enum class NetworkRecovery {
     }
 
     /**
-     * The stream reached a ready state. A playing stream leaves nothing for a reconnect to
-     * restore, but a stream the policy paused still loads and becomes ready while paused.
+     * The stream reached a ready state, which leaves nothing for a reconnect to restore.
      */
     fun onPlaybackReady(): NetworkRecovery {
-        return if (this == PAUSED_BY_NETWORK_POLICY) PAUSED_BY_NETWORK_POLICY else IDLE
+        return IDLE
     }
 
     /**

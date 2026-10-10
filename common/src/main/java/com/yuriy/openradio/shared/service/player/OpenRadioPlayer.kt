@@ -774,6 +774,12 @@ class OpenRadioPlayer(
      * Pauses because the current network may not be used for playback. The network, not the user,
      * stopped the station, so a station the user wanted playing resumes once a network it may use
      * connects, while a station the user had paused stays paused.
+     *
+     * The player is stopped as well as paused, keeping its media items so that prepare() and
+     * play() bring the station back. A paused ExoPlayer keeps loading until its buffer is full and
+     * keeps the connection open, which spends the mobile data the policy exists to save; only a
+     * stop releases the media source, and with it the connection. Media3 removes the playback
+     * notification while the player is stopped, and shows it again once the station resumes.
      */
     fun pauseForNetworkPolicy() {
         updateNetworkRecovery(
@@ -783,6 +789,7 @@ class OpenRadioPlayer(
             "network policy pause"
         )
         mPlayer.pause()
+        mPlayer.stop()
     }
 
     /**
