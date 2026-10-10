@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-10-09 08:11'
-updated_date: '2026-10-10 06:59'
+updated_date: '2026-10-10 07:07'
 labels: []
 milestone: m-1
 dependencies: []
@@ -39,3 +39,9 @@ When playback over mobile data is disabled, OpenRadioService pauses through Open
 5. Instrumented OpenRadioPlayer test against a paced endless WAV on LoopbackHttpFixture: after the policy pause the connection closes and no further bytes are sent; prepare()+play() opens a new connection and plays.
 6. Playlist fallback over mobile is split to a follow-up task.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Notification decision (AC3): the playback notification does not survive the policy pause. Media3 1.2.1 MediaNotificationManager.shouldShowNotification hides it whenever the player is in STATE_IDLE, and a stop is the only way in 1.2.1 to release the media source and close the connection: a paused player keeps loading to the LoadControl buffer, and a LoadControl gate leaves the socket open and reads up to 1 MiB more (ProgressiveMediaPeriod checks only every continueLoadingCheckIntervalBytes). The service already leaves foreground on a pause, so only the visible notification is lost; it returns when the station resumes. Keeping it would mean overriding onUpdateNotification and managing a frozen notification by hand, which was rejected. The playlist fallback over mobile data is split into TASK-104.
+<!-- SECTION:NOTES:END -->
