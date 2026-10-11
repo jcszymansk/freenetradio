@@ -229,6 +229,102 @@ class NetworkPermitTest {
         assertEquals(Pair(1, 1), disconnectsAtTheRevocation)
     }
 
+    @Test
+    fun aConnectionStartsWhileThePermitStands() {
+        var starts = 0
+
+        val held = NetworkPermit { true }.connect(RecordingConnection()) { starts++ }
+
+        assertEquals(NetworkPermit.Held.Answered(Unit), held)
+        assertEquals(1, starts)
+    }
+
+    /**
+     * A disconnect made before a connection connects is lost, so a connection whose permit is
+     * already revoked must not start at all.
+     */
+    @Test
+    fun aConnectionDoesNotStartOnceThePermitIsRevoked() {
+        val permit = NetworkPermit { true }
+        var starts = 0
+        permit.revoke()
+
+        val held = permit.connect(RecordingConnection()) { starts++ }
+
+        assertEquals(NetworkPermit.Held.Revoked, held)
+        assertEquals(0, starts)
+    }
+
+    /**
+     * The gap a revocation must not fall into: after the permit allowed a connection and before
+     * it has started. The revocation waits until it has, and the read of its response then finds
+     * the permit revoked, does not run, and disconnects the connection that started.
+     */
+    @Test
+    fun aRevocationWaitsForAConnectionThatIsStartingAndThenEndsIt() {
+        val permit = NetworkPermit { true }
+        val connection = RecordingConnection()
+        val starting = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val reader = Executors.newSingleThreadExecutor()
+        val revoker = Executors.newSingleThreadExecutor()
+        try {
+            val started = reader.submit<NetworkPermit.Held<Unit>> {
+                permit.connect(connection) {
+                    starting.countDown()
+                    assertTrue(release.await(5, TimeUnit.SECONDS))
+                }
+            }
+            assertTrue(starting.await(5, TimeUnit.SECONDS))
+            val revocation = revoker.submit { permit.revoke() }
+            Thread.sleep(WAIT_MILLIS)
+
+            assertFalse("The revocation did not wait for the connection to start", revocation.isDone)
+            assertFalse(permit.isRevoked)
+
+            release.countDown()
+            revocation.get(5, TimeUnit.SECONDS)
+            assertEquals(NetworkPermit.Held.Answered(Unit), started.get(5, TimeUnit.SECONDS))
+        } finally {
+            reader.shutdownNow()
+            revoker.shutdownNow()
+        }
+        var reads = 0
+
+        val held = permit.hold(connection) { reads++ }
+
+        assertEquals(NetworkPermit.Held.Revoked, held)
+        assertEquals(0, reads)
+        assertEquals(1, connection.disconnects)
+    }
+
+    /**
+     * A connection that takes long to start must not hold up the reads that only ask whether the
+     * permit stands, such as every read of another transfer.
+     */
+    @Test
+    fun askingDoesNotWaitForAConnectionThatIsStarting() {
+        val permit = NetworkPermit { true }
+        val starting = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val reader = Executors.newSingleThreadExecutor()
+        try {
+            reader.submit<NetworkPermit.Held<Unit>> {
+                permit.connect(RecordingConnection()) {
+                    starting.countDown()
+                    assertTrue(release.await(5, TimeUnit.SECONDS))
+                }
+            }
+            assertTrue(starting.await(5, TimeUnit.SECONDS))
+
+            assertFalse(permit.isRevoked)
+            assertTrue(permit.mayContinue())
+        } finally {
+            release.countDown()
+            reader.shutdownNow()
+        }
+    }
+
     /**
      * An [HttpURLConnection] that never touches the network and counts its disconnects.
      */
@@ -259,5 +355,13 @@ class NetworkPermitTest {
         override fun usingProxy() = false
 
         override fun connect() = Unit
+    }
+
+    private companion object {
+
+        /**
+         * Long enough for a revocation that does not wait to have finished.
+         */
+        const val WAIT_MILLIS = 300L
     }
 }

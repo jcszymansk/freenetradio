@@ -537,6 +537,7 @@ class OpenRadioService : MediaLibraryService() {
      * because its answer would only start a station the policy holds paused; the station reads its
      * playlist again when it resumes. Every read still under way, abandoned earlier or not, has its
      * permit revoked, which disconnects a transfer waiting on a server that holds its answer back.
+     * Revoking waits for a connection that is starting, so it runs off the main thread.
      */
     @MainThread
     private fun pauseForNetworkPolicyUiThread() {
@@ -545,11 +546,14 @@ class OpenRadioService : MediaLibraryService() {
             getString(R.string.mobile_network_disabled)
         )
         if (mPlaylistReads.isNotEmpty()) {
-            AppLogger.i("$TAG revoke ${mPlaylistReads.size} playlist reads for the network policy")
-            for (permit in mPlaylistReads) {
-                permit.revoke()
-            }
+            val revoked = mPlaylistReads.toList()
             mPlaylistReads.clear()
+            AppLogger.i("$TAG revoke ${revoked.size} playlist reads for the network policy")
+            mScope.launch {
+                for (permit in revoked) {
+                    permit.revoke()
+                }
+            }
         }
         if (mPlaylistFallback.isReadPending) {
             val next = mPlaylistFallback.abandonRead()

@@ -31,22 +31,36 @@ import java.net.HttpURLConnection
  * the server holds the response back. Connections are therefore [hold]ed for as long as they are
  * read, and revoking the permit disconnects them, which ends a waiting read at once.
  *
+ * A disconnect only ends what a connection has already started; one made before it connects is
+ * lost, and the connection would go on to connect. Starting a connection therefore goes through
+ * [connect], which [revoke] waits for: a revocation either comes first and the connection never
+ * starts, or comes after it has started and its disconnect takes effect. Since [revoke] can wait
+ * for as long as a connect takes, it is not for the main thread.
+ *
  * ```
- *   reader thread                    revoking thread
- *   hold(c) { read ... blocked }     revoke(): revoked, disconnect every held c
- *             read throws  <──────────────┘
+ *   reader thread                        revoking thread
+ *   connect(c) { c.connect() }  ──┐      revoke(): waits for a connect under way,
+ *   hold(c) { read ... blocked }  └────>   then revoked, disconnect every held c
+ *             read throws  <───────────────────┘
  * ```
  *
  * @param mayUseNetwork Whether the network may be used now. Not asked again after a refusal.
  */
 class NetworkPermit(private val mayUseNetwork: () -> Boolean) {
 
+    /**
+     * Guards [mIsRevoked] and [mHeld] together, so that a connection is never held after the
+     * revocation that should have disconnected it. Never held for longer than it takes to read or
+     * change them.
+     */
     private val mLock = Any()
 
     /**
-     * Guarded by [mLock], like [mHeld], so that a connection is never held after the revocation
-     * that should have disconnected it.
+     * Held while a connection starts and while the permit is revoked, so that the two never
+     * overlap. Taken before [mLock] whenever both are.
      */
+    private val mConnectLock = Any()
+
     private var mIsRevoked = false
 
     private val mHeld = mutableSetOf<HttpURLConnection>()
@@ -73,18 +87,37 @@ class NetworkPermit(private val mayUseNetwork: () -> Boolean) {
     }
 
     /**
-     * Ends the permit and disconnects every connection held under it, from any thread.
+     * Ends the permit and disconnects every connection held under it. Waits for a connection that
+     * is starting to have started, so call it off the main thread.
      */
     fun revoke() {
-        val held = synchronized(mLock) {
-            mIsRevoked = true
-            val held = mHeld.toList()
-            mHeld.clear()
-            held
+        val held = synchronized(mConnectLock) {
+            synchronized(mLock) {
+                mIsRevoked = true
+                val held = mHeld.toList()
+                mHeld.clear()
+                held
+            }
         }
         AppLogger.i("$CLASS_NAME revoked, disconnect ${held.size} connections")
         for (connection in held) {
             connection.disconnect()
+        }
+    }
+
+    /**
+     * Starts [connection] by running [start], unless the permit is revoked, in which case [start]
+     * never runs. A revocation cannot land while [start] runs; it waits, and the [hold] that reads
+     * the response then finds the permit revoked and disconnects the connection that started.
+     */
+    fun connect(connection: HttpURLConnection, start: () -> Unit): Held<Unit> {
+        synchronized(mConnectLock) {
+            if (isRevoked) {
+                AppLogger.i("$CLASS_NAME already revoked, ${connection.url} not started")
+                return Held.Revoked
+            }
+            start()
+            return Held.Answered(Unit)
         }
     }
 
@@ -94,9 +127,8 @@ class NetworkPermit(private val mayUseNetwork: () -> Boolean) {
      * A disconnect only ends what a connection has already started, and one made before the
      * connection connects is lost. [read] therefore does not run at all once the permit is
      * revoked, and a revocation that lands while it runs is answered with [Held.Revoked] and a
-     * second disconnect, which the connection honours once [read] has returned. A caller that
-     * connects should hold the connect on its own, so that the revocation is seen before it waits
-     * for a response.
+     * second disconnect, which the connection honours once [read] has returned. A connection is
+     * started through [connect], never inside [read].
      */
     fun <T> hold(connection: HttpURLConnection, read: () -> T): Held<T> {
         val isHeld = synchronized(mLock) {

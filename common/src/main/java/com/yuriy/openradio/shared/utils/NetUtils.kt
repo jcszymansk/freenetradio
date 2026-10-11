@@ -156,7 +156,7 @@ object NetUtils {
                         )
                     }
                 }
-                if (permit.hold(opened) { opened.connect() } == NetworkPermit.Held.Revoked) {
+                if (permit.connect(opened) { opened.connect() } == NetworkPermit.Held.Revoked) {
                     break
                 }
                 val responseCode = when (val held = permit.hold(opened) { opened.responseCode }) {
