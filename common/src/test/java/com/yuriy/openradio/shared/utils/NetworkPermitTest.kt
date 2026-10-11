@@ -20,6 +20,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -90,5 +93,133 @@ class NetworkPermitTest {
 
         assertTrue(permit.isRevoked)
         assertFalse(permit.mayContinue())
+    }
+
+    @Test
+    fun revokingEndsThePermitWithoutAskingTheNetwork() {
+        var questions = 0
+        val permit = NetworkPermit {
+            questions++
+            true
+        }
+
+        permit.revoke()
+
+        assertTrue(permit.isRevoked)
+        assertFalse(permit.mayContinue())
+        assertEquals(0, questions)
+    }
+
+    @Test
+    fun aHeldReadRunsAndAnswersWhileThePermitStands() {
+        val connection = RecordingConnection()
+
+        val answer = NetworkPermit { true }.hold(connection) { 42 }
+
+        assertEquals(42, answer)
+        assertEquals(0, connection.disconnects)
+    }
+
+    @Test
+    fun revokingDisconnectsAConnectionHeldOnAnotherThread() {
+        val permit = NetworkPermit { true }
+        val connection = RecordingConnection()
+        val holding = CountDownLatch(1)
+        val other = Executors.newSingleThreadExecutor()
+        try {
+            val read = other.submit<Int> {
+                permit.hold(connection) {
+                    holding.countDown()
+                    connection.awaitDisconnect()
+                    connection.disconnects
+                }
+            }
+            assertTrue(holding.await(5, TimeUnit.SECONDS))
+
+            permit.revoke()
+
+            assertEquals(1, read.get(5, TimeUnit.SECONDS))
+        } finally {
+            other.shutdownNow()
+        }
+    }
+
+    /**
+     * A connection held after the revocation would otherwise be read in full, so it is
+     * disconnected before its read starts.
+     */
+    @Test
+    fun aConnectionHeldAfterTheRevocationIsDisconnectedBeforeItsRead() {
+        val permit = NetworkPermit { true }
+        val connection = RecordingConnection()
+        permit.revoke()
+
+        val disconnectsSeenByTheRead = permit.hold(connection) { connection.disconnects }
+
+        assertEquals(1, disconnectsSeenByTheRead)
+    }
+
+    @Test
+    fun aConnectionNoLongerHeldIsLeftAloneByALaterRevocation() {
+        val permit = NetworkPermit { true }
+        val connection = RecordingConnection()
+        permit.hold(connection) { Unit }
+
+        permit.revoke()
+
+        assertEquals(0, connection.disconnects)
+    }
+
+    @Test
+    fun aConnectionWhoseReadFailedIsNoLongerHeld() {
+        val permit = NetworkPermit { true }
+        val connection = RecordingConnection()
+        val failure = runCatching { permit.hold(connection) { throw IllegalStateException("read failed") } }
+
+        permit.revoke()
+
+        assertTrue(failure.exceptionOrNull() is IllegalStateException)
+        assertEquals(0, connection.disconnects)
+    }
+
+    @Test
+    fun revokingDisconnectsEveryConnectionHeldAtThatMoment() {
+        val permit = NetworkPermit { true }
+        val outer = RecordingConnection()
+        val inner = RecordingConnection()
+
+        permit.hold(outer) {
+            permit.hold(inner) {
+                permit.revoke()
+            }
+        }
+
+        assertEquals(1, outer.disconnects)
+        assertEquals(1, inner.disconnects)
+    }
+
+    /**
+     * An [HttpURLConnection] that never touches the network and counts its disconnects.
+     */
+    private class RecordingConnection : HttpURLConnection(URL("http://permit.test/")) {
+
+        private val mDisconnected = CountDownLatch(1)
+
+        @Volatile
+        var disconnects = 0
+            private set
+
+        fun awaitDisconnect() {
+            assertTrue("Never disconnected", mDisconnected.await(5, TimeUnit.SECONDS))
+        }
+
+        override fun disconnect() {
+            disconnects++
+            mDisconnected.countDown()
+        }
+
+        override fun usingProxy() = false
+
+        override fun connect() = Unit
     }
 }

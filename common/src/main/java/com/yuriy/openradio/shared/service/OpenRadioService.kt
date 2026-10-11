@@ -65,6 +65,7 @@ import com.yuriy.openradio.shared.utils.IntentUtils
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import com.yuriy.openradio.shared.utils.MediaItemHelper
 import com.yuriy.openradio.shared.utils.NetUtils
+import com.yuriy.openradio.shared.utils.NetworkPermit
 import com.yuriy.openradio.shared.utils.PlaylistRead
 import com.yuriy.openradio.shared.utils.SafeToast
 import kotlinx.coroutines.CoroutineScope
@@ -111,6 +112,12 @@ class OpenRadioService : MediaLibraryService() {
      * How far the current play request has got with a station url the player could not read.
      */
     private var mPlaylistFallback: PlaylistFallback = PlaylistFallback.Idle()
+
+    /**
+     * The network permits of the playlist reads under way, revoked when the mobile-network policy
+     * pauses the station. Only touched on the main thread.
+     */
+    private val mPlaylistReads = mutableSetOf<NetworkPermit>()
     private val mUiScope: CoroutineScope
     private val mScope: CoroutineScope
     private val mCommandScope: CoroutineScope
@@ -361,11 +368,12 @@ class OpenRadioService : MediaLibraryService() {
             return
         }
         AppLogger.i("$TAG resolve playlist $playlistUrl for $resolution")
+        val permit = NetworkPermit { mPresenter.isPlaybackBlockedByMobileNetwork().not() }
+        mPlaylistReads.add(permit)
         mScope.launch {
-            val read = NetUtils.extractUrlsFromPlaylist(applicationContext, mDownloader, playlistUrl) {
-                mPresenter.isPlaybackBlockedByMobileNetwork().not()
-            }
+            val read = NetUtils.extractUrlsFromPlaylist(applicationContext, mDownloader, playlistUrl, permit)
             mUiScope.launch {
+                mPlaylistReads.remove(permit)
                 AppLogger.i("$TAG playlist read $read for $resolution")
                 when (read) {
                     PlaylistRead.Blocked -> advancePlaylistFallback(mPlaylistFallback.onReadBlocked(resolution))
@@ -527,7 +535,8 @@ class OpenRadioService : MediaLibraryService() {
     /**
      * Pauses the station for the mobile-network policy. A playlist read under way is abandoned,
      * because its answer would only start a station the policy holds paused; the station reads its
-     * playlist again when it resumes.
+     * playlist again when it resumes. Every read still under way, abandoned earlier or not, has its
+     * permit revoked, which disconnects a transfer waiting on a server that holds its answer back.
      */
     @MainThread
     private fun pauseForNetworkPolicyUiThread() {
@@ -535,6 +544,13 @@ class OpenRadioService : MediaLibraryService() {
             applicationContext,
             getString(R.string.mobile_network_disabled)
         )
+        if (mPlaylistReads.isNotEmpty()) {
+            AppLogger.i("$TAG revoke ${mPlaylistReads.size} playlist reads for the network policy")
+            for (permit in mPlaylistReads) {
+                permit.revoke()
+            }
+            mPlaylistReads.clear()
+        }
         if (mPlaylistFallback.isReadPending) {
             val next = mPlaylistFallback.abandonRead()
             AppLogger.i("$TAG playlist fallback $mPlaylistFallback -> $next: abandoned for the network policy")

@@ -15,6 +15,7 @@ import com.yuriy.openradio.shared.model.parser.ParserLayerRadioBrowserImpl
 import com.yuriy.openradio.shared.model.storage.cache.api.ApiCache
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.service.location.Country
+import com.yuriy.openradio.shared.utils.NetworkPermit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -296,7 +297,7 @@ class ModelLayerImplTest {
             parameters: List<Pair<String, String>>,
             contentTypeFilter: String?,
             maxBytes: Int,
-            mayUseNetwork: () -> Boolean
+            permit: NetworkPermit
         ): ByteArray {
             calls++
             return data.toByteArray()

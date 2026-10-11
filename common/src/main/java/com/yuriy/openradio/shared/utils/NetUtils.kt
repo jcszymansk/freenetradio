@@ -77,10 +77,10 @@ object NetUtils {
     }
 
     private fun getHttpURLConnection(
-        context: Context, urlString: String, requestMethod: String, mayUseNetwork: () -> Boolean = { true }
+        context: Context, urlString: String, requestMethod: String, permit: NetworkPermit = NetworkPermit { true }
     ): HttpURLConnection? {
         return try {
-            getHttpURLConnection(context, URL(urlString), requestMethod, null, mayUseNetwork)
+            getHttpURLConnection(context, URL(urlString), requestMethod, null, permit)
         } catch (exception: MalformedURLException) {
             AppLogger.e("Can not get http connection (1) from $urlString", exception)
             null
@@ -91,21 +91,22 @@ object NetUtils {
      * Opens [url] and follows the redirects it answers with.
      *
      * A request without a body follows every redirect here rather than inside
-     * [HttpURLConnection], so that [mayUseNetwork] is asked before each request that leaves the
+     * [HttpURLConnection], so that [permit] is asked before each request that leaves the
      * device, the hops included. A request with a body lets [HttpURLConnection] follow redirects
      * within one protocol, because the method a redirected POST continues with depends on the
      * status, and follows the rest here.
      *
-     * @param mayUseNetwork Whether a request may be made now, asked before every one of them.
-     * @return The connection that answered last, or null when none could be opened or
-     * [mayUseNetwork] refused a request.
+     * @param permit Asked before every request, and holding each connection until it has
+     * answered, so that revoking it disconnects one still waiting for its response.
+     * @return The connection that answered last, or null when none could be opened or [permit]
+     * refused a request.
      */
     fun getHttpURLConnection(
         context: Context,
         url: URL,
         requestMethod: String,
         parameters: List<Pair<String, String>>?,
-        mayUseNetwork: () -> Boolean = { true }
+        permit: NetworkPermit = NetworkPermit { true }
     ): HttpURLConnection? {
         var connection: HttpURLConnection? = null
         var isRedirect: Boolean
@@ -116,13 +117,14 @@ object NetUtils {
 
         do {
             isRedirect = false
-            if (mayUseNetwork().not()) {
+            if (permit.mayContinue().not()) {
                 AppLogger.i("$CLASS_NAME $connectUrl not requested, the network may not be used")
                 closeHttpURLConnection(connection)
                 return null
             }
             try {
-                connection = connectUrl.openConnection() as HttpURLConnection
+                val opened = connectUrl.openConnection() as HttpURLConnection
+                connection = opened
                 connection.readTimeout = AppUtils.TIME_OUT
                 connection.connectTimeout = AppUtils.TIME_OUT
                 connection.instanceFollowRedirects = hasBody
@@ -154,8 +156,10 @@ object NetUtils {
                         )
                     }
                 }
-                connection.connect()
-                val responseCode = connection.responseCode
+                val responseCode = permit.hold(opened) {
+                    opened.connect()
+                    opened.responseCode
+                }
                 if (responseCode in REDIRECT_CODES) {
                     if (redirects++ >= MAX_REDIRECTS) {
                         AppLogger.e("$CLASS_NAME redirect reached max attempts number")
@@ -178,6 +182,11 @@ object NetUtils {
             }
         } while (isRedirect)
 
+        if (permit.isRevoked) {
+            AppLogger.i("$CLASS_NAME $connectUrl abandoned, the network may not be used")
+            closeHttpURLConnection(connection)
+            return null
+        }
         return connection
     }
 
@@ -236,23 +245,22 @@ object NetUtils {
      * The station url itself is opened here, because its declared content type is part of how its
      * format is recognised. Every playlist it names in turn is read through [downloader].
      *
-     * Playback may be barred from the current network, which is what [mayUseNetwork] answers, and
-     * reading a station's playlist is part of playing it. It is asked before every request and
-     * before every read of a response, so no request starts, and no transfer goes on, once the
-     * network is barred.
+     * Playback may be barred from the current network, and reading a station's playlist is part
+     * of playing it. [permit] is asked before every request and before every read of a response,
+     * and holds every connection while it is waited on, so no request starts, and no transfer goes
+     * on, once the network is barred or the permit revoked.
      *
      * @param downloader Reads the playlists that [playlistUrl] names.
-     * @param mayUseNetwork Whether playback may use the network the device is on now. It is
-     * called on the thread this runs on and on the threads [downloader] reads on.
-     * @return [PlaylistRead.Blocked] when the network was barred before the read finished,
+     * @param permit Whether playback may use the network, for this read alone. It is asked on the
+     * thread this runs on and on the threads [downloader] reads on, and may be revoked from any.
+     * @return [PlaylistRead.Blocked] when the permit ended before the read finished,
      * otherwise [PlaylistRead.Urls] with the stream urls, none when the playlist names none, or
      * one empty string when [playlistUrl] cannot be opened.
      */
     fun extractUrlsFromPlaylist(
-        context: Context, downloader: DownloaderLayer, playlistUrl: String, mayUseNetwork: () -> Boolean
+        context: Context, downloader: DownloaderLayer, playlistUrl: String, permit: NetworkPermit
     ): PlaylistRead {
-        val permit = NetworkPermit(mayUseNetwork)
-        val connection = getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET, permit::mayContinue)
+        val connection = getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET, permit)
         if (connection == null) {
             if (permit.isRevoked) {
                 AppLogger.i("$CLASS_NAME playlist $playlistUrl not opened, the network may not be used")
@@ -261,13 +269,14 @@ object NetUtils {
             return PlaylistRead.Urls(listOf(AppUtils.EMPTY_STRING))
         }
         var result = listOf(AppUtils.EMPTY_STRING)
-        val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url, permit::mayContinue) }
+        val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url, permit) }
         val playlist = Playlist()
         val contentType = connection.contentType
         var gated: GatedInputStream? = null
         try {
-            gated = GatedInputStream(connection.inputStream, permit::mayContinue)
-            parser.parse(playlistUrl, contentType, gated, playlist)
+            val stream = GatedInputStream(connection.inputStream, permit::mayContinue)
+            gated = stream
+            permit.hold(connection) { parser.parse(playlistUrl, contentType, stream, playlist) }
             result = playlist.playlistEntries.map { it[PlaylistEntry.URI] }
             AppLogger.d("Found ${result.size} streams associated with $playlistUrl:")
             for (url in result) {
@@ -296,12 +305,12 @@ object NetUtils {
      * which answers a failed read with no content.
      */
     private fun fetchPlaylist(
-        context: Context, downloader: DownloaderLayer, url: String, mayUseNetwork: () -> Boolean
+        context: Context, downloader: DownloaderLayer, url: String, permit: NetworkPermit
     ): ByteArray {
         AppLogger.d("$CLASS_NAME reading playlist $url")
         return try {
             downloader.downloadDataFromUri(
-                context, Uri.parse(url), maxBytes = PLAYLIST_MAX_BYTES, mayUseNetwork = mayUseNetwork
+                context, Uri.parse(url), maxBytes = PLAYLIST_MAX_BYTES, permit = permit
             )
         } catch (exception: ExecutionException) {
             AppLogger.e("$CLASS_NAME can not read playlist $url", exception)

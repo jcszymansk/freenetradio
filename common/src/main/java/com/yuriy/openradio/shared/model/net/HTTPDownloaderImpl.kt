@@ -21,6 +21,7 @@ import androidx.core.util.Pair
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.GatedInputStream
+import com.yuriy.openradio.shared.utils.NetworkPermit
 import com.yuriy.openradio.shared.utils.NetUtils
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
@@ -50,10 +51,10 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         parameters: List<Pair<String, String>>,
         contentTypeFilter: String?,
         maxBytes: Int,
-        mayUseNetwork: () -> Boolean
+        permit: NetworkPermit
     ): ByteArray {
         val task = BytesDownloader(
-            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING, maxBytes, mayUseNetwork
+            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING, maxBytes, permit
         )
         return mExecutor.submit(task).get()
     }
@@ -65,7 +66,7 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         private val mParameters: List<Pair<String, String>>,
         private val mContentTypeFilter: String,
         private val mMaxBytes: Int = DownloaderLayer.NO_LIMIT,
-        private val mMayUseNetwork: () -> Boolean = { true }
+        private val mPermit: NetworkPermit = NetworkPermit { true }
     ) : Callable<ByteArray> {
 
         override fun call(): ByteArray {
@@ -77,7 +78,7 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
             )
 
             fun openConnection(): Response {
-                if (mMayUseNetwork().not()) {
+                if (mPermit.mayContinue().not()) {
                     AppLogger.i("$CLASS_NAME $mUri not requested, the network may not be used")
                     return Response()
                 }
@@ -88,7 +89,7 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
                     url,
                     if (mParameters.isEmpty()) NetUtils.HTTP_METHOD_GET else NetUtils.HTTP_METHOD_POST,
                     mParameters,
-                    mMayUseNetwork
+                    mPermit
                 ) ?: return Response()
                 var responseCode = 0
                 try {
@@ -136,10 +137,10 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
             }
 
             try {
-                val gated = GatedInputStream(connection.inputStream, mMayUseNetwork)
-                val content = toByteArray(BufferedInputStream(gated), mMaxBytes)
+                val gated = GatedInputStream(connection.inputStream, mPermit::mayContinue)
+                val content = mPermit.hold(connection) { toByteArray(BufferedInputStream(gated), mMaxBytes) }
                 response = when {
-                    gated.isCutShort -> ByteArray(0).also {
+                    gated.isCutShort || mPermit.isRevoked -> ByteArray(0).also {
                         AppLogger.i("$CLASS_NAME stopped reading ${responseObj.url}, the network may not be used")
                     }
                     content == null -> ByteArray(0).also {

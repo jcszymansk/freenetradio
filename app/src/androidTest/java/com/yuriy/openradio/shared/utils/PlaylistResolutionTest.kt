@@ -195,7 +195,7 @@ class PlaylistResolutionTest {
         val referenced = mServer.serve("/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX></ASX>")
 
         val content = HTTPDownloaderImpl(DirectUrlResolver())
-            .downloadDataFromUri(mContext, Uri.parse(referenced), mayUseNetwork = { false })
+            .downloadDataFromUri(mContext, Uri.parse(referenced), permit = NetworkPermit { false })
 
         assertEquals(0, content.size)
         assertEquals(emptyList<String>(), mServer.requestedPaths())
@@ -314,6 +314,68 @@ class PlaylistResolutionTest {
     }
 
     /**
+     * A server can stop answering in the middle of a playlist, and a read waiting on it receives
+     * nothing that a check before the next read could stop. Revoking the permit, which the
+     * service does when the policy pauses the station, disconnects it while it waits.
+     */
+    @Test
+    fun revokingThePermitDisconnectsAStationUrlWhoseBodyIsHeldBack() {
+        val stall = mServer.stall(
+            "/stalled.pls", LoopbackHttpFixture.AUDIO_PLS, "[playlist]\n".toByteArray(), isHeadSent = true
+        )
+
+        assertEquals(PlaylistRead.Blocked, revokeWhileWaiting(stall, stall.url))
+        assertStallEnded(stall)
+    }
+
+    @Test
+    fun revokingThePermitDisconnectsAStationUrlWaitingForItsResponse() {
+        val stall = mServer.stall("/silent.pls", LoopbackHttpFixture.AUDIO_PLS, ByteArray(0), isHeadSent = false)
+
+        assertEquals(PlaylistRead.Blocked, revokeWhileWaiting(stall, stall.url))
+        assertStallEnded(stall)
+    }
+
+    /**
+     * The same for a playlist the station's names, which the downloader waits on from its own
+     * thread.
+     */
+    @Test
+    fun revokingThePermitDisconnectsAPlaylistItNamesThatIsHeldBack() {
+        val stall = mServer.stall("/silent", LoopbackHttpFixture.TEXT_PLAIN, ByteArray(0), isHeadSent = false)
+        val playlist = entryRefTo(stall.url, "/station.asx")
+
+        assertEquals(PlaylistRead.Blocked, revokeWhileWaiting(stall, playlist))
+        assertStallEnded(stall)
+    }
+
+    /**
+     * Reads [url] on its own thread until [stall] holds a connection from it, revokes the permit
+     * the way the service does, and returns what the read answered.
+     */
+    private fun revokeWhileWaiting(stall: LoopbackHttpFixture.Stall, url: String): PlaylistRead {
+        val permit = NetworkPermit { true }
+        val reader = Executors.newSingleThreadExecutor()
+        try {
+            val answer = reader.submit(Callable {
+                NetUtils.extractUrlsFromPlaylist(mContext, HTTPDownloaderImpl(DirectUrlResolver()), url, permit)
+            })
+            await("the read to wait on the stalled server") { stall.openConnections() == 1 }
+            Thread.sleep(WAITING_MILLIS)
+            assertFalse("The read ended before the permit was revoked", answer.isDone)
+            permit.revoke()
+            return answer.get(REVOKED_READ_MILLIS, TimeUnit.MILLISECONDS)
+        } finally {
+            reader.shutdownNow()
+        }
+    }
+
+    private fun assertStallEnded(stall: LoopbackHttpFixture.Stall) {
+        await("the stalled connection to close") { stall.openConnections() == 0 }
+        assertEquals(1, stall.connections())
+    }
+
+    /**
      * Runs [read] on its own thread while [broadcast] sends, bars the network once the transfer is
      * under way, and returns what the read answered.
      */
@@ -388,7 +450,7 @@ class PlaylistResolutionTest {
         downloader: DownloaderLayer = HTTPDownloaderImpl(DirectUrlResolver()),
         mayUseNetwork: () -> Boolean
     ): PlaylistRead {
-        return NetUtils.extractUrlsFromPlaylist(mContext, downloader, url, mayUseNetwork)
+        return NetUtils.extractUrlsFromPlaylist(mContext, downloader, url, NetworkPermit(mayUseNetwork))
     }
 
     /**
@@ -404,10 +466,10 @@ class PlaylistResolutionTest {
             parameters: List<Pair<String, String>>,
             contentTypeFilter: String?,
             maxBytes: Int,
-            mayUseNetwork: () -> Boolean
+            permit: NetworkPermit
         ): ByteArray {
             reads.add(uri.toString())
-            return mDelegate.downloadDataFromUri(context, uri, parameters, contentTypeFilter, maxBytes, mayUseNetwork)
+            return mDelegate.downloadDataFromUri(context, uri, parameters, contentTypeFilter, maxBytes, permit)
         }
     }
 
@@ -440,6 +502,15 @@ class PlaylistResolutionTest {
         const val TRANSFER_UNDER_WAY_BYTES = 2_000L
 
         const val TIMEOUT_SECONDS = 15L
+
+        /**
+         * Long enough for the read to be waiting on the socket, and with [REVOKED_READ_MILLIS]
+         * still well inside the connections' two-second read timeout, so a read that only ended by
+         * timing out fails the test.
+         */
+        const val WAITING_MILLIS = 500L
+
+        const val REVOKED_READ_MILLIS = 500L
 
         const val POLL_MILLIS = 50L
 
