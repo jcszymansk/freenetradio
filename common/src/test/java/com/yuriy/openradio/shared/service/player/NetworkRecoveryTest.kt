@@ -160,22 +160,32 @@ class NetworkRecoveryTest {
     }
 
     @Test
-    fun streamBecomingReadyWhilePausedByThePolicyStillResumesOnReconnect() {
+    fun streamPreparedAgainAfterAPolicyPauseNoLongerResumesOnReconnect() {
         val recovery = NetworkRecovery.IDLE
             .onPolicyPause(isPlayRequested = true)
             .onPlaybackReady()
 
-        assertEquals(NetworkRecovery.PAUSED_BY_NETWORK_POLICY, recovery)
-        assertTrue(recovery.resumesOnReconnect)
+        assertEquals(NetworkRecovery.IDLE, recovery)
+        assertFalse(recovery.resumesOnReconnect)
     }
 
     @Test
-    fun networkFailureWhilePausedByThePolicyStillResumesOnReconnect() {
+    fun pausedStreamPreparedAgainAfterAPolicyPauseThatFailsDoesNotResumeOnReconnect() {
         val recovery = NetworkRecovery.IDLE
             .onPolicyPause(isPlayRequested = true)
             .onNetworkLost(isPlayRequested = false)
 
-        assertEquals(NetworkRecovery.PAUSED_BY_NETWORK_POLICY, recovery)
+        assertEquals(NetworkRecovery.IDLE, recovery)
+        assertFalse(recovery.resumesOnReconnect)
+    }
+
+    @Test
+    fun playingStreamThatFailsAfterAPolicyPauseWaitsForTheNetwork() {
+        val recovery = NetworkRecovery.IDLE
+            .onPolicyPause(isPlayRequested = true)
+            .onNetworkLost(isPlayRequested = true)
+
+        assertEquals(NetworkRecovery.AWAITING_NETWORK, recovery)
         assertTrue(recovery.resumesOnReconnect)
     }
 
@@ -230,7 +240,7 @@ class NetworkRecoveryTest {
         val expected = mapOf(
             idle to listOf(awaiting, idle, policy, idle, idle, idle, idle),
             awaiting to listOf(awaiting, idle, policy, awaiting, awaiting, idle, idle),
-            policy to listOf(policy, policy, policy, policy, idle, policy, idle),
+            policy to listOf(awaiting, idle, policy, policy, idle, idle, idle),
         )
 
         assertEquals(NetworkRecovery.entries.toSet(), expected.keys)
