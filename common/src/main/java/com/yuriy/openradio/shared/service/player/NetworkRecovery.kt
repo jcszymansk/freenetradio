@@ -50,6 +50,11 @@ import androidx.media3.common.Player
  * requested because of the policy and not because of the user. The policy also stops the player,
  * so the stream neither becomes ready nor fails until someone prepares it again; whoever does
  * has taken the station over, and a ready stream or a network failure after that is theirs.
+ *
+ * The service stops the player too, when it could not read a station's stream, while it finds
+ * the one to play in its place: a playlist the station url names, or the next stream that
+ * playlist named. That stop is no event here: the user still wants the station, and a policy
+ * pause that lands before the replacement starts has to resume it like any other.
  */
 enum class NetworkRecovery {
 
@@ -124,16 +129,29 @@ enum class NetworkRecovery {
     companion object {
 
         /**
-         * Whether a loaded stream is meant to be playing. playWhenReady alone does not say so: the
-         * player starts with it set, and neither a stop nor a failed stream clears it, so a
-         * station that was stopped, never started, or rejected would otherwise count as playing.
+         * Whether a stream is meant to be playing. playWhenReady alone does not say so: the player
+         * starts with it set, and neither a stop nor a failed stream clears it, so a station that
+         * was stopped, never started, or rejected would otherwise count as playing. A stream is
+         * meant to be playing while it is loading or ready, and also while the service has stopped
+         * the player to find a stream to replace one it could not read, which it starts once it
+         * has one.
          *
          * @param playWhenReady The player's playWhenReady.
          * @param playbackState The player's [Player.State].
+         * @param isAwaitingStream Whether the player was stopped for a replacement stream and has
+         * not been prepared, stopped or paused since.
          */
-        fun isStreamPlayRequested(playWhenReady: Boolean, @Player.State playbackState: Int): Boolean {
-            return playWhenReady
-                    && (playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_READY)
+        fun isStreamPlayRequested(
+            playWhenReady: Boolean,
+            @Player.State playbackState: Int,
+            isAwaitingStream: Boolean
+        ): Boolean {
+            if (playWhenReady.not()) {
+                return false
+            }
+            return isAwaitingStream
+                    || playbackState == Player.STATE_BUFFERING
+                    || playbackState == Player.STATE_READY
         }
     }
 }

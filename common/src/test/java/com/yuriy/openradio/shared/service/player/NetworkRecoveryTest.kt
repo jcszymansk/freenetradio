@@ -261,42 +261,76 @@ class NetworkRecoveryTest {
 
     @Test
     fun bufferingOrReadyStreamThatShouldPlayIsPlayRequested() {
-        assertTrue(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_BUFFERING))
-        assertTrue(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_READY))
+        assertTrue(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_BUFFERING, false))
+        assertTrue(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_READY, false))
     }
 
     @Test
     fun pausedStreamIsNotPlayRequested() {
-        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_BUFFERING))
-        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_READY))
+        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_BUFFERING, false))
+        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_READY, false))
     }
 
     @Test
     fun stoppedFailedOrNeverStartedStreamIsNotPlayRequested() {
-        assertFalse(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE))
-        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_IDLE))
+        assertFalse(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE, false))
+        assertFalse(NetworkRecovery.isStreamPlayRequested(false, Player.STATE_IDLE, false))
     }
 
     @Test
     fun endedStreamIsNotPlayRequested() {
-        assertFalse(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_ENDED))
+        assertFalse(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_ENDED, false))
+    }
+
+    @Test
+    fun streamAwaitedFromAPlaylistIsPlayRequestedInEveryPlaybackState() {
+        for (state in PLAYBACK_STATES) {
+            assertTrue("state $state", NetworkRecovery.isStreamPlayRequested(true, state, true))
+        }
+    }
+
+    @Test
+    fun pausedStreamAwaitedFromAPlaylistIsNotPlayRequested() {
+        for (state in PLAYBACK_STATES) {
+            assertFalse("state $state", NetworkRecovery.isStreamPlayRequested(false, state, true))
+        }
     }
 
     @Test
     fun policyPauseOfAStoppedStationThatStillHasPlayWhenReadyDoesNotResume() {
         val recovery = NetworkRecovery.IDLE
             .onStopRequested()
-            .onPolicyPause(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE))
+            .onPolicyPause(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE, false))
 
         assertFalse(recovery.resumesOnReconnect)
+    }
+
+    /**
+     * The service stops the player to read the station's playlist, and the policy can pause the
+     * station before the stream the playlist names has started. The user never stopped it.
+     */
+    @Test
+    fun policyPauseWhileAPlaylistIsReadResumesTheStation() {
+        val recovery = NetworkRecovery.IDLE
+            .onPolicyPause(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE, true))
+
+        assertEquals(NetworkRecovery.PAUSED_BY_NETWORK_POLICY, recovery)
+        assertTrue(recovery.resumesOnReconnect)
     }
 
     @Test
     fun policyPauseOfAStreamThatFailedForTheNetworkKeepsItWaiting() {
         val recovery = NetworkRecovery.IDLE
             .onNetworkLost(isPlayRequested = true)
-            .onPolicyPause(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE))
+            .onPolicyPause(NetworkRecovery.isStreamPlayRequested(true, Player.STATE_IDLE, false))
 
         assertEquals(NetworkRecovery.AWAITING_NETWORK, recovery)
+    }
+
+    private companion object {
+
+        val PLAYBACK_STATES = listOf(
+            Player.STATE_IDLE, Player.STATE_BUFFERING, Player.STATE_READY, Player.STATE_ENDED
+        )
     }
 }

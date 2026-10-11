@@ -165,6 +165,65 @@ class PlaylistResolutionTest {
         assertEquals(0, resolve(entryRefTo(overTheLimit, "/long.asx")).size)
     }
 
+    /**
+     * Reading a playlist is part of playing the station, so on a network playback may not use it
+     * does not even open the station url.
+     */
+    @Test
+    fun aPlaylistIsNotOpenedWhileTheNetworkMayNotBeUsed() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val playlist = mServer.serve("/stream.pls", LoopbackHttpFixture.AUDIO_PLS, pls(stream))
+        val downloader = RecordingDownloader(HTTPDownloaderImpl(DirectUrlResolver()))
+
+        assertEquals(PlaylistRead.Blocked, read(playlist, downloader) { false })
+        assertEquals(emptyList<String>(), mServer.requestedPaths())
+        assertEquals(emptyList<String>(), downloader.reads)
+    }
+
+    /**
+     * The network can become one playback may not use while a playlist is read. The playlists it
+     * names are not read then, and what was read so far is not answered as the playlist: without
+     * the playlist it references, the station's own names nothing, and that is not the same as a
+     * playlist that names nothing.
+     */
+    @Test
+    fun aPlaylistItNamesIsNotReadOnceTheNetworkMayNotBeUsed() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val referenced = mServer.serve(
+            "/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY><REF href=\"$stream\"/></ENTRY></ASX>"
+        )
+        val playlist = entryRefTo(referenced, "/station.asx")
+        val downloader = RecordingDownloader(HTTPDownloaderImpl(DirectUrlResolver()))
+        val answers = ArrayDeque(listOf(true, false))
+
+        assertEquals(PlaylistRead.Blocked, read(playlist, downloader) { answers.removeFirst() })
+        assertEquals(emptyList<String>(), downloader.reads)
+        assertEquals(listOf("/station.asx"), mServer.requestedPaths())
+        assertEquals("the network was not asked before each request", 0, answers.size)
+    }
+
+    /**
+     * Asked before every request and only then: once for the station url, once for the playlist
+     * it references.
+     */
+    @Test
+    fun theNetworkIsAskedAboutBeforeEveryRequest() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val referenced = mServer.serve(
+            "/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY><REF href=\"$stream\"/></ENTRY></ASX>"
+        )
+        val playlist = entryRefTo(referenced, "/station.asx")
+        var questions = 0
+
+        val answer = read(playlist) {
+            questions++
+            true
+        }
+
+        assertEquals(PlaylistRead.Urls(listOf(stream)), answer)
+        assertEquals(2, questions)
+    }
+
     private fun entryRefTo(reference: String, path: String): String {
         return mServer.serve(path, VIDEO_ASF, "<ASX version=\"3.0\"><ENTRYREF href=\"$reference\"/></ASX>")
     }
@@ -178,11 +237,25 @@ class PlaylistResolutionTest {
                 "<!-- padding -->".repeat(padding) + "</ASX>"
     }
 
+    /**
+     * Reads [url] on a network playback may use, where every read runs and answers with urls.
+     */
     private fun resolve(
         url: String,
         downloader: DownloaderLayer = HTTPDownloaderImpl(DirectUrlResolver())
     ): Array<String> {
-        return NetUtils.extractUrlsFromPlaylist(mContext, downloader, url)
+        return when (val answer = read(url, downloader) { true }) {
+            is PlaylistRead.Urls -> answer.urls.toTypedArray()
+            PlaylistRead.Blocked -> throw AssertionError("A read on a usable network was blocked")
+        }
+    }
+
+    private fun read(
+        url: String,
+        downloader: DownloaderLayer = HTTPDownloaderImpl(DirectUrlResolver()),
+        mayUseNetwork: () -> Boolean
+    ): PlaylistRead {
+        return NetUtils.extractUrlsFromPlaylist(mContext, downloader, url, mayUseNetwork)
     }
 
     /**

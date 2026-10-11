@@ -65,6 +65,7 @@ import com.yuriy.openradio.shared.utils.IntentUtils
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import com.yuriy.openradio.shared.utils.MediaItemHelper
 import com.yuriy.openradio.shared.utils.NetUtils
+import com.yuriy.openradio.shared.utils.PlaylistRead
 import com.yuriy.openradio.shared.utils.SafeToast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -335,27 +336,41 @@ class OpenRadioService : MediaLibraryService() {
                 mPlayer.stop()
                 mPlayer.reportUnplayableStream()
             }
+            is PlaylistFallback.Action.PauseForNetworkPolicy -> pauseForNetworkPolicyUiThread()
         }
     }
 
     /**
      * Reads the station url of the media item [resolution] names as a playlist, because the player
-     * could not recognise what it serves as a stream.
+     * could not recognise what it serves as a stream. The read is part of playing the station, so
+     * it does not start, and does not go on to the playlists it names, while the network may not
+     * be used for playback.
      */
     @MainThread
     private fun resolvePlaylist(resolution: PlaylistFallback.Resolution) {
-        mPlayer.stop()
+        mPlayer.stopForReplacementStream()
         val playlistUrl = getStationUrl(resolution.mediaId)
         if (playlistUrl.isEmpty()) {
             AppLogger.e("$TAG no station url to resolve for $resolution")
             advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, emptyList()))
             return
         }
+        if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
+            AppLogger.i("$TAG playlist $playlistUrl for $resolution not read on blocked mobile data")
+            advancePlaylistFallback(mPlaylistFallback.onReadBlocked(resolution))
+            return
+        }
         AppLogger.i("$TAG resolve playlist $playlistUrl for $resolution")
         mScope.launch {
-            val urls = NetUtils.extractUrlsFromPlaylist(applicationContext, mDownloader, playlistUrl).toList()
+            val read = NetUtils.extractUrlsFromPlaylist(applicationContext, mDownloader, playlistUrl) {
+                mPresenter.isPlaybackBlockedByMobileNetwork().not()
+            }
             mUiScope.launch {
-                advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, urls))
+                AppLogger.i("$TAG playlist read $read for $resolution")
+                when (read) {
+                    PlaylistRead.Blocked -> advancePlaylistFallback(mPlaylistFallback.onReadBlocked(resolution))
+                    is PlaylistRead.Urls -> advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, read.urls))
+                }
             }
         }
     }
@@ -383,7 +398,13 @@ class OpenRadioService : MediaLibraryService() {
             return
         }
         AppLogger.i("$TAG play $streamUrl in place of $mediaId")
+        mPlayer.stopForReplacementStream()
         mPlayer.replaceMediaItem(mPlayer.currentMediaItemIndex, MediaItemBuilder.withStreamUrl(current, streamUrl))
+        if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
+            AppLogger.i("$TAG hold $streamUrl of $mediaId until a network it may use connects")
+            pauseForNetworkPolicyUiThread()
+            return
+        }
         handlePlayRequestUiThread()
     }
 
@@ -500,11 +521,26 @@ class OpenRadioService : MediaLibraryService() {
      * playing resumes once a network it may use connects.
      */
     private fun handleMobileNetworkBlocked() {
+        mUiScope.launch { pauseForNetworkPolicyUiThread() }
+    }
+
+    /**
+     * Pauses the station for the mobile-network policy. A playlist read under way is abandoned,
+     * because its answer would only start a station the policy holds paused; the station reads its
+     * playlist again when it resumes.
+     */
+    @MainThread
+    private fun pauseForNetworkPolicyUiThread() {
         SafeToast.showAnyThread(
             applicationContext,
             getString(R.string.mobile_network_disabled)
         )
-        mUiScope.launch { mPlayer.pauseForNetworkPolicy() }
+        if (mPlaylistFallback.isReadPending) {
+            val next = mPlaylistFallback.abandonRead()
+            AppLogger.i("$TAG playlist fallback $mPlaylistFallback -> $next: abandoned for the network policy")
+            mPlaylistFallback = next
+        }
+        mPlayer.pauseForNetworkPolicy()
     }
 
     /**

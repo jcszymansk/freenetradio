@@ -35,6 +35,11 @@ class NetworkLayerImpl(private val mConnectivityManager: ConnectivityManager) : 
 
     private var mListener: NetworkMonitorListener? = null
 
+    /**
+     * Written by the connectivity receiver on the main thread, and read from the threads that ask
+     * whether playback may use the network, a playlist read among them.
+     */
+    @Volatile
     private var mType = -1
 
     companion object {

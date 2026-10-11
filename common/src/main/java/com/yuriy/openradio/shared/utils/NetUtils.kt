@@ -193,29 +193,49 @@ object NetUtils {
      * The station url itself is opened here, because its declared content type is part of how its
      * format is recognised. Every playlist it names in turn is read through [downloader].
      *
+     * Playback may be barred from the current network, which is what [mayUseNetwork] answers, and
+     * reading a station's playlist is part of playing it. It is asked before the station url is
+     * opened and before every playlist that one names is read, so no request starts while the
+     * network is barred. A request already under way when that changes runs to its end, and the
+     * answer then depends on whether any request was skipped.
+     *
      * @param downloader Reads the playlists that [playlistUrl] names.
-     * @return The stream urls, none when the playlist names none, or one empty string when
+     * @param mayUseNetwork Whether playback may use the network the device is on now. It is
+     * called on the thread this runs on.
+     * @return [PlaylistRead.Blocked] when a request was skipped, otherwise [PlaylistRead.Urls]
+     * with the stream urls, none when the playlist names none, or one empty string when
      * [playlistUrl] cannot be opened.
      */
     fun extractUrlsFromPlaylist(
-        context: Context, downloader: DownloaderLayer, playlistUrl: String
-    ): Array<String> {
-        val connection =
-            getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET) ?: return Array(1) { AppUtils.EMPTY_STRING }
+        context: Context, downloader: DownloaderLayer, playlistUrl: String, mayUseNetwork: () -> Boolean
+    ): PlaylistRead {
+        if (mayUseNetwork().not()) {
+            AppLogger.i("$CLASS_NAME playlist $playlistUrl not opened, the network may not be used")
+            return PlaylistRead.Blocked
+        }
+        val connection = getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET)
+            ?: return PlaylistRead.Urls(listOf(AppUtils.EMPTY_STRING))
         var inputStream: InputStream? = null
-        var result = Array(1) { AppUtils.EMPTY_STRING }
-        val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url) }
+        var result = listOf(AppUtils.EMPTY_STRING)
+        var isBlocked = false
+        val parser = AutoDetectParser { url ->
+            if (mayUseNetwork()) {
+                fetchPlaylist(context, downloader, url)
+            } else {
+                AppLogger.i("$CLASS_NAME playlist $url not read, the network may not be used")
+                isBlocked = true
+                ByteArray(0)
+            }
+        }
         val playlist = Playlist()
         val contentType = connection.contentType
         try {
             inputStream = connection.inputStream
             parser.parse(playlistUrl, contentType, inputStream, playlist)
-            val length = playlist.playlistEntries.size
-            result = Array(length) { AppUtils.EMPTY_STRING }
-            AppLogger.d("Found $length streams associated with $playlistUrl:")
-            for ((i, entry) in playlist.playlistEntries.withIndex()) {
-                result[i] = entry[PlaylistEntry.URI]
-                AppLogger.d(" - ${result[i]}")
+            result = playlist.playlistEntries.map { it[PlaylistEntry.URI] }
+            AppLogger.d("Found ${result.size} streams associated with $playlistUrl:")
+            for (url in result) {
+                AppLogger.d(" - $url")
             }
         } catch (e: Exception) {
             val errorMessage = "Can not get urls from playlist at $playlistUrl"
@@ -230,7 +250,10 @@ object NetUtils {
                 }
             }
         }
-        return result
+        if (isBlocked) {
+            return PlaylistRead.Blocked
+        }
+        return PlaylistRead.Urls(result)
     }
 
     /**
