@@ -106,14 +106,17 @@ class NetworkPermit(private val mayUseNetwork: () -> Boolean) {
     }
 
     /**
-     * Starts [connection] by running [start], unless the permit is revoked, in which case [start]
-     * never runs. A revocation cannot land while [start] runs; it waits, and the [hold] that reads
-     * the response then finds the permit revoked and disconnects the connection that started.
+     * Starts [connection] by running [start], unless the permit is revoked or the network refuses
+     * it now, in which case [start] never runs. The network is asked here, under the same lock,
+     * rather than relied on from an earlier [mayContinue], because the service learns of a policy
+     * change and revokes some time after the network turned. A revocation cannot land while
+     * [start] runs; it waits, and the [hold] that reads the response then finds the permit
+     * revoked and disconnects the connection that started.
      */
     fun connect(connection: HttpURLConnection, start: () -> Unit): Held<Unit> {
         synchronized(mConnectLock) {
-            if (isRevoked) {
-                AppLogger.i("$CLASS_NAME already revoked, ${connection.url} not started")
+            if (mayContinue().not()) {
+                AppLogger.i("$CLASS_NAME ${connection.url} not started, the network may not be used")
                 return Held.Revoked
             }
             start()

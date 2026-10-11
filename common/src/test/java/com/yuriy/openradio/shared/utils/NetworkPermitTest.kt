@@ -256,6 +256,24 @@ class NetworkPermitTest {
     }
 
     /**
+     * The network can turn after a request was allowed and before the service learns of it and
+     * revokes, so starting the connection asks the network again.
+     */
+    @Test
+    fun aConnectionDoesNotStartOnceTheNetworkRefusesIt() {
+        val answers = ArrayDeque(listOf(true, false))
+        val permit = NetworkPermit { answers.removeFirst() }
+        var starts = 0
+        assertTrue(permit.mayContinue())
+
+        val held = permit.connect(RecordingConnection()) { starts++ }
+
+        assertEquals(NetworkPermit.Held.Revoked, held)
+        assertEquals(0, starts)
+        assertTrue(permit.isRevoked)
+    }
+
+    /**
      * The gap a revocation must not fall into: after the permit allowed a connection and before
      * it has started. The revocation waits until it has, and the read of its response then finds
      * the permit revoked, does not run, and disconnects the connection that started.

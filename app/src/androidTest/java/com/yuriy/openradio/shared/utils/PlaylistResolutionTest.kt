@@ -373,6 +373,23 @@ class PlaylistResolutionTest {
     }
 
     /**
+     * The network can turn between the check that allows a request and the start of its
+     * connection, before the service has revoked anything. The start asks again, so no connection
+     * is opened.
+     */
+    @Test
+    fun aRequestIsNotMadeWhenTheNetworkTurnsBeforeItsConnectionStarts() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val playlist = mServer.serve("/stream.pls", LoopbackHttpFixture.AUDIO_PLS, pls(stream))
+        val answers = ArrayDeque(listOf(true, false))
+
+        val answer = read(playlist) { answers.removeFirst() }
+
+        assertEquals(PlaylistRead.Blocked, answer)
+        assertEquals(0, mServer.acceptedConnections())
+    }
+
+    /**
      * Reads [url] on its own thread until [stall] holds a connection from it, revokes the permit
      * the way the service does, and returns what the read answered.
      */

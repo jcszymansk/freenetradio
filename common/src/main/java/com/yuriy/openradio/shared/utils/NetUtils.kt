@@ -277,11 +277,12 @@ object NetUtils {
         val contentType = connection.contentType
         var gated: GatedInputStream? = null
         try {
-            val stream = GatedInputStream(connection.inputStream, permit::mayContinue)
-            gated = stream
-            if (permit.hold(connection) { parser.parse(playlistUrl, contentType, stream, playlist) }
-                == NetworkPermit.Held.Revoked
-            ) {
+            val held = permit.hold(connection) {
+                val stream = GatedInputStream(connection.inputStream, permit::mayContinue)
+                gated = stream
+                parser.parse(playlistUrl, contentType, stream, playlist)
+            }
+            if (held == NetworkPermit.Held.Revoked) {
                 AppLogger.i("$CLASS_NAME playlist $playlistUrl read revoked")
             }
             result = playlist.playlistEntries.map { it[PlaylistEntry.URI] }
