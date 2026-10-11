@@ -161,6 +161,124 @@ class OpenRadioPlayerPolicyPauseTest {
         )
     }
 
+    /**
+     * The service stops the player when it cannot read a station url, and reads the url as a
+     * playlist. The policy can pause the station before the stream the playlist names starts; the
+     * user never stopped it, so it resumes, with the stream the playlist named.
+     */
+    @Test
+    fun aPolicyPauseWhileAReplacementStreamIsFoundResumesTheStation() {
+        failOnAnUnreadableStream()
+        onMain {
+            mPlayer.stopForReplacementStream()
+            assertFalse(mPlayer.resumesOnReconnect())
+        }
+
+        onMain { mPlayer.pauseForNetworkPolicy() }
+
+        onMain {
+            assertTrue("The policy pause forgot the station", mPlayer.resumesOnReconnect())
+            mPlayer.replaceMediaItem(0, MediaItem.fromUri(mBroadcast.url))
+            mPlayer.prepare()
+            mPlayer.play()
+        }
+        awaitPlaying()
+        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+    }
+
+    /**
+     * The stop for a replacement stream is the service's, not the user's, so it leaves a station
+     * the network stopped to be resumed. [Player.stop] is the user's, and forgets it.
+     */
+    @Test
+    fun aStopForAReplacementStreamKeepsAStationThePolicyPaused() {
+        playTheBroadcast()
+        onMain { mPlayer.pauseForNetworkPolicy() }
+
+        onMain { mPlayer.stopForReplacementStream() }
+        onMain { assertTrue(mPlayer.resumesOnReconnect()) }
+
+        onMain { mPlayer.stop() }
+        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+    }
+
+    @Test
+    fun aPolicyPauseAfterTheUserStoppedAStationAwaitingAReplacementDoesNotResumeIt() {
+        failOnAnUnreadableStream()
+        onMain {
+            mPlayer.stopForReplacementStream()
+            mPlayer.stop()
+        }
+
+        onMain { mPlayer.pauseForNetworkPolicy() }
+
+        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+    }
+
+    @Test
+    fun aPolicyPauseAfterTheUserPausedAStationAwaitingAReplacementDoesNotResumeIt() {
+        failOnAnUnreadableStream()
+        onMain {
+            mPlayer.stopForReplacementStream()
+            mPlayer.pause()
+        }
+
+        onMain { mPlayer.pauseForNetworkPolicy() }
+
+        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+    }
+
+    /**
+     * Another station chosen in its place is no longer awaiting anything, and until it is
+     * prepared nothing is meant to be playing.
+     */
+    @Test
+    fun aPolicyPauseAfterAnotherStationWasSetInPlaceOfOneAwaitingAReplacementDoesNotResumeIt() {
+        failOnAnUnreadableStream()
+        onMain {
+            mPlayer.stopForReplacementStream()
+            mPlayer.setMediaItem(MediaItem.fromUri(mBroadcast.url))
+        }
+
+        onMain { mPlayer.pauseForNetworkPolicy() }
+
+        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        assertEquals(0, mBroadcast.connections())
+    }
+
+    /**
+     * A policy pause is resolved once: a second one, before anything prepared the station again,
+     * finds it paused rather than awaiting a stream, and keeps it to resume.
+     */
+    @Test
+    fun aRepeatedPolicyPauseOfAStationAwaitingAReplacementKeepsItToResume() {
+        failOnAnUnreadableStream()
+        onMain { mPlayer.stopForReplacementStream() }
+        onMain { mPlayer.pauseForNetworkPolicy() }
+
+        onMain { mPlayer.pauseForNetworkPolicy() }
+
+        onMain { assertTrue(mPlayer.resumesOnReconnect()) }
+    }
+
+    /**
+     * Plays a url whose body no extractor recognises, which is how the player fails on a station
+     * url that is a playlist, and waits for that failure.
+     */
+    private fun failOnAnUnreadableStream() {
+        val noise = mServer.serve("/noise", LoopbackHttpFixture.TEXT_PLAIN, NOT_AUDIO)
+        onMain {
+            mPlayer.setMediaItem(MediaItem.fromUri(noise))
+            mPlayer.prepare()
+            mPlayer.play()
+        }
+        await("the player to fail on the unreadable stream") { onMain { mPlayer.playerError != null } }
+        onMain {
+            assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
+            assertTrue(mPlayer.playWhenReady)
+        }
+    }
+
     private fun playTheBroadcast() {
         onMain {
             mPlayer.setMediaItem(MediaItem.fromUri(mBroadcast.url))
@@ -244,6 +362,8 @@ class OpenRadioPlayerPolicyPauseTest {
     private companion object {
 
         const val TIMEOUT_SECONDS = 15L
+
+        const val NOT_AUDIO = "not really audio, only text that no extractor will recognise"
 
         const val POLL_MILLIS = 50L
 

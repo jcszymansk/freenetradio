@@ -42,6 +42,17 @@ import androidx.media3.common.Player
  *
  * An unrecognised stream of any other media item, in any state, starts [Resolving] that one.
  *
+ * Reading a playlist is part of playing the station, so it is subject to the mobile-network
+ * policy. A read the policy stopped, and a read still under way when the policy pauses the
+ * station, both end in [Idle]: the station resumes from its own url once a network it may use
+ * connects, and that is a new reason to read its playlist.
+ *
+ * ```
+ *                  read blocked(#n), pause for the policy
+ *   Resolving(#n) ─────────────────────────────────────────▶ Idle
+ *                  abandoned for a policy pause
+ * ```
+ *
  * Reading a playlist takes long enough for its station to be asked for again meanwhile, so each
  * read is a numbered [Resolution] and only the read a [Resolving] state is waiting for counts.
  * Matching the media id alone would let a read the user has since restarted answer for the
@@ -68,6 +79,30 @@ sealed class PlaylistFallback {
      */
     open fun onResolved(resolution: Resolution, urls: List<String>): Step {
         return Step(this, Action.Ignore)
+    }
+
+    /**
+     * Reacts to the playlist read [resolution] having been stopped, before it could finish,
+     * because the network may not be used for playback.
+     */
+    open fun onReadBlocked(resolution: Resolution): Step {
+        return Step(this, Action.Ignore)
+    }
+
+    /**
+     * Whether a playlist read is under way for the current play request.
+     */
+    open val isReadPending: Boolean
+        get() = false
+
+    /**
+     * The state that follows the mobile-network policy pausing the station. A read under way is
+     * abandoned: whatever it answers later is ignored, and the resumed station reads its playlist
+     * again. Streams a playlist has already named stay, because the station resumes with the one
+     * it was playing.
+     */
+    open fun abandonRead(): PlaylistFallback {
+        return this
     }
 
     /**
@@ -108,6 +143,20 @@ sealed class PlaylistFallback {
                 return Step(this, Action.Ignore)
             }
             return tryFirst(resolution.mediaId, urls)
+        }
+
+        override fun onReadBlocked(resolution: Resolution): Step {
+            if (resolution != this.resolution) {
+                return Step(this, Action.Ignore)
+            }
+            return Step(abandonRead(), Action.PauseForNetworkPolicy(resolution.mediaId))
+        }
+
+        override val isReadPending: Boolean
+            get() = true
+
+        override fun abandonRead(): PlaylistFallback {
+            return Idle(resolutions)
         }
     }
 
@@ -180,6 +229,12 @@ sealed class PlaylistFallback {
          * Stop, and tell the user that the station of [mediaId] cannot be played.
          */
         data class GiveUp(val mediaId: String) : Action()
+
+        /**
+         * Pause the station of [mediaId] for the mobile-network policy, so that it resumes once a
+         * network it may use connects.
+         */
+        data class PauseForNetworkPolicy(val mediaId: String) : Action()
     }
 
     companion object {

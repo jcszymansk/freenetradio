@@ -26,7 +26,6 @@ import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.BufferedWriter
 import java.io.IOException
-import java.io.InputStream
 import java.io.OutputStreamWriter
 import java.io.UnsupportedEncodingException
 import java.net.HttpURLConnection
@@ -53,6 +52,23 @@ object NetUtils {
     private const val USER_AGENT_PARAMETER_KEY = "User-Agent"
     private const val HEADER_FIELD_LOCATION = "Location"
 
+    /**
+     * Statuses whose Location a request is sent on to. 307 and 308 have no constant in
+     * [HttpURLConnection].
+     */
+    private val REDIRECT_CODES = setOf(
+        HttpURLConnection.HTTP_MOVED_PERM,
+        HttpURLConnection.HTTP_MOVED_TEMP,
+        HttpURLConnection.HTTP_SEE_OTHER,
+        307,
+        308
+    )
+
+    /**
+     * As many hops as a station url plausibly takes through trackers and load balancers.
+     */
+    private const val MAX_REDIRECTS = 10
+
     fun isWebUrl(url: String): Boolean {
         return if (url.isEmpty()) {
             false
@@ -61,31 +77,57 @@ object NetUtils {
     }
 
     private fun getHttpURLConnection(
-        context: Context, urlString: String, requestMethod: String
+        context: Context, urlString: String, requestMethod: String, permit: NetworkPermit = NetworkPermit { true }
     ): HttpURLConnection? {
         return try {
-            getHttpURLConnection(context, URL(urlString), requestMethod, null)
+            getHttpURLConnection(context, URL(urlString), requestMethod, null, permit)
         } catch (exception: MalformedURLException) {
             AppLogger.e("Can not get http connection (1) from $urlString", exception)
             null
         }
     }
 
+    /**
+     * Opens [url] and follows the redirects it answers with.
+     *
+     * A request without a body follows every redirect here rather than inside
+     * [HttpURLConnection], so that [permit] is asked before each request that leaves the
+     * device, the hops included. A request with a body lets [HttpURLConnection] follow redirects
+     * within one protocol, because the method a redirected POST continues with depends on the
+     * status, and follows the rest here.
+     *
+     * @param permit Asked before every request, and holding each connection until it has
+     * answered, so that revoking it disconnects one still waiting for its response.
+     * @return The connection that answered last, or null when none could be opened or [permit]
+     * refused a request.
+     */
     fun getHttpURLConnection(
-        context: Context, url: URL, requestMethod: String, parameters: List<Pair<String, String>>?
+        context: Context,
+        url: URL,
+        requestMethod: String,
+        parameters: List<Pair<String, String>>?,
+        permit: NetworkPermit = NetworkPermit { true }
     ): HttpURLConnection? {
         var connection: HttpURLConnection? = null
-        var isRedirect = false
+        var isRedirect: Boolean
         var connectUrl = url
-        var maxAttempt = 3
+        var redirects = 0
+        val body = parameters.orEmpty()
+        val hasBody = body.isNotEmpty()
 
         do {
+            isRedirect = false
+            if (permit.mayContinue().not()) {
+                AppLogger.i("$CLASS_NAME $connectUrl not requested, the network may not be used")
+                closeHttpURLConnection(connection)
+                return null
+            }
             try {
-                isRedirect = false
-                connection = connectUrl.openConnection() as HttpURLConnection
+                val opened = connectUrl.openConnection() as HttpURLConnection
+                connection = opened
                 connection.readTimeout = AppUtils.TIME_OUT
                 connection.connectTimeout = AppUtils.TIME_OUT
-                connection.instanceFollowRedirects = true
+                connection.instanceFollowRedirects = hasBody
                 connection.useCaches = false
                 connection.defaultUseCaches = false
                 connection.requestMethod = requestMethod
@@ -98,35 +140,43 @@ object NetUtils {
                 AppLogger.d("$CLASS_NAME UserAgent:$userAgent")
 
                 // If there are http request parameters:
-                if (!parameters.isNullOrEmpty()) {
+                if (hasBody) {
                     connection.setRequestProperty("enctype", "application/x-www-form-urlencoded")
                     try {
                         connection.outputStream.use { outputStream ->
                             BufferedWriter(OutputStreamWriter(outputStream, Charsets.UTF_8)).use { writer ->
-                                writer.write(getPostParametersQuery(parameters))
+                                writer.write(getPostParametersQuery(body))
                                 writer.flush()
                             }
                         }
                     } catch (exception: IOException) {
                         AppLogger.e(
-                            " ${createExceptionMessage(url.toString(), parameters)}", exception
+                            " ${createExceptionMessage(url.toString(), body)}", exception
 
                         )
                     }
                 }
-                connection.connect()
-                val responseCode = connection.responseCode
-                if (responseCode == HttpURLConnection.HTTP_MOVED_PERM
-                    || responseCode == HttpURLConnection.HTTP_MOVED_TEMP
-                ) {
-                    if (maxAttempt-- <= 0) {
+                if (permit.connect(opened) { opened.connect() } == NetworkPermit.Held.Revoked) {
+                    break
+                }
+                val responseCode = when (val held = permit.hold(opened) { opened.responseCode }) {
+                    is NetworkPermit.Held.Answered -> held.value
+                    NetworkPermit.Held.Revoked -> break
+                }
+                if (responseCode in REDIRECT_CODES) {
+                    if (redirects++ >= MAX_REDIRECTS) {
                         AppLogger.e("$CLASS_NAME redirect reached max attempts number")
                         break
                     }
-                    val newUrl = connection.getHeaderField(HEADER_FIELD_LOCATION)
+                    val location = connection.getHeaderField(HEADER_FIELD_LOCATION)
+                    if (location == null) {
+                        AppLogger.e("$CLASS_NAME redirect $responseCode from $connectUrl names no location")
+                        break
+                    }
+                    val newUrl = URL(connectUrl, location)
                     connection.disconnect()
-                    AppLogger.i("$CLASS_NAME redirect from $connectUrl to $newUrl")
-                    connectUrl = URL(newUrl)
+                    AppLogger.i("$CLASS_NAME redirect $responseCode from $connectUrl to $newUrl")
+                    connectUrl = newUrl
                     isRedirect = true
                 }
             } catch (exception: Exception) {
@@ -135,6 +185,11 @@ object NetUtils {
             }
         } while (isRedirect)
 
+        if (permit.isRevoked) {
+            AppLogger.i("$CLASS_NAME $connectUrl abandoned, the network may not be used")
+            closeHttpURLConnection(connection)
+            return null
+        }
         return connection
     }
 
@@ -193,54 +248,78 @@ object NetUtils {
      * The station url itself is opened here, because its declared content type is part of how its
      * format is recognised. Every playlist it names in turn is read through [downloader].
      *
+     * Playback may be barred from the current network, and reading a station's playlist is part
+     * of playing it. [permit] is asked before every request and before every read of a response,
+     * and holds every connection while it is waited on, so no request starts, and no transfer goes
+     * on, once the network is barred or the permit revoked.
+     *
      * @param downloader Reads the playlists that [playlistUrl] names.
-     * @return The stream urls, none when the playlist names none, or one empty string when
-     * [playlistUrl] cannot be opened.
+     * @param permit Whether playback may use the network, for this read alone. It is asked on the
+     * thread this runs on and on the threads [downloader] reads on, and may be revoked from any.
+     * @return [PlaylistRead.Blocked] when the permit ended before the read finished,
+     * otherwise [PlaylistRead.Urls] with the stream urls, none when the playlist names none, or
+     * one empty string when [playlistUrl] cannot be opened.
      */
     fun extractUrlsFromPlaylist(
-        context: Context, downloader: DownloaderLayer, playlistUrl: String
-    ): Array<String> {
-        val connection =
-            getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET) ?: return Array(1) { AppUtils.EMPTY_STRING }
-        var inputStream: InputStream? = null
-        var result = Array(1) { AppUtils.EMPTY_STRING }
-        val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url) }
+        context: Context, downloader: DownloaderLayer, playlistUrl: String, permit: NetworkPermit
+    ): PlaylistRead {
+        val connection = getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET, permit)
+        if (connection == null) {
+            if (permit.isRevoked) {
+                AppLogger.i("$CLASS_NAME playlist $playlistUrl not opened, the network may not be used")
+                return PlaylistRead.Blocked
+            }
+            return PlaylistRead.Urls(listOf(AppUtils.EMPTY_STRING))
+        }
+        var result = listOf(AppUtils.EMPTY_STRING)
+        val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url, permit) }
         val playlist = Playlist()
         val contentType = connection.contentType
+        var gated: GatedInputStream? = null
         try {
-            inputStream = connection.inputStream
-            parser.parse(playlistUrl, contentType, inputStream, playlist)
-            val length = playlist.playlistEntries.size
-            result = Array(length) { AppUtils.EMPTY_STRING }
-            AppLogger.d("Found $length streams associated with $playlistUrl:")
-            for ((i, entry) in playlist.playlistEntries.withIndex()) {
-                result[i] = entry[PlaylistEntry.URI]
-                AppLogger.d(" - ${result[i]}")
+            val held = permit.hold(connection) {
+                val stream = GatedInputStream(connection.inputStream, permit::mayContinue)
+                gated = stream
+                parser.parse(playlistUrl, contentType, stream, playlist)
+            }
+            if (held == NetworkPermit.Held.Revoked) {
+                AppLogger.i("$CLASS_NAME playlist $playlistUrl read revoked")
+            }
+            result = playlist.playlistEntries.map { it[PlaylistEntry.URI] }
+            AppLogger.d("Found ${result.size} streams associated with $playlistUrl:")
+            for (url in result) {
+                AppLogger.d(" - $url")
             }
         } catch (e: Exception) {
             val errorMessage = "Can not get urls from playlist at $playlistUrl"
             AppLogger.e(errorMessage, e)
         } finally {
             closeHttpURLConnection(connection)
-            if (inputStream != null) {
-                try {
-                    inputStream.close()
-                } catch (e: IOException) {
-                    /**/
-                }
+            try {
+                gated?.close()
+            } catch (e: IOException) {
+                /**/
             }
         }
-        return result
+        if (permit.isRevoked) {
+            AppLogger.i("$CLASS_NAME playlist $playlistUrl read cut short, the network may not be used")
+            return PlaylistRead.Blocked
+        }
+        return PlaylistRead.Urls(result)
     }
 
     /**
      * Adapts [downloader] to the parsers' [wseemann.media.jplaylistparser.parser.PlaylistFetcher],
      * which answers a failed read with no content.
      */
-    private fun fetchPlaylist(context: Context, downloader: DownloaderLayer, url: String): ByteArray {
+    private fun fetchPlaylist(
+        context: Context, downloader: DownloaderLayer, url: String, permit: NetworkPermit
+    ): ByteArray {
         AppLogger.d("$CLASS_NAME reading playlist $url")
         return try {
-            downloader.downloadDataFromUri(context, Uri.parse(url), maxBytes = PLAYLIST_MAX_BYTES)
+            downloader.downloadDataFromUri(
+                context, Uri.parse(url), maxBytes = PLAYLIST_MAX_BYTES, permit = permit
+            )
         } catch (exception: ExecutionException) {
             AppLogger.e("$CLASS_NAME can not read playlist $url", exception)
             ByteArray(0)

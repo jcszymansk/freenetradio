@@ -118,6 +118,13 @@ class OpenRadioPlayer(
      */
     private var mNetworkRecovery = NetworkRecovery.IDLE
 
+    /**
+     * Whether the player was stopped while the service finds a stream to replace one it could not
+     * read, and has not been prepared, stopped or paused since. The station is still meant to play
+     * meanwhile. Written and read on the main thread.
+     */
+    private var mIsAwaitingStream = false
+
     private val mExoPlayer: Player by lazy {
         AppLogger.i("Init ExoPlayer")
         val trackSelector = DefaultTrackSelector(mContext)
@@ -180,6 +187,7 @@ class OpenRadioPlayer(
 
     override fun pause() {
         updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "pause")
+        forgetAwaitedStream("pause")
         mPlayer.pause()
     }
 
@@ -203,6 +211,7 @@ class OpenRadioPlayer(
     }
 
     override fun prepare() {
+        forgetAwaitedStream("prepare")
         mPlayer.prepare()
     }
 
@@ -222,6 +231,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size}")
+        forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems)
         mPlaylist.clear()
         mPlaylist.addAll(mediaItems)
@@ -229,6 +239,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size} $resetPosition")
+        forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems, resetPosition)
         mPlaylist.clear()
         mPlaylist.addAll(mediaItems)
@@ -236,6 +247,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size} $startIndex $startPositionMs")
+        forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems, startIndex, startPositionMs)
         mPlaylist.clear()
         mPlaylist.addAll(mediaItems)
@@ -243,6 +255,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItem(mediaItem: MediaItem) {
         AppLogger.d("$TAG setMediaItem $mediaItem")
+        forgetAwaitedStream("set media items")
         mPlayer.setMediaItem(mediaItem)
         mPlaylist.clear()
         mPlaylist.add(mediaItem)
@@ -250,6 +263,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) {
         AppLogger.d("$TAG setMediaItem $mediaItem $startPositionMs")
+        forgetAwaitedStream("set media items")
         mPlayer.setMediaItem(mediaItem, startPositionMs)
         mPlaylist.clear()
         mPlaylist.add(mediaItem)
@@ -257,6 +271,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) {
         AppLogger.d("$TAG setMediaItem $mediaItem $resetPosition")
+        forgetAwaitedStream("set media items")
         mPlayer.setMediaItem(mediaItem, resetPosition)
         mPlaylist.clear()
         mPlaylist.add(mediaItem)
@@ -314,6 +329,7 @@ class OpenRadioPlayer(
     }
 
     override fun clearMediaItems() {
+        forgetAwaitedStream("clear media items")
         mPlayer.clearMediaItems()
         mPlaylist.clear()
     }
@@ -349,6 +365,7 @@ class OpenRadioPlayer(
     override fun setPlayWhenReady(playWhenReady: Boolean) {
         if (playWhenReady.not()) {
             updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "play when ready off")
+            forgetAwaitedStream("play when ready off")
         }
         mPlayer.playWhenReady = playWhenReady
     }
@@ -491,6 +508,7 @@ class OpenRadioPlayer(
 
     override fun stop() {
         updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "stop")
+        forgetAwaitedStream("stop")
         mPlayer.stop()
     }
 
@@ -767,6 +785,7 @@ class OpenRadioPlayer(
     fun reset() {
         AppLogger.d("$TAG reset")
         updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "reset")
+        forgetAwaitedStream("reset")
         stopCurrentPlayer()
     }
 
@@ -784,11 +803,27 @@ class OpenRadioPlayer(
     fun pauseForNetworkPolicy() {
         updateNetworkRecovery(
             mNetworkRecovery.onPolicyPause(
-                NetworkRecovery.isStreamPlayRequested(mPlayer.playWhenReady, mPlayer.playbackState)
+                NetworkRecovery.isStreamPlayRequested(
+                    mPlayer.playWhenReady, mPlayer.playbackState, mIsAwaitingStream
+                )
             ),
             "network policy pause"
         )
+        forgetAwaitedStream("network policy pause")
         mPlayer.pause()
+        mPlayer.stop()
+    }
+
+    /**
+     * Stops a stream the player could not read while the service finds the stream to play in its
+     * place: by reading the station url as a playlist, or by taking the next stream that playlist
+     * named. The user still wants the station playing, so this is not a stop for
+     * [NetworkRecovery]: a policy pause that lands before the replacement starts resumes the
+     * station once a network it may use connects.
+     */
+    fun stopForReplacementStream() {
+        AppLogger.i("$TAG stop for a replacement stream, recovery stays $mNetworkRecovery")
+        mIsAwaitingStream = true
         mPlayer.stop()
     }
 
@@ -798,6 +833,13 @@ class OpenRadioPlayer(
      */
     fun resumesOnReconnect(): Boolean {
         return mNetworkRecovery.resumesOnReconnect
+    }
+
+    private fun forgetAwaitedStream(event: String) {
+        if (mIsAwaitingStream) {
+            AppLogger.i("$TAG no longer awaiting a stream on $event")
+            mIsAwaitingStream = false
+        }
     }
 
     private fun updateNetworkRecovery(next: NetworkRecovery, event: String) {

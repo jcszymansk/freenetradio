@@ -23,6 +23,7 @@ import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
@@ -49,7 +50,11 @@ internal class LoopbackHttpFixture {
 
     private val mBroadcasts = ConcurrentHashMap<String, Broadcast>()
 
+    private val mStalls = ConcurrentHashMap<String, Stall>()
+
     private val mRequests = CopyOnWriteArrayList<String>()
+
+    private val mAccepted = AtomicInteger()
 
     private val mExecutor = Executors.newCachedThreadPool()
 
@@ -108,6 +113,34 @@ internal class LoopbackHttpFixture {
     }
 
     /**
+     * Answers [path] the way a server that has stopped responding does: with the status line,
+     * the headers and [head] when [isHeadSent], or with nothing at all otherwise, and then nothing
+     * more until the client closes the connection.
+     */
+    fun stall(path: String, contentType: String, head: ByteArray, isHeadSent: Boolean): Stall {
+        val stall = Stall(url(path), contentType, head, isHeadSent)
+        mStalls[path] = stall
+        return stall
+    }
+
+    /**
+     * Redirects [path] to [location] with [status], and returns the url that reaches it.
+     * [location] is sent as given, so it can be relative.
+     */
+    fun redirect(path: String, status: Int, location: String): String {
+        mRoutes[path] = Response(status, "Redirect", TEXT_PLAIN, ByteArray(0), mapOf("Location" to location))
+        return url(path)
+    }
+
+    /**
+     * @return how many connections the server accepted, including ones that never sent a
+     * request: a client can open a connection and only send its request line later.
+     */
+    fun acceptedConnections(): Int {
+        return mAccepted.get()
+    }
+
+    /**
      * @return the paths that were asked for, in the order they arrived.
      */
     fun requestedPaths(): List<String> {
@@ -127,6 +160,7 @@ internal class LoopbackHttpFixture {
                 // The socket was closed by stop(), or the run is over.
                 return
             }
+            mAccepted.incrementAndGet()
             mExecutor.execute { answer(socket) }
         }
     }
@@ -151,6 +185,11 @@ internal class LoopbackHttpFixture {
             }
             val path = pathOf(requestLine)
             mRequests.add(path)
+            val stall = mStalls[path]
+            if (stall != null) {
+                stall.hold(it)
+                return
+            }
             val broadcast = mBroadcasts[path]
             if (broadcast != null) {
                 broadcast.transmit(it)
@@ -161,6 +200,9 @@ internal class LoopbackHttpFixture {
                 append("HTTP/1.1 ${response.status} ${response.reason}\r\n")
                 append("Content-Type: ${response.contentType}\r\n")
                 append("Content-Length: ${response.body.size}\r\n")
+                for ((name, value) in response.headers) {
+                    append("$name: $value\r\n")
+                }
                 append("Accept-Ranges: none\r\n")
                 append("Connection: close\r\n")
                 append("\r\n")
@@ -262,11 +304,86 @@ internal class LoopbackHttpFixture {
         }
     }
 
+    /**
+     * One response that never completes, and the connections that waited for it.
+     */
+    class Stall internal constructor(
+        val url: String,
+        private val mContentType: String,
+        private val mHead: ByteArray,
+        private val mIsHeadSent: Boolean
+    ) {
+
+        private val mOpenConnections = AtomicInteger()
+
+        private val mConnections = AtomicInteger()
+
+        /**
+         * Connections still waiting for the rest of the response.
+         */
+        fun openConnections(): Int {
+            return mOpenConnections.get()
+        }
+
+        /**
+         * Connections ever made, open or closed.
+         */
+        fun connections(): Int {
+            return mConnections.get()
+        }
+
+        /**
+         * Sends what this stall sends, then waits until the client closes [socket] or the fixture
+         * stops. The wait polls, because a blocked socket read cannot be interrupted.
+         */
+        internal fun hold(socket: Socket) {
+            mConnections.incrementAndGet()
+            mOpenConnections.incrementAndGet()
+            try {
+                if (mIsHeadSent) {
+                    val output = socket.getOutputStream()
+                    val head = buildString {
+                        append("HTTP/1.1 $HTTP_OK OK\r\n")
+                        append("Content-Type: $mContentType\r\n")
+                        append("Connection: close\r\n")
+                        append("\r\n")
+                    }
+                    output.write(head.toByteArray(Charsets.US_ASCII))
+                    output.write(mHead)
+                    output.flush()
+                }
+                socket.soTimeout = POLL_MILLIS
+                val input = socket.getInputStream()
+                while (Thread.currentThread().isInterrupted.not()) {
+                    try {
+                        if (input.read() == END_OF_STREAM) {
+                            return
+                        }
+                    } catch (exception: SocketTimeoutException) {
+                        /* Still open; look again. */
+                    }
+                }
+            } catch (exception: IOException) {
+                /* The client reset the connection, which ends a stall too. */
+            } finally {
+                mOpenConnections.decrementAndGet()
+            }
+        }
+
+        private companion object {
+
+            const val POLL_MILLIS = 100
+
+            const val END_OF_STREAM = -1
+        }
+    }
+
     private class Response(
         val status: Int,
         val reason: String,
         val contentType: String,
-        val body: ByteArray
+        val body: ByteArray,
+        val headers: Map<String, String> = emptyMap()
     )
 
     companion object {
@@ -276,6 +393,10 @@ internal class LoopbackHttpFixture {
         const val HTTP_FORBIDDEN = 403
 
         const val HTTP_NOT_FOUND = 404
+
+        const val HTTP_FOUND = 302
+
+        const val HTTP_TEMPORARY_REDIRECT = 307
 
         const val AUDIO_WAV = "audio/wav"
 

@@ -20,6 +20,8 @@ import android.net.Uri
 import androidx.core.util.Pair
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
+import com.yuriy.openradio.shared.utils.GatedInputStream
+import com.yuriy.openradio.shared.utils.NetworkPermit
 import com.yuriy.openradio.shared.utils.NetUtils
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
@@ -48,10 +50,11 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         context: Context, uri: Uri,
         parameters: List<Pair<String, String>>,
         contentTypeFilter: String?,
-        maxBytes: Int
+        maxBytes: Int,
+        permit: NetworkPermit
     ): ByteArray {
         val task = BytesDownloader(
-            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING, maxBytes
+            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING, maxBytes, permit
         )
         return mExecutor.submit(task).get()
     }
@@ -62,7 +65,8 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         private val mUri: Uri,
         private val mParameters: List<Pair<String, String>>,
         private val mContentTypeFilter: String,
-        private val mMaxBytes: Int = DownloaderLayer.NO_LIMIT
+        private val mMaxBytes: Int = DownloaderLayer.NO_LIMIT,
+        private val mPermit: NetworkPermit = NetworkPermit { true }
     ) : Callable<ByteArray> {
 
         override fun call(): ByteArray {
@@ -74,13 +78,18 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
             )
 
             fun openConnection(): Response {
+                if (mPermit.mayContinue().not()) {
+                    AppLogger.i("$CLASS_NAME $mUri not requested, the network may not be used")
+                    return Response()
+                }
                 val url = mResolver.resolve(mUri, mParameters) ?: return Response()
                 AppLogger.i("$CLASS_NAME Request URL:$url")
                 val connection = NetUtils.getHttpURLConnection(
                     mContext,
                     url,
                     if (mParameters.isEmpty()) NetUtils.HTTP_METHOD_GET else NetUtils.HTTP_METHOD_POST,
-                    mParameters
+                    mParameters,
+                    mPermit
                 ) ?: return Response()
                 var responseCode = 0
                 try {
@@ -128,11 +137,21 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
             }
 
             try {
-                val inputStream = BufferedInputStream(connection.inputStream)
-                response = toByteArray(inputStream, mMaxBytes)
-                    ?: ByteArray(0).also {
+                val held = mPermit.hold(connection) {
+                    val gated = GatedInputStream(connection.inputStream, mPermit::mayContinue)
+                    val content = toByteArray(BufferedInputStream(gated), mMaxBytes)
+                    if (gated.isCutShort) ByteRead.CutShort else content
+                }
+                val read = if (held is NetworkPermit.Held.Answered) held.value else ByteRead.CutShort
+                response = when (read) {
+                    is ByteRead.Done -> read.bytes
+                    ByteRead.CutShort -> ByteArray(0).also {
+                        AppLogger.i("$CLASS_NAME stopped reading ${responseObj.url}, the network may not be used")
+                    }
+                    ByteRead.TooLong -> ByteArray(0).also {
                         AppLogger.e("$CLASS_NAME more than $mMaxBytes bytes at ${responseObj.url}")
                     }
+                }
             } catch (exception: IOException) {
                 AppLogger.e(
                     "$CLASS_NAME getStream ${
@@ -148,6 +167,27 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
             AppLogger.d("$CLASS_NAME return ${response.size} bytes for ${responseObj.url}")
             return response
         }
+    }
+
+    /**
+     * How reading a response body ended.
+     */
+    private sealed class ByteRead {
+
+        /**
+         * The whole body, [bytes].
+         */
+        class Done(val bytes: ByteArray) : ByteRead()
+
+        /**
+         * The body was longer than the caller allowed.
+         */
+        object TooLong : ByteRead()
+
+        /**
+         * The network may no longer be used, and the body was abandoned.
+         */
+        object CutShort : ByteRead()
     }
 
     companion object {
@@ -169,20 +209,21 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
          * Reads [input] whole.
          *
          * @param maxBytes Most that may be read, or [DownloaderLayer.NO_LIMIT].
-         * @return The content, or null when there is more of it than [maxBytes]. A response that
-         * long is not the document the caller asked for, so it is refused rather than cut short.
+         * @return The content, or [ByteRead.TooLong] when there is more of it than [maxBytes]. A
+         * response that long is not the document the caller asked for, so it is refused rather
+         * than cut short.
          */
         @Throws(IOException::class)
-        private fun toByteArray(input: InputStream, maxBytes: Int): ByteArray? {
+        private fun toByteArray(input: InputStream, maxBytes: Int): ByteRead {
             val output = ByteArrayOutputStream()
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
             while (true) {
                 val read = input.read(buffer)
                 if (read == EOF) {
-                    return output.toByteArray()
+                    return ByteRead.Done(output.toByteArray())
                 }
                 if (maxBytes != DownloaderLayer.NO_LIMIT && output.size() + read > maxBytes) {
-                    return null
+                    return ByteRead.TooLong
                 }
                 output.write(buffer, 0, read)
             }

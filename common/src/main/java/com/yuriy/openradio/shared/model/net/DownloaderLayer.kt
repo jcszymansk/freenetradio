@@ -20,6 +20,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.util.Pair
 import com.yuriy.openradio.shared.utils.AppUtils
+import com.yuriy.openradio.shared.utils.NetworkPermit
 
 /**
  * Created by Yuriy Chernyshov
@@ -45,6 +46,10 @@ interface DownloaderLayer {
      * discarded rather than truncated, because half a document is not a shorter document. Pass a
      * limit whenever the address comes from downloaded content: a url that looks like a playlist
      * can answer with a live stream that never ends.
+     * @param permit Whether the transfer may go on, asked on the downloading thread before every
+     * connection and every read, and holding the connection while it is read so that revoking
+     * the permit disconnects it. A transfer it stops is abandoned, and its partial content is
+     * discarded the same way as a response over [maxBytes].
      * @return Downloaded data, or an empty array when nothing could be read.
      */
     fun downloadDataFromUri(
@@ -52,7 +57,8 @@ interface DownloaderLayer {
         uri: Uri,
         parameters: List<Pair<String, String>> = ArrayList(),
         contentTypeFilter: String? = AppUtils.EMPTY_STRING,
-        maxBytes: Int = NO_LIMIT
+        maxBytes: Int = NO_LIMIT,
+        permit: NetworkPermit = NetworkPermit { true }
     ): ByteArray
 
     companion object {

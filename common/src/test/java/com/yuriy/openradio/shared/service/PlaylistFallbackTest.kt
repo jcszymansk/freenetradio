@@ -369,6 +369,111 @@ class PlaylistFallbackTest {
     }
 
     @Test
+    fun aBlockedReadPausesTheStationForThePolicyAndEndsIdle() {
+        val step = Resolving(FIRST_READ).onReadBlocked(FIRST_READ)
+
+        assertEquals(Step(Idle(1), Action.PauseForNetworkPolicy(STATION)), step)
+    }
+
+    @Test
+    fun aBlockedReadOfAnotherRequestIsIgnored() {
+        val current = Resolving(Resolution(STATION, 2))
+
+        assertEquals(Step(current, Action.Ignore), current.onReadBlocked(FIRST_READ))
+    }
+
+    @Test
+    fun aBlockedReadIsIgnoredWhenNoReadIsPending() {
+        val states = listOf(
+            Idle(1),
+            Trying(STATION, listOf(URL_A), 1),
+            Exhausted(STATION, 1),
+        )
+
+        for (state in states) {
+            assertEquals(state.toString(), Step(state, Action.Ignore), state.onReadBlocked(FIRST_READ))
+        }
+    }
+
+    @Test
+    fun onlyResolvingHasAReadPending() {
+        assertTrue(Resolving(FIRST_READ).isReadPending)
+        assertFalse(Idle(1).isReadPending)
+        assertFalse(Trying(STATION, listOf(URL_A), 1).isReadPending)
+        assertFalse(Exhausted(STATION, 1).isReadPending)
+    }
+
+    @Test
+    fun abandoningAPendingReadLeavesNothingResolvedAndKeepsTheReadCount() {
+        assertEquals(Idle(1), Resolving(FIRST_READ).abandonRead())
+    }
+
+    /**
+     * A station the policy paused resumes from where it was: one trying a stream its playlist named
+     * keeps that stream and the ones after it, and one that was given up on stays given up on.
+     */
+    @Test
+    fun abandoningAReadKeepsEveryStateWithoutOne() {
+        val states = listOf(
+            Idle(1),
+            Trying(STATION, listOf(URL_A), 1),
+            Exhausted(STATION, 1),
+        )
+
+        for (state in states) {
+            assertEquals(state.toString(), state, state.abandonRead())
+        }
+    }
+
+    /**
+     * The policy pauses the station while its playlist is read. The read answers afterwards, but
+     * the station is paused and that answer is no longer anyone's; once it resumes, its own url
+     * fails again and the playlist is read again, for the resumed request.
+     */
+    @Test
+    fun aReadAbandonedForThePolicyIsIgnoredAndTheResumedStationReadsItsPlaylistAgain() {
+        val (pending, _) = fold(Idle(), Unrecognized(STATION))
+        val secondRead = Resolution(STATION, 2)
+
+        val (state, actions) = fold(
+            pending.abandonRead(),
+            Resolved(FIRST_READ, listOf(URL_A)),
+            Unrecognized(STATION),
+            Resolved(secondRead, listOf(URL_B)),
+        )
+
+        assertEquals(Trying(STATION, emptyList(), 2), state)
+        assertEquals(
+            listOf(Action.Ignore, Action.Resolve(secondRead), Action.Play(STATION, URL_B)),
+            actions,
+        )
+    }
+
+    @Test
+    fun aStationWhoseReadWasBlockedReadsItsPlaylistAgainWhenItResumes() {
+        val secondRead = Resolution(STATION, 2)
+
+        val (state, actions) = fold(
+            Idle(),
+            Unrecognized(STATION),
+            ReadBlocked(FIRST_READ),
+            Unrecognized(STATION),
+            Resolved(secondRead, listOf(URL_A)),
+        )
+
+        assertEquals(Trying(STATION, emptyList(), 2), state)
+        assertEquals(
+            listOf(
+                Action.Resolve(FIRST_READ),
+                Action.PauseForNetworkPolicy(STATION),
+                Action.Resolve(secondRead),
+                Action.Play(STATION, URL_A),
+            ),
+            actions,
+        )
+    }
+
+    @Test
     fun everyCommandThatStartsStopsOrChangesPlaybackIsAPlayRequest() {
         val requests = mapOf(
             "COMMAND_PLAY_PAUSE" to Player.COMMAND_PLAY_PAUSE,
@@ -418,6 +523,11 @@ class PlaylistFallbackTest {
     private data class Resolved(val resolution: Resolution, val urls: List<String>) : Event() {
 
         override fun applyTo(state: PlaylistFallback) = state.onResolved(resolution, urls)
+    }
+
+    private data class ReadBlocked(val resolution: Resolution) : Event() {
+
+        override fun applyTo(state: PlaylistFallback) = state.onReadBlocked(resolution)
     }
 
     /**
