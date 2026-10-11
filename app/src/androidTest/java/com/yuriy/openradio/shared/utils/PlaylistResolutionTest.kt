@@ -240,6 +240,29 @@ class PlaylistResolutionTest {
     }
 
     /**
+     * The network refuses the playlist the station's names, and is usable again by the time the
+     * read looks back. The refusal still counts: without the playlist it references, the station's
+     * names nothing, and answering that as an empty playlist would give up on the station rather
+     * than pause it. The predicate refuses only on the downloader's threads, which is the race.
+     */
+    @Test
+    fun aPlaylistItNamesThatTheNetworkRefusedIsBlockedEvenOnceTheNetworkIsUsableAgain() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val referenced = mServer.serve(
+            "/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY><REF href=\"$stream\"/></ENTRY></ASX>"
+        )
+        val playlist = entryRefTo(referenced, "/station.asx")
+        val downloader = RecordingDownloader(HTTPDownloaderImpl(DirectUrlResolver()))
+        val reader = Thread.currentThread()
+
+        val answer = read(playlist, downloader) { Thread.currentThread() == reader }
+
+        assertEquals(PlaylistRead.Blocked, answer)
+        assertEquals(listOf(referenced), downloader.reads)
+        assertEquals(listOf("/station.asx"), mServer.requestedPaths())
+    }
+
+    /**
      * Runs [read] on its own thread while [broadcast] sends, bars the network once the transfer is
      * under way, and returns what the read answered.
      */

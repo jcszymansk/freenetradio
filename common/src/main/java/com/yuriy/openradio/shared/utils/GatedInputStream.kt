@@ -49,6 +49,9 @@ class GatedInputStream(
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (length == 0) {
+            return super.read(buffer, offset, length)
+        }
         if (isOpen().not()) {
             return END_OF_STREAM
         }

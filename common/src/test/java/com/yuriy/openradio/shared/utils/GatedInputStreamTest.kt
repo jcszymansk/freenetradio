@@ -117,6 +117,31 @@ class GatedInputStreamTest {
         assertTrue(stream.isCutShort)
     }
 
+    /**
+     * A zero-length read answers nothing read, never the end of the stream, which a reader can
+     * use to probe a stream without taking from it.
+     */
+    @Test
+    fun aZeroLengthReadAnswersZeroWithoutAsking() {
+        var questions = 0
+        val stream = GatedInputStream(ByteArrayInputStream(CONTENT)) {
+            questions++
+            false
+        }
+
+        assertEquals(0, stream.read(ByteArray(4), 0, 0))
+        assertEquals(0, questions)
+        assertFalse(stream.isCutShort)
+    }
+
+    @Test
+    fun aZeroLengthReadOfAStreamCutShortAnswersZero() {
+        val stream = GatedInputStream(ByteArrayInputStream(CONTENT)) { false }
+        stream.read()
+
+        assertEquals(0, stream.read(ByteArray(4), 0, 0))
+    }
+
     @Test
     fun markIsNotOffered() {
         assertFalse(GatedInputStream(ByteArrayInputStream(CONTENT)) { true }.markSupported())

@@ -207,32 +207,20 @@ object NetUtils {
     fun extractUrlsFromPlaylist(
         context: Context, downloader: DownloaderLayer, playlistUrl: String, mayUseNetwork: () -> Boolean
     ): PlaylistRead {
-        if (mayUseNetwork().not()) {
+        val permit = NetworkPermit(mayUseNetwork)
+        if (permit.mayContinue().not()) {
             AppLogger.i("$CLASS_NAME playlist $playlistUrl not opened, the network may not be used")
             return PlaylistRead.Blocked
         }
         val connection = getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET)
             ?: return PlaylistRead.Urls(listOf(AppUtils.EMPTY_STRING))
         var result = listOf(AppUtils.EMPTY_STRING)
-        var isBlocked = false
-        val parser = AutoDetectParser { url ->
-            if (mayUseNetwork().not()) {
-                AppLogger.i("$CLASS_NAME playlist $url not read, the network may not be used")
-                isBlocked = true
-                return@AutoDetectParser ByteArray(0)
-            }
-            val content = fetchPlaylist(context, downloader, url, mayUseNetwork)
-            if (mayUseNetwork().not()) {
-                AppLogger.i("$CLASS_NAME playlist $url read while the network turned unusable")
-                isBlocked = true
-            }
-            content
-        }
+        val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url, permit::mayContinue) }
         val playlist = Playlist()
         val contentType = connection.contentType
         var gated: GatedInputStream? = null
         try {
-            gated = GatedInputStream(connection.inputStream, mayUseNetwork)
+            gated = GatedInputStream(connection.inputStream, permit::mayContinue)
             parser.parse(playlistUrl, contentType, gated, playlist)
             result = playlist.playlistEntries.map { it[PlaylistEntry.URI] }
             AppLogger.d("Found ${result.size} streams associated with $playlistUrl:")
@@ -250,7 +238,8 @@ object NetUtils {
                 /**/
             }
         }
-        if (isBlocked || gated?.isCutShort == true) {
+        if (permit.isRevoked) {
+            AppLogger.i("$CLASS_NAME playlist $playlistUrl read cut short, the network may not be used")
             return PlaylistRead.Blocked
         }
         return PlaylistRead.Urls(result)
