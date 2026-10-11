@@ -3,11 +3,11 @@ id: TASK-104
 title: >-
   Keep the playlist fallback off blocked mobile data and resumable through a
   policy pause
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-10-10 06:59'
-updated_date: '2026-10-11 17:45'
+updated_date: '2026-10-11 19:48'
 labels: []
 milestone: m-1
 dependencies: []
@@ -23,10 +23,10 @@ OpenRadioService resolves a station url the player could not read as a playlist,
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 No playlist is downloaded while playback over the mobile network is blocked
-- [ ] #2 A station whose playlist resolution meets a policy pause resumes when a network it may use connects
-- [ ] #3 The service's own stop before a playlist read no longer counts as the user stopping the station
-- [ ] #4 Covered by a test that needs neither a network nor a real stream
+- [x] #1 No playlist is downloaded while playback over the mobile network is blocked
+- [x] #2 A station whose playlist resolution meets a policy pause resumes when a network it may use connects
+- [x] #3 The service's own stop before a playlist read no longer counts as the user stopping the station
+- [x] #4 Covered by a test that needs neither a network nor a real stream
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -39,4 +39,18 @@ OpenRadioService resolves a station url the player could not read as a playlist,
 5. OpenRadioService: resolvePlaylist checks the policy before reading and passes the policy as the predicate; one main-thread pauseForNetworkPolicy path abandons a pending read and pauses the player, used by the connectivity and settings events, by a blocked read, and by playResolvedStream when the policy blocks the resolved stream (which keeps the resolved url so the resume plays it).
 6. NetworkLayerImpl's network type becomes @Volatile, since the predicate reads it from the IO thread.
 7. Tests: PlaylistFallbackTest and NetworkRecoveryTest on the JVM; PlaylistResolutionTest (no request reaches the loopback server while blocked, nested reads stop when the policy trips) and OpenRadioPlayerPolicyPauseTest (a stop for a playlist read is not a user stop, and a policy pause during it resumes) on the offline emulator.
+
+8. Review rounds 1-7 extended step 3: a NetworkPermit (one per playlist read) asks the policy before every request, every redirect hop (GET redirects are now followed in getHttpURLConnection) and, through GatedInputStream, every read; it latches the first refusal so a read the policy stopped is never mistaken for an empty one. The service revokes the permits of reads under way on a policy pause (off the main thread); revocation disconnects held connections, a connection only starts through NetworkPermit.connect under a lock revoke also takes, and the policy is asked again at that start.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Validation: ./gradlew test, verifyPureCoreCoverage, assembleDebug and :app:assembleDebugAndroidTest pass. Full :app:connectedDebugAndroidTest on the offline test34 emulator: 252/252 on the final commit (OpenRadioPlayerPolicyPauseTest.aStationThePolicyPausedPlaysAgainOverANewConnectionWhenResumed is flaky on master too, about one run in five, filed as TASK-106). Mutation checks: the player's awaited-stream handling, GatedInputStream, the NetworkPermit latch, revoke disconnecting, the connect lock and the policy check at connect each turn the matching tests red. Codex review loop: 7 rounds, last verdict FAIL on two findings that round 7 fixed; the loop hit its round limit before reviewing that fix, and the user chose to close as is. Residual: the policy turning between the final check at connect and the system connect call cannot be closed. Not verified on a real phone on blocked mobile data. Every GET in the app now follows redirects in NetUtils rather than in HttpURLConnection, verified only against the loopback server.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+A station url the player could not read is no longer resolved over blocked mobile data, and a station whose playlist resolution meets a policy pause resumes on a usable network. The service stops the player for a replacement stream through OpenRadioPlayer.stopForReplacementStream, which is not a user stop, and the policy pause counts such a station as wanted. PlaylistFallback gained onReadBlocked and abandonRead, and a blocked resolved stream pauses for the policy instead of giving up. Playlist reads go through a per-read NetworkPermit that checks the policy before every request, redirect hop and read, and that the service revokes on a policy pause to disconnect reads under way. Verified by PlaylistFallbackTest, NetworkRecoveryTest, GatedInputStreamTest, NetworkPermitTest, PlaylistResolutionTest and OpenRadioPlayerPolicyPauseTest, with the full JVM and offline instrumented suites passing.
+<!-- SECTION:FINAL_SUMMARY:END -->
