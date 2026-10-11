@@ -20,6 +20,7 @@ import android.net.Uri
 import androidx.core.util.Pair
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
+import com.yuriy.openradio.shared.utils.GatedInputStream
 import com.yuriy.openradio.shared.utils.NetUtils
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
@@ -48,10 +49,11 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         context: Context, uri: Uri,
         parameters: List<Pair<String, String>>,
         contentTypeFilter: String?,
-        maxBytes: Int
+        maxBytes: Int,
+        mayUseNetwork: () -> Boolean
     ): ByteArray {
         val task = BytesDownloader(
-            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING, maxBytes
+            context, mResolver, uri, parameters, contentTypeFilter ?: AppUtils.EMPTY_STRING, maxBytes, mayUseNetwork
         )
         return mExecutor.submit(task).get()
     }
@@ -62,7 +64,8 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         private val mUri: Uri,
         private val mParameters: List<Pair<String, String>>,
         private val mContentTypeFilter: String,
-        private val mMaxBytes: Int = DownloaderLayer.NO_LIMIT
+        private val mMaxBytes: Int = DownloaderLayer.NO_LIMIT,
+        private val mMayUseNetwork: () -> Boolean = { true }
     ) : Callable<ByteArray> {
 
         override fun call(): ByteArray {
@@ -74,6 +77,10 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
             )
 
             fun openConnection(): Response {
+                if (mMayUseNetwork().not()) {
+                    AppLogger.i("$CLASS_NAME $mUri not requested, the network may not be used")
+                    return Response()
+                }
                 val url = mResolver.resolve(mUri, mParameters) ?: return Response()
                 AppLogger.i("$CLASS_NAME Request URL:$url")
                 val connection = NetUtils.getHttpURLConnection(
@@ -128,11 +135,17 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
             }
 
             try {
-                val inputStream = BufferedInputStream(connection.inputStream)
-                response = toByteArray(inputStream, mMaxBytes)
-                    ?: ByteArray(0).also {
+                val gated = GatedInputStream(connection.inputStream, mMayUseNetwork)
+                val content = toByteArray(BufferedInputStream(gated), mMaxBytes)
+                response = when {
+                    gated.isCutShort -> ByteArray(0).also {
+                        AppLogger.i("$CLASS_NAME stopped reading ${responseObj.url}, the network may not be used")
+                    }
+                    content == null -> ByteArray(0).also {
                         AppLogger.e("$CLASS_NAME more than $mMaxBytes bytes at ${responseObj.url}")
                     }
+                    else -> content
+                }
             } catch (exception: IOException) {
                 AppLogger.e(
                     "$CLASS_NAME getStream ${

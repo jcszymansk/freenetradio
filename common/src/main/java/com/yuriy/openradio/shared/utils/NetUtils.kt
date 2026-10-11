@@ -26,7 +26,6 @@ import wseemann.media.jplaylistparser.playlist.Playlist
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.BufferedWriter
 import java.io.IOException
-import java.io.InputStream
 import java.io.OutputStreamWriter
 import java.io.UnsupportedEncodingException
 import java.net.HttpURLConnection
@@ -194,17 +193,16 @@ object NetUtils {
      * format is recognised. Every playlist it names in turn is read through [downloader].
      *
      * Playback may be barred from the current network, which is what [mayUseNetwork] answers, and
-     * reading a station's playlist is part of playing it. It is asked before the station url is
-     * opened and before every playlist that one names is read, so no request starts while the
-     * network is barred. A request already under way when that changes runs to its end, and the
-     * answer then depends on whether any request was skipped.
+     * reading a station's playlist is part of playing it. It is asked before every request and
+     * before every read of a response, so no request starts, and no transfer goes on, once the
+     * network is barred.
      *
      * @param downloader Reads the playlists that [playlistUrl] names.
      * @param mayUseNetwork Whether playback may use the network the device is on now. It is
-     * called on the thread this runs on.
-     * @return [PlaylistRead.Blocked] when a request was skipped, otherwise [PlaylistRead.Urls]
-     * with the stream urls, none when the playlist names none, or one empty string when
-     * [playlistUrl] cannot be opened.
+     * called on the thread this runs on and on the threads [downloader] reads on.
+     * @return [PlaylistRead.Blocked] when the network was barred before the read finished,
+     * otherwise [PlaylistRead.Urls] with the stream urls, none when the playlist names none, or
+     * one empty string when [playlistUrl] cannot be opened.
      */
     fun extractUrlsFromPlaylist(
         context: Context, downloader: DownloaderLayer, playlistUrl: String, mayUseNetwork: () -> Boolean
@@ -215,23 +213,27 @@ object NetUtils {
         }
         val connection = getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET)
             ?: return PlaylistRead.Urls(listOf(AppUtils.EMPTY_STRING))
-        var inputStream: InputStream? = null
         var result = listOf(AppUtils.EMPTY_STRING)
         var isBlocked = false
         val parser = AutoDetectParser { url ->
-            if (mayUseNetwork()) {
-                fetchPlaylist(context, downloader, url)
-            } else {
+            if (mayUseNetwork().not()) {
                 AppLogger.i("$CLASS_NAME playlist $url not read, the network may not be used")
                 isBlocked = true
-                ByteArray(0)
+                return@AutoDetectParser ByteArray(0)
             }
+            val content = fetchPlaylist(context, downloader, url, mayUseNetwork)
+            if (mayUseNetwork().not()) {
+                AppLogger.i("$CLASS_NAME playlist $url read while the network turned unusable")
+                isBlocked = true
+            }
+            content
         }
         val playlist = Playlist()
         val contentType = connection.contentType
+        var gated: GatedInputStream? = null
         try {
-            inputStream = connection.inputStream
-            parser.parse(playlistUrl, contentType, inputStream, playlist)
+            gated = GatedInputStream(connection.inputStream, mayUseNetwork)
+            parser.parse(playlistUrl, contentType, gated, playlist)
             result = playlist.playlistEntries.map { it[PlaylistEntry.URI] }
             AppLogger.d("Found ${result.size} streams associated with $playlistUrl:")
             for (url in result) {
@@ -242,15 +244,13 @@ object NetUtils {
             AppLogger.e(errorMessage, e)
         } finally {
             closeHttpURLConnection(connection)
-            if (inputStream != null) {
-                try {
-                    inputStream.close()
-                } catch (e: IOException) {
-                    /**/
-                }
+            try {
+                gated?.close()
+            } catch (e: IOException) {
+                /**/
             }
         }
-        if (isBlocked) {
+        if (isBlocked || gated?.isCutShort == true) {
             return PlaylistRead.Blocked
         }
         return PlaylistRead.Urls(result)
@@ -260,10 +260,14 @@ object NetUtils {
      * Adapts [downloader] to the parsers' [wseemann.media.jplaylistparser.parser.PlaylistFetcher],
      * which answers a failed read with no content.
      */
-    private fun fetchPlaylist(context: Context, downloader: DownloaderLayer, url: String): ByteArray {
+    private fun fetchPlaylist(
+        context: Context, downloader: DownloaderLayer, url: String, mayUseNetwork: () -> Boolean
+    ): ByteArray {
         AppLogger.d("$CLASS_NAME reading playlist $url")
         return try {
-            downloader.downloadDataFromUri(context, Uri.parse(url), maxBytes = PLAYLIST_MAX_BYTES)
+            downloader.downloadDataFromUri(
+                context, Uri.parse(url), maxBytes = PLAYLIST_MAX_BYTES, mayUseNetwork = mayUseNetwork
+            )
         } catch (exception: ExecutionException) {
             AppLogger.e("$CLASS_NAME can not read playlist $url", exception)
             ByteArray(0)

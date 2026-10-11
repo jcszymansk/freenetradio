@@ -30,10 +30,16 @@ import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.Callable
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * What [NetUtils.extractUrlsFromPlaylist] answers, which is what
@@ -181,47 +187,100 @@ class PlaylistResolutionTest {
     }
 
     /**
-     * The network can become one playback may not use while a playlist is read. The playlists it
-     * names are not read then, and what was read so far is not answered as the playlist: without
-     * the playlist it references, the station's own names nothing, and that is not the same as a
-     * playlist that names nothing.
+     * The downloader reads every playlist the station's names, and makes no request of its own
+     * while the network may not be used.
      */
     @Test
-    fun aPlaylistItNamesIsNotReadOnceTheNetworkMayNotBeUsed() {
-        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
-        val referenced = mServer.serve(
-            "/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY><REF href=\"$stream\"/></ENTRY></ASX>"
-        )
-        val playlist = entryRefTo(referenced, "/station.asx")
-        val downloader = RecordingDownloader(HTTPDownloaderImpl(DirectUrlResolver()))
-        val answers = ArrayDeque(listOf(true, false))
+    fun theDownloaderMakesNoRequestWhileTheNetworkMayNotBeUsed() {
+        val referenced = mServer.serve("/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX></ASX>")
 
-        assertEquals(PlaylistRead.Blocked, read(playlist, downloader) { answers.removeFirst() })
-        assertEquals(emptyList<String>(), downloader.reads)
-        assertEquals(listOf("/station.asx"), mServer.requestedPaths())
-        assertEquals("the network was not asked before each request", 0, answers.size)
+        val content = HTTPDownloaderImpl(DirectUrlResolver())
+            .downloadDataFromUri(mContext, Uri.parse(referenced), mayUseNetwork = { false })
+
+        assertEquals(0, content.size)
+        assertEquals(emptyList<String>(), mServer.requestedPaths())
     }
 
     /**
-     * Asked before every request and only then: once for the station url, once for the playlist
-     * it references.
+     * The network can become one playback may not use while the station url is still being read,
+     * and a station url can answer with something that never ends. The read stops there, rather
+     * than at the end of the response, and the server sees the connection close.
      */
     @Test
-    fun theNetworkIsAskedAboutBeforeEveryRequest() {
-        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
-        val referenced = mServer.serve(
-            "/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY><REF href=\"$stream\"/></ENTRY></ASX>"
+    fun aStationUrlBeingReadStopsOnceTheNetworkMayNotBeUsed() {
+        val endless = mServer.broadcast(
+            "/endless.pls", LoopbackHttpFixture.AUDIO_PLS, "[playlist]\n".toByteArray(), BYTES_PER_SECOND
         )
-        val playlist = entryRefTo(referenced, "/station.asx")
-        var questions = 0
 
-        val answer = read(playlist) {
-            questions++
-            true
+        val answer = readUntilBarred(endless) { mayUseNetwork ->
+            read(endless.url) { mayUseNetwork.get() }
         }
 
-        assertEquals(PlaylistRead.Urls(listOf(stream)), answer)
-        assertEquals(2, questions)
+        assertEquals(PlaylistRead.Blocked, answer)
+        assertTransferEnded(endless)
+    }
+
+    /**
+     * The same for a playlist the station's names, which the downloader reads: the transfer stops
+     * once the network may not be used, and its partial content is not answered as the playlist.
+     */
+    @Test
+    fun aPlaylistItNamesBeingReadStopsOnceTheNetworkMayNotBeUsed() {
+        val endless = mServer.broadcast(
+            "/endless", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY>".toByteArray(), BYTES_PER_SECOND
+        )
+        val playlist = entryRefTo(endless.url, "/station.asx")
+
+        val answer = readUntilBarred(endless) { mayUseNetwork ->
+            read(playlist) { mayUseNetwork.get() }
+        }
+
+        assertEquals(PlaylistRead.Blocked, answer)
+        assertTransferEnded(endless)
+    }
+
+    /**
+     * Runs [read] on its own thread while [broadcast] sends, bars the network once the transfer is
+     * under way, and returns what the read answered.
+     */
+    private fun readUntilBarred(
+        broadcast: LoopbackHttpFixture.Broadcast,
+        read: (AtomicBoolean) -> PlaylistRead
+    ): PlaylistRead {
+        val mayUseNetwork = AtomicBoolean(true)
+        val reader = Executors.newSingleThreadExecutor()
+        try {
+            val answer = reader.submit(Callable { read(mayUseNetwork) })
+            await("the transfer to be under way") { broadcast.bytesSent() > TRANSFER_UNDER_WAY_BYTES }
+            assertFalse("The read ended before the network was barred", answer.isDone)
+            mayUseNetwork.set(false)
+            return answer.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } finally {
+            reader.shutdownNow()
+        }
+    }
+
+    /**
+     * Once the server notices the connection is gone it writes nothing more, so the count that
+     * matters is the one after the connection closed, held for many of the broadcast's chunks.
+     */
+    private fun assertTransferEnded(broadcast: LoopbackHttpFixture.Broadcast) {
+        await("the connection to the broadcast to close") { broadcast.openConnections() == 0 }
+        val sent = broadcast.bytesSent()
+        Thread.sleep(QUIET_MILLIS)
+        assertEquals("Bytes were sent after the network was barred", sent, broadcast.bytesSent())
+        assertEquals(1, broadcast.connections())
+    }
+
+    private fun await(what: String, condition: () -> Boolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            if (condition()) {
+                return
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+        fail("Timed out waiting for $what")
     }
 
     private fun entryRefTo(reference: String, path: String): String {
@@ -270,10 +329,11 @@ class PlaylistResolutionTest {
             uri: Uri,
             parameters: List<Pair<String, String>>,
             contentTypeFilter: String?,
-            maxBytes: Int
+            maxBytes: Int,
+            mayUseNetwork: () -> Boolean
         ): ByteArray {
             reads.add(uri.toString())
-            return mDelegate.downloadDataFromUri(context, uri, parameters, contentTypeFilter, maxBytes)
+            return mDelegate.downloadDataFromUri(context, uri, parameters, contentTypeFilter, maxBytes, mayUseNetwork)
         }
     }
 
@@ -293,6 +353,26 @@ class PlaylistResolutionTest {
     private companion object {
 
         const val AUDIO_MPEG = "audio/mpeg"
+
+        /**
+         * Slow enough that a megabyte would take a minute, so a read that is not stopped is still
+         * under way when the test looks.
+         */
+        const val BYTES_PER_SECOND = 16_000
+
+        /**
+         * A few of the broadcast's chunks past its head.
+         */
+        const val TRANSFER_UNDER_WAY_BYTES = 2_000L
+
+        const val TIMEOUT_SECONDS = 15L
+
+        const val POLL_MILLIS = 50L
+
+        /**
+         * Many times the 20 milliseconds between the broadcast's chunks.
+         */
+        const val QUIET_MILLIS = 2_000L
 
         const val VIDEO_ASF = "video/x-ms-asf"
 

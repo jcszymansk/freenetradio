@@ -151,8 +151,9 @@ on its extension and then on its first bytes, and an entry without a playlist ex
 a stream.
 
 Reading a station's playlist counts as playing it, so the mobile-network policy applies to it.
-`extractUrlsFromPlaylist` asks the policy before opening the station URL and before every playlist
-that one names, and answers `PlaylistRead.Blocked` when it skipped a request. A blocked read, and a
+`extractUrlsFromPlaylist` asks the policy before every request and, through `GatedInputStream`,
+before every read of a response, so a transfer already under way stops too; it answers
+`PlaylistRead.Blocked` when the policy cut the read short. A blocked read, and a
 read still under way when the policy pauses the station, end the `PlaylistFallback` request; the
 station resumes from its own URL on a network it may use and reads its playlist again.
 

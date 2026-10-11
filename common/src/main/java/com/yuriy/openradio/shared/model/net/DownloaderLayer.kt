@@ -45,6 +45,9 @@ interface DownloaderLayer {
      * discarded rather than truncated, because half a document is not a shorter document. Pass a
      * limit whenever the address comes from downloaded content: a url that looks like a playlist
      * can answer with a live stream that never ends.
+     * @param mayUseNetwork Whether the transfer may go on, asked on the downloading thread before
+     * every connection and every read. A transfer it stops is abandoned, and its partial content
+     * is discarded the same way as a response over [maxBytes].
      * @return Downloaded data, or an empty array when nothing could be read.
      */
     fun downloadDataFromUri(
@@ -52,7 +55,8 @@ interface DownloaderLayer {
         uri: Uri,
         parameters: List<Pair<String, String>> = ArrayList(),
         contentTypeFilter: String? = AppUtils.EMPTY_STRING,
-        maxBytes: Int = NO_LIMIT
+        maxBytes: Int = NO_LIMIT,
+        mayUseNetwork: () -> Boolean = { true }
     ): ByteArray
 
     companion object {
