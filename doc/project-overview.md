@@ -150,6 +150,12 @@ has followed and stops a chain at `AutoDetectParser.MAX_DEPTH`. A fetched playli
 on its extension and then on its first bytes, and an entry without a playlist extension is kept as
 a stream.
 
+Reading a station's playlist counts as playing it, so the mobile-network policy applies to it.
+`extractUrlsFromPlaylist` asks the policy before opening the station URL and before every playlist
+that one names, and answers `PlaylistRead.Blocked` when it skipped a request. A blocked read, and a
+read still under way when the policy pauses the station, end the `PlaylistFallback` request; the
+station resumes from its own URL on a network it may use and reads its playlist again.
+
 ## Playback
 
 `OpenRadioPlayer.kt` wraps:
