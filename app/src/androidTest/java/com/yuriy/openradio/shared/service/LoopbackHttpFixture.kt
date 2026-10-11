@@ -108,6 +108,15 @@ internal class LoopbackHttpFixture {
     }
 
     /**
+     * Redirects [path] to [location] with [status], and returns the url that reaches it.
+     * [location] is sent as given, so it can be relative.
+     */
+    fun redirect(path: String, status: Int, location: String): String {
+        mRoutes[path] = Response(status, "Redirect", TEXT_PLAIN, ByteArray(0), mapOf("Location" to location))
+        return url(path)
+    }
+
+    /**
      * @return the paths that were asked for, in the order they arrived.
      */
     fun requestedPaths(): List<String> {
@@ -161,6 +170,9 @@ internal class LoopbackHttpFixture {
                 append("HTTP/1.1 ${response.status} ${response.reason}\r\n")
                 append("Content-Type: ${response.contentType}\r\n")
                 append("Content-Length: ${response.body.size}\r\n")
+                for ((name, value) in response.headers) {
+                    append("$name: $value\r\n")
+                }
                 append("Accept-Ranges: none\r\n")
                 append("Connection: close\r\n")
                 append("\r\n")
@@ -266,7 +278,8 @@ internal class LoopbackHttpFixture {
         val status: Int,
         val reason: String,
         val contentType: String,
-        val body: ByteArray
+        val body: ByteArray,
+        val headers: Map<String, String> = emptyMap()
     )
 
     companion object {
@@ -276,6 +289,10 @@ internal class LoopbackHttpFixture {
         const val HTTP_FORBIDDEN = 403
 
         const val HTTP_NOT_FOUND = 404
+
+        const val HTTP_FOUND = 302
+
+        const val HTTP_TEMPORARY_REDIRECT = 307
 
         const val AUDIO_WAV = "audio/wav"
 

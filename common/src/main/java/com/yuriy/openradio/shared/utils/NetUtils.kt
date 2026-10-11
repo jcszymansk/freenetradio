@@ -52,6 +52,23 @@ object NetUtils {
     private const val USER_AGENT_PARAMETER_KEY = "User-Agent"
     private const val HEADER_FIELD_LOCATION = "Location"
 
+    /**
+     * Statuses whose Location a request is sent on to. 307 and 308 have no constant in
+     * [HttpURLConnection].
+     */
+    private val REDIRECT_CODES = setOf(
+        HttpURLConnection.HTTP_MOVED_PERM,
+        HttpURLConnection.HTTP_MOVED_TEMP,
+        HttpURLConnection.HTTP_SEE_OTHER,
+        307,
+        308
+    )
+
+    /**
+     * As many hops as a station url plausibly takes through trackers and load balancers.
+     */
+    private const val MAX_REDIRECTS = 10
+
     fun isWebUrl(url: String): Boolean {
         return if (url.isEmpty()) {
             false
@@ -60,31 +77,55 @@ object NetUtils {
     }
 
     private fun getHttpURLConnection(
-        context: Context, urlString: String, requestMethod: String
+        context: Context, urlString: String, requestMethod: String, mayUseNetwork: () -> Boolean = { true }
     ): HttpURLConnection? {
         return try {
-            getHttpURLConnection(context, URL(urlString), requestMethod, null)
+            getHttpURLConnection(context, URL(urlString), requestMethod, null, mayUseNetwork)
         } catch (exception: MalformedURLException) {
             AppLogger.e("Can not get http connection (1) from $urlString", exception)
             null
         }
     }
 
+    /**
+     * Opens [url] and follows the redirects it answers with.
+     *
+     * A request without a body follows every redirect here rather than inside
+     * [HttpURLConnection], so that [mayUseNetwork] is asked before each request that leaves the
+     * device, the hops included. A request with a body lets [HttpURLConnection] follow redirects
+     * within one protocol, because the method a redirected POST continues with depends on the
+     * status, and follows the rest here.
+     *
+     * @param mayUseNetwork Whether a request may be made now, asked before every one of them.
+     * @return The connection that answered last, or null when none could be opened or
+     * [mayUseNetwork] refused a request.
+     */
     fun getHttpURLConnection(
-        context: Context, url: URL, requestMethod: String, parameters: List<Pair<String, String>>?
+        context: Context,
+        url: URL,
+        requestMethod: String,
+        parameters: List<Pair<String, String>>?,
+        mayUseNetwork: () -> Boolean = { true }
     ): HttpURLConnection? {
         var connection: HttpURLConnection? = null
-        var isRedirect = false
+        var isRedirect: Boolean
         var connectUrl = url
-        var maxAttempt = 3
+        var redirects = 0
+        val body = parameters.orEmpty()
+        val hasBody = body.isNotEmpty()
 
         do {
+            isRedirect = false
+            if (mayUseNetwork().not()) {
+                AppLogger.i("$CLASS_NAME $connectUrl not requested, the network may not be used")
+                closeHttpURLConnection(connection)
+                return null
+            }
             try {
-                isRedirect = false
                 connection = connectUrl.openConnection() as HttpURLConnection
                 connection.readTimeout = AppUtils.TIME_OUT
                 connection.connectTimeout = AppUtils.TIME_OUT
-                connection.instanceFollowRedirects = true
+                connection.instanceFollowRedirects = hasBody
                 connection.useCaches = false
                 connection.defaultUseCaches = false
                 connection.requestMethod = requestMethod
@@ -97,35 +138,38 @@ object NetUtils {
                 AppLogger.d("$CLASS_NAME UserAgent:$userAgent")
 
                 // If there are http request parameters:
-                if (!parameters.isNullOrEmpty()) {
+                if (hasBody) {
                     connection.setRequestProperty("enctype", "application/x-www-form-urlencoded")
                     try {
                         connection.outputStream.use { outputStream ->
                             BufferedWriter(OutputStreamWriter(outputStream, Charsets.UTF_8)).use { writer ->
-                                writer.write(getPostParametersQuery(parameters))
+                                writer.write(getPostParametersQuery(body))
                                 writer.flush()
                             }
                         }
                     } catch (exception: IOException) {
                         AppLogger.e(
-                            " ${createExceptionMessage(url.toString(), parameters)}", exception
+                            " ${createExceptionMessage(url.toString(), body)}", exception
 
                         )
                     }
                 }
                 connection.connect()
                 val responseCode = connection.responseCode
-                if (responseCode == HttpURLConnection.HTTP_MOVED_PERM
-                    || responseCode == HttpURLConnection.HTTP_MOVED_TEMP
-                ) {
-                    if (maxAttempt-- <= 0) {
+                if (responseCode in REDIRECT_CODES) {
+                    if (redirects++ >= MAX_REDIRECTS) {
                         AppLogger.e("$CLASS_NAME redirect reached max attempts number")
                         break
                     }
-                    val newUrl = connection.getHeaderField(HEADER_FIELD_LOCATION)
+                    val location = connection.getHeaderField(HEADER_FIELD_LOCATION)
+                    if (location == null) {
+                        AppLogger.e("$CLASS_NAME redirect $responseCode from $connectUrl names no location")
+                        break
+                    }
+                    val newUrl = URL(connectUrl, location)
                     connection.disconnect()
-                    AppLogger.i("$CLASS_NAME redirect from $connectUrl to $newUrl")
-                    connectUrl = URL(newUrl)
+                    AppLogger.i("$CLASS_NAME redirect $responseCode from $connectUrl to $newUrl")
+                    connectUrl = newUrl
                     isRedirect = true
                 }
             } catch (exception: Exception) {
@@ -208,12 +252,14 @@ object NetUtils {
         context: Context, downloader: DownloaderLayer, playlistUrl: String, mayUseNetwork: () -> Boolean
     ): PlaylistRead {
         val permit = NetworkPermit(mayUseNetwork)
-        if (permit.mayContinue().not()) {
-            AppLogger.i("$CLASS_NAME playlist $playlistUrl not opened, the network may not be used")
-            return PlaylistRead.Blocked
+        val connection = getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET, permit::mayContinue)
+        if (connection == null) {
+            if (permit.isRevoked) {
+                AppLogger.i("$CLASS_NAME playlist $playlistUrl not opened, the network may not be used")
+                return PlaylistRead.Blocked
+            }
+            return PlaylistRead.Urls(listOf(AppUtils.EMPTY_STRING))
         }
-        val connection = getHttpURLConnection(context, playlistUrl, HTTP_METHOD_GET)
-            ?: return PlaylistRead.Urls(listOf(AppUtils.EMPTY_STRING))
         var result = listOf(AppUtils.EMPTY_STRING)
         val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url, permit::mayContinue) }
         val playlist = Playlist()

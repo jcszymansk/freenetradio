@@ -87,7 +87,8 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
                     mContext,
                     url,
                     if (mParameters.isEmpty()) NetUtils.HTTP_METHOD_GET else NetUtils.HTTP_METHOD_POST,
-                    mParameters
+                    mParameters,
+                    mMayUseNetwork
                 ) ?: return Response()
                 var responseCode = 0
                 try {

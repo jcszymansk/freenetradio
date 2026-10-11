@@ -263,6 +263,57 @@ class PlaylistResolutionTest {
     }
 
     /**
+     * Station urls commonly redirect to where the playlist is, with absolute and relative
+     * locations alike; the read follows every hop.
+     */
+    @Test
+    fun aRedirectedStationUrlIsFollowedToItsPlaylist() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        mServer.serve("/stream.pls", LoopbackHttpFixture.AUDIO_PLS, pls(stream))
+        mServer.redirect("/moved.pls", LoopbackHttpFixture.HTTP_TEMPORARY_REDIRECT, "/stream.pls")
+        val station = mServer.redirect(
+            "/station.pls", LoopbackHttpFixture.HTTP_FOUND, mServer.url("/moved.pls")
+        )
+
+        assertArrayEquals(arrayOf(stream), resolve(station))
+        assertEquals(listOf("/station.pls", "/moved.pls", "/stream.pls"), mServer.requestedPaths())
+    }
+
+    /**
+     * A redirect is a new request, so it is not sent once the network may not be used, even
+     * though the url that answered with it was allowed.
+     */
+    @Test
+    fun aRedirectOfTheStationUrlIsNotFollowedOnceTheNetworkMayNotBeUsed() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        mServer.serve("/stream.pls", LoopbackHttpFixture.AUDIO_PLS, pls(stream))
+        val station = mServer.redirect("/station.pls", LoopbackHttpFixture.HTTP_FOUND, "/stream.pls")
+
+        val answer = read(station) { mServer.requestedPaths().isEmpty() }
+
+        assertEquals(PlaylistRead.Blocked, answer)
+        assertEquals(listOf("/station.pls"), mServer.requestedPaths())
+    }
+
+    /**
+     * The same for a playlist the station's names, which the downloader opens.
+     */
+    @Test
+    fun aRedirectOfAPlaylistItNamesIsNotFollowedOnceTheNetworkMayNotBeUsed() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        mServer.serve(
+            "/referenced", LoopbackHttpFixture.TEXT_PLAIN, "<ASX><ENTRY><REF href=\"$stream\"/></ENTRY></ASX>"
+        )
+        val moved = mServer.redirect("/moved", LoopbackHttpFixture.HTTP_FOUND, "/referenced")
+        val playlist = entryRefTo(moved, "/station.asx")
+
+        val answer = read(playlist) { mServer.requestedPaths().contains("/moved").not() }
+
+        assertEquals(PlaylistRead.Blocked, answer)
+        assertEquals(listOf("/station.asx", "/moved"), mServer.requestedPaths())
+    }
+
+    /**
      * Runs [read] on its own thread while [broadcast] sends, bars the network once the transfer is
      * under way, and returns what the read answered.
      */
