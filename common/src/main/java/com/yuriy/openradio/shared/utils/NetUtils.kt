@@ -156,9 +156,12 @@ object NetUtils {
                         )
                     }
                 }
-                val responseCode = permit.hold(opened) {
-                    opened.connect()
-                    opened.responseCode
+                if (permit.hold(opened) { opened.connect() } == NetworkPermit.Held.Revoked) {
+                    break
+                }
+                val responseCode = when (val held = permit.hold(opened) { opened.responseCode }) {
+                    is NetworkPermit.Held.Answered -> held.value
+                    NetworkPermit.Held.Revoked -> break
                 }
                 if (responseCode in REDIRECT_CODES) {
                     if (redirects++ >= MAX_REDIRECTS) {
@@ -276,7 +279,11 @@ object NetUtils {
         try {
             val stream = GatedInputStream(connection.inputStream, permit::mayContinue)
             gated = stream
-            permit.hold(connection) { parser.parse(playlistUrl, contentType, stream, playlist) }
+            if (permit.hold(connection) { parser.parse(playlistUrl, contentType, stream, playlist) }
+                == NetworkPermit.Held.Revoked
+            ) {
+                AppLogger.i("$CLASS_NAME playlist $playlistUrl read revoked")
+            }
             result = playlist.playlistEntries.map { it[PlaylistEntry.URI] }
             AppLogger.d("Found ${result.size} streams associated with $playlistUrl:")
             for (url in result) {

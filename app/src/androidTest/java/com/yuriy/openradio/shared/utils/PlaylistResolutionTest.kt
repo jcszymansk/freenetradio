@@ -350,6 +350,29 @@ class PlaylistResolutionTest {
     }
 
     /**
+     * The policy pause can revoke the permit after a request was allowed and before its
+     * connection connects. A disconnect then does nothing, so the request must not be made at
+     * all: the permit is revoked here from inside the check that allows it.
+     */
+    @Test
+    fun aRequestWhosePermitIsRevokedBeforeItConnectsIsNotMade() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val playlist = mServer.serve("/stream.pls", LoopbackHttpFixture.AUDIO_PLS, pls(stream))
+        lateinit var permit: NetworkPermit
+        permit = NetworkPermit {
+            permit.revoke()
+            true
+        }
+
+        val answer = NetUtils.extractUrlsFromPlaylist(
+            mContext, HTTPDownloaderImpl(DirectUrlResolver()), playlist, permit
+        )
+
+        assertEquals(PlaylistRead.Blocked, answer)
+        assertEquals(0, mServer.acceptedConnections())
+    }
+
+    /**
      * Reads [url] on its own thread until [stall] holds a connection from it, revokes the permit
      * the way the service does, and returns what the read answered.
      */

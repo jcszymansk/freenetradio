@@ -54,6 +54,8 @@ internal class LoopbackHttpFixture {
 
     private val mRequests = CopyOnWriteArrayList<String>()
 
+    private val mAccepted = AtomicInteger()
+
     private val mExecutor = Executors.newCachedThreadPool()
 
     private var mServer: ServerSocket? = null
@@ -131,6 +133,14 @@ internal class LoopbackHttpFixture {
     }
 
     /**
+     * @return how many connections the server accepted, including ones that never sent a
+     * request: a client can open a connection and only send its request line later.
+     */
+    fun acceptedConnections(): Int {
+        return mAccepted.get()
+    }
+
+    /**
      * @return the paths that were asked for, in the order they arrived.
      */
     fun requestedPaths(): List<String> {
@@ -150,6 +160,7 @@ internal class LoopbackHttpFixture {
                 // The socket was closed by stop(), or the run is over.
                 return
             }
+            mAccepted.incrementAndGet()
             mExecutor.execute { answer(socket) }
         }
     }

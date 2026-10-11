@@ -90,10 +90,15 @@ class NetworkPermit(private val mayUseNetwork: () -> Boolean) {
 
     /**
      * Runs [read] with [connection] held, so that revoking the permit meanwhile disconnects it.
-     * A connection held after the permit was revoked is disconnected before [read] runs, so its
-     * read fails at once.
+     *
+     * A disconnect only ends what a connection has already started, and one made before the
+     * connection connects is lost. [read] therefore does not run at all once the permit is
+     * revoked, and a revocation that lands while it runs is answered with [Held.Revoked] and a
+     * second disconnect, which the connection honours once [read] has returned. A caller that
+     * connects should hold the connect on its own, so that the revocation is seen before it waits
+     * for a response.
      */
-    fun <T> hold(connection: HttpURLConnection, read: () -> T): T {
+    fun <T> hold(connection: HttpURLConnection, read: () -> T): Held<T> {
         val isHeld = synchronized(mLock) {
             if (mIsRevoked) {
                 false
@@ -103,13 +108,39 @@ class NetworkPermit(private val mayUseNetwork: () -> Boolean) {
             }
         }
         if (isHeld.not()) {
-            AppLogger.i("$CLASS_NAME already revoked, disconnect ${connection.url}")
+            AppLogger.i("$CLASS_NAME already revoked, ${connection.url} not read")
             connection.disconnect()
+            return Held.Revoked
         }
         try {
-            return read()
+            val value = read()
+            if (isRevoked) {
+                AppLogger.i("$CLASS_NAME revoked while ${connection.url} was read")
+                connection.disconnect()
+                return Held.Revoked
+            }
+            return Held.Answered(value)
         } finally {
             synchronized(mLock) { mHeld.remove(connection) }
+        }
+    }
+
+    /**
+     * What a [hold] came to.
+     */
+    sealed class Held<out T> {
+
+        /**
+         * The read ran to its end with the permit standing, and answered [value].
+         */
+        data class Answered<out T>(val value: T) : Held<T>()
+
+        /**
+         * The permit was revoked before or while the read ran, so whatever it read is not used.
+         */
+        object Revoked : Held<Nothing>() {
+
+            override fun toString() = "Revoked"
         }
     }
 

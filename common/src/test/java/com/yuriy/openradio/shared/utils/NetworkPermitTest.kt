@@ -114,49 +114,79 @@ class NetworkPermitTest {
     fun aHeldReadRunsAndAnswersWhileThePermitStands() {
         val connection = RecordingConnection()
 
-        val answer = NetworkPermit { true }.hold(connection) { 42 }
+        val held = NetworkPermit { true }.hold(connection) { 42 }
 
-        assertEquals(42, answer)
+        assertEquals(NetworkPermit.Held.Answered(42), held)
         assertEquals(0, connection.disconnects)
     }
 
+    /**
+     * Revoking disconnects the connection a read is waiting on, and the read that comes back, by
+     * failing or by answering, is not used: the connection is disconnected again in case the
+     * first disconnect came before it had connected.
+     */
     @Test
-    fun revokingDisconnectsAConnectionHeldOnAnotherThread() {
+    fun revokingDisconnectsAConnectionHeldOnAnotherThreadAndDiscardsItsRead() {
         val permit = NetworkPermit { true }
         val connection = RecordingConnection()
         val holding = CountDownLatch(1)
+        var disconnectsSeenByTheRead = 0
         val other = Executors.newSingleThreadExecutor()
         try {
-            val read = other.submit<Int> {
+            val held = other.submit<NetworkPermit.Held<Int>> {
                 permit.hold(connection) {
                     holding.countDown()
                     connection.awaitDisconnect()
-                    connection.disconnects
+                    disconnectsSeenByTheRead = connection.disconnects
+                    42
                 }
             }
             assertTrue(holding.await(5, TimeUnit.SECONDS))
 
             permit.revoke()
 
-            assertEquals(1, read.get(5, TimeUnit.SECONDS))
+            assertEquals(NetworkPermit.Held.Revoked, held.get(5, TimeUnit.SECONDS))
         } finally {
             other.shutdownNow()
         }
+        assertEquals(1, disconnectsSeenByTheRead)
+        assertEquals(2, connection.disconnects)
     }
 
     /**
-     * A connection held after the revocation would otherwise be read in full, so it is
-     * disconnected before its read starts.
+     * A disconnect made before a connection connects is lost, so a read held after the
+     * revocation must not run at all, or it would connect.
      */
     @Test
-    fun aConnectionHeldAfterTheRevocationIsDisconnectedBeforeItsRead() {
+    fun aReadHeldAfterTheRevocationDoesNotRun() {
         val permit = NetworkPermit { true }
         val connection = RecordingConnection()
+        var reads = 0
         permit.revoke()
 
-        val disconnectsSeenByTheRead = permit.hold(connection) { connection.disconnects }
+        val held = permit.hold(connection) { reads++ }
 
-        assertEquals(1, disconnectsSeenByTheRead)
+        assertEquals(NetworkPermit.Held.Revoked, held)
+        assertEquals(0, reads)
+        assertEquals(1, connection.disconnects)
+    }
+
+    /**
+     * The revocation that lands while a connection is connecting, when its disconnect is lost:
+     * the read finishes, and the permit disconnects the connection once it can be.
+     */
+    @Test
+    fun aRevocationDuringTheReadDisconnectsAfterIt() {
+        val permit = NetworkPermit { true }
+        val connection = RecordingConnection()
+
+        val held = permit.hold(connection) {
+            permit.revoke()
+            connection.forgetDisconnects()
+        }
+
+        assertEquals(NetworkPermit.Held.Revoked, held)
+        assertEquals(1, connection.disconnects)
     }
 
     @Test
@@ -187,15 +217,16 @@ class NetworkPermitTest {
         val permit = NetworkPermit { true }
         val outer = RecordingConnection()
         val inner = RecordingConnection()
+        var disconnectsAtTheRevocation = Pair(0, 0)
 
         permit.hold(outer) {
             permit.hold(inner) {
                 permit.revoke()
+                disconnectsAtTheRevocation = Pair(outer.disconnects, inner.disconnects)
             }
         }
 
-        assertEquals(1, outer.disconnects)
-        assertEquals(1, inner.disconnects)
+        assertEquals(Pair(1, 1), disconnectsAtTheRevocation)
     }
 
     /**
@@ -216,6 +247,13 @@ class NetworkPermitTest {
         override fun disconnect() {
             disconnects++
             mDisconnected.countDown()
+        }
+
+        /**
+         * Stands for a disconnect made before the connection connected, which does nothing.
+         */
+        fun forgetDisconnects() {
+            disconnects = 0
         }
 
         override fun usingProxy() = false

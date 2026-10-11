@@ -138,15 +138,15 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
 
             try {
                 val gated = GatedInputStream(connection.inputStream, mPermit::mayContinue)
-                val content = mPermit.hold(connection) { toByteArray(BufferedInputStream(gated), mMaxBytes) }
+                val held = mPermit.hold(connection) { toByteArray(BufferedInputStream(gated), mMaxBytes) }
                 response = when {
-                    gated.isCutShort || mPermit.isRevoked -> ByteArray(0).also {
+                    held !is NetworkPermit.Held.Answered || gated.isCutShort -> ByteArray(0).also {
                         AppLogger.i("$CLASS_NAME stopped reading ${responseObj.url}, the network may not be used")
                     }
-                    content == null -> ByteArray(0).also {
+                    held.value == null -> ByteArray(0).also {
                         AppLogger.e("$CLASS_NAME more than $mMaxBytes bytes at ${responseObj.url}")
                     }
-                    else -> content
+                    else -> held.value
                 }
             } catch (exception: IOException) {
                 AppLogger.e(
