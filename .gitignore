@@ -15,6 +15,7 @@ sign.properties
 *.gate.lock*
 
 # Gas City
+.gc/
 .beads/*
 !.beads/identity.toml
 .claude/skills/
