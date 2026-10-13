@@ -1,0 +1,13 @@
+issue_prefix: fnr
+issue-prefix: fnr
+dolt.auto-start: false
+dolt:
+    disable-event-flush: true
+export.auto: false
+backup.enabled: false
+gc.endpoint_origin: inherited_city
+gc.endpoint_status: verified
+dolt.mode: server
+types.custom: molecule,convoy,message,event,gate,merge-request,agent,role,rig,session,spec,convergence,step,startup-health-episode
+sync:
+    remote: "git+ssh://git@github.com/jcszymansk/freenetradio.git"
