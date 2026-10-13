@@ -35,8 +35,8 @@ import java.io.StringReader
  * Pins how [ASXPlaylistParser] reads an ASX playlist through the public [AutoDetectParser] entry
  * point: which `REF` of an `ENTRY` names the stream and how its address is found, titles, case
  * insensitive element names, the repair of real world malformed XML, ampersand and entity
- * handling, that no external DTD is ever read, and how `ENTRYREF` is followed through the
- * [PlaylistFetcher] with its failure modes, cycles and the depth limit.
+ * handling, that no external DTD is ever read, entries grouped in `REPEAT`, and how `ENTRYREF` is
+ * followed through the [PlaylistFetcher] with its failure modes, cycles and the depth limit.
  *
  * Every read beyond the top level stream goes to a [RecordingFetcher]; the urls are only strings
  * handed to it, and nothing in these tests opens a connection.
@@ -508,6 +508,35 @@ class ASXPlaylistParserTest {
             listOf("$HOST/second.asx", "$HOST/fourth", "$HOST/fifth", "$HOST/sixth"),
             fetcher.reads
         )
+    }
+
+    /**
+     * ASX lets a `REPEAT` hold `ENTRY` and `ENTRYREF` elements. Its `COUNT` asks a player to play
+     * them again; a radio list keeps each once, where it stands in the document.
+     */
+    @Test
+    fun entriesAndEntryRefsInsideRepeatAreReadOnceInDocumentOrder() {
+        val fetcher = RecordingFetcher(
+            "$HOST/third.asx" to "<ASX><ENTRY><TITLE>Three</TITLE><REF href=\"$HOST/s3\"/></ENTRY></ASX>"
+        )
+
+        val playlist = parse(
+            "<ASX>" +
+                    "<ENTRY><TITLE>One</TITLE><REF href=\"$HOST/s1\"/></ENTRY>" +
+                    "<Repeat COUNT=\"3\">" +
+                    "<ENTRY><TITLE>Two</TITLE><REF href=\"$HOST/s2\"/></ENTRY>" +
+                    "<ABSTRACT>Ignored</ABSTRACT>" +
+                    "<entryref href=\"$HOST/third.asx\"/>" +
+                    "<REPEAT><ENTRY><TITLE>Four</TITLE><REF href=\"$HOST/s4\"/></ENTRY></REPEAT>" +
+                    "</Repeat>" +
+                    "<ENTRY><TITLE>Five</TITLE><REF href=\"$HOST/s5\"/></ENTRY>" +
+                    "</ASX>",
+            fetcher
+        )
+
+        assertEquals((1..5).map { "$HOST/s$it" }, uris(playlist))
+        assertEquals(listOf("One", "Two", "Three", "Four", "Five"), titles(playlist))
+        assertEquals(listOf("$HOST/third.asx"), fetcher.reads)
     }
 
     @Test

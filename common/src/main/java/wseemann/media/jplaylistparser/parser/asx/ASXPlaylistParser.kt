@@ -33,7 +33,8 @@ import java.util.Locale
 
 /**
  * Reads an ASX playlist: each `ENTRY` becomes a stream named by its first `REF`, and each
- * `ENTRYREF` is followed as another playlist, unless it names HLS, which is kept as a stream.
+ * `ENTRYREF` is followed as another playlist, unless it names HLS, which is kept as a stream. Both
+ * are read at the top level and inside a `REPEAT`.
  *
  * ASX is XML only in shape. Element names are case insensitive and real files mix the cases of an
  * element's start and end tags, and they carry bare ampersands in urls. Both are mended before the
@@ -47,10 +48,22 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
     @Throws(IOException::class)
     override fun parse(uri: String, stream: InputStream, playlist: Playlist) {
         val document = readDocument(stream.bufferedReader().readText().trimStart(*LEADING_NOISE)) ?: return
-        for (child in document.rootElement.children) {
+        readEntries(document.rootElement, uri, playlist)
+    }
+
+    /**
+     * Adds what the `ENTRY` and `ENTRYREF` children of [parent] name, in document order, and those
+     * grouped in a `REPEAT` where it stands. The `COUNT` of a `REPEAT` asks a player to play its
+     * entries again, which means nothing to a list of stations, so each is read once. ASX puts a
+     * `REPEAT` only at the top level; one nested in another is read the same way rather than
+     * dropped.
+     */
+    private fun readEntries(parent: Element, uri: String, playlist: Playlist) {
+        for (child in parent.children) {
             when (child.name.uppercase(Locale.ROOT)) {
                 ENTRY_ELEMENT -> buildPlaylistEntry(child, playlist)
                 ENTRYREF_ELEMENT -> follow(hrefOf(child), playlist)
+                REPEAT_ELEMENT -> readEntries(child, uri, playlist)
                 else -> AppLogger.d("$TAG skipping element '${child.name}' of $uri")
             }
         }
@@ -129,6 +142,7 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
         private const val TAG = "ASXPlaylistParser"
         private const val ENTRY_ELEMENT = "ENTRY"
         private const val ENTRYREF_ELEMENT = "ENTRYREF"
+        private const val REPEAT_ELEMENT = "REPEAT"
         private const val REF_ELEMENT = "REF"
         private const val TITLE_ELEMENT = "TITLE"
         private const val HREF_ATTRIBUTE = "href"
