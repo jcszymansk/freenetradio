@@ -4,10 +4,10 @@ FreeNetRadio is a revival of the Apache-licensed OpenRadio source as a trustwort
 application. The immediate purpose is personal use, particularly through Android Auto. Public distribution comes only after that version is stable and useful.
 
 > **Paused:** complete the separate [testing roadmap](testing-roadmap.md) before resuming this roadmap. The gate
-> is `TASK-068`; feature work here depends on it, so `backlog task list --ready --plain` will not offer it early.
+> is `TASK-068`; feature work here depends on it, so `gc bd ready` will not offer it early.
 
-How far each section has got is recorded in the tracker, not here: every section names its task, and `backlog
-task view TASK-011 --plain` shows its state and remaining criteria. This document keeps the reasoning and the
+How far each section has got is recorded in the tracker, not here: every section names its task, and
+`gc bd list --all --external-ref TASK-011` finds the bead with its state and remaining criteria. This document keeps the reasoning and the
 standard each section has to meet.
 
 The roadmap has three targets:

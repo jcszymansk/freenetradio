@@ -80,8 +80,8 @@ Use end-to-end tests only where integration is the contract:
 ## Phases
 
 The phases run in order. Each one is a task in the tracker, and the coverage lists that used to appear here are
-now that task's acceptance criteria, so progress is recorded in exactly one place. Run `backlog task list
---ready --plain` to see what is unblocked, and `backlog task view TASK-003 --plain` to read a phase in full.
+now that task's acceptance criteria, so progress is recorded in exactly one place. Run `gc bd ready` to see
+what is unblocked, and `gc bd list --all --external-ref TASK-003` to find a phase's bead.
 
 ### Phase 1: Repair the foundation — `TASK-001`
 

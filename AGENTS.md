@@ -48,6 +48,10 @@ adb shell pm clear com.github.jcszymansk.freenetradio   # skip if the app is not
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
+With more than one device attached, `adb` refuses to guess and `connectedDebugAndroidTest` installs on every
+device. When `ANDROID_SERIAL` is set, it names the one device this work may use: never pass another `-s`
+serial, and never touch, clear or stop another emulator.
+
 The test APK runs under `OfflineTestRunner`, which fails every test class without running it when
 the device reports a network, so forgetting the first line costs a red run rather than traffic.
 A url an instrumented fixture hands to the app points at `UNREACHABLE_ORIGIN` or a
@@ -121,36 +125,35 @@ These come from `doc/roadmap.md` and are not negotiable defaults:
 
 ## Work tracking
 
-Tasks live in `backlog/`, managed with the `backlog` CLI (see the Backlog.md section at the end of this file).
-`doc/roadmap.md` and `doc/testing-roadmap.md` hold the reasoning and the standard each piece of work must meet;
-the tracker holds the state. Start from `backlog task list --ready --plain`.
+Work is tracked as beads in this repository's Gas City rig (`freenetradio`, prefix `fnr`), read and written with
+`gc bd` from the repository root. `doc/roadmap.md` and `doc/testing-roadmap.md` hold the reasoning and the standard
+each piece of work must meet; the beads hold the state. Start from `gc bd ready`.
+
+Until 2026-10 the tracker was Backlog.md. Every task it held is a bead now, open or closed, with its old id as
+the bead's external reference: code, tests, docs and commit messages that cite `TASK-104` find it with
+`gc bd list --all --external-ref TASK-104`. Those citations stay as they are. Milestones are epics.
 
 1. **One source of truth per fact.** A roadmap document states why work exists and what "done" means. The
-   tracker records whether it is done. Never add a checkbox, a status line, or a progress note to a document —
+   bead records whether it is done. Never add a checkbox, a status line, or a progress note to a document;
    that is the half that rots, because nothing forces it to agree with the code.
 
-2. **One task, one branch, named for the task.** Branch names are `<task-id>-<short-slug>`, lower case, e.g.
-   `task-003-persistence-tests`. The branch is merged with `--no-ff` when the task is done, then deleted.
-   Merges are not squashed by default.
+2. **A bead's state lives in the bead, not in commits.** Claim it, record decisions, blockers and scope changes
+   on it with `gc bd update` while they are fresh, and close it when its acceptance criteria hold. Do not edit
+   acceptance criteria to fit the work; a criterion that turns out wrong is a decision for the owner.
 
-3. **Task state moves with the work, never in a separate bookkeeping pass.** A task is normally several
-   commits — a commit per review turn is preferred to an uncommitted mess that can only be discarded.
-   On the task's branch:
-   - The first commit that touches the task's code also sets the task In Progress.
-   - The commit that makes the acceptance criteria true also marks the task Done — that is the last commit on
-     the branch, before the merge, never a sweep on master afterwards.
-   - Intermediate commits need not touch the task file, except when they change what is known: a discovered
-     blocker, a scope change, or a decision worth keeping is recorded in the commit that caused it, while it
-     is still fresh.
-   - Review feedback that will not be acted on now becomes a new task in the commit that closes the review
-     turn — not a TODO comment, and not an unwritten intention. It reaches master with the merge.
-   - Abandoning a branch leaves the task exactly as master last saw it, which is correct. If the attempt
-     taught you something — a dead end, a blocker, a wrong assumption — record it on the task in a small
-     commit on master so the next attempt does not repeat it.
+3. **Batches land on an integration branch.** A batch of beads is drained one bead at a time, each in its own
+   worktree based on the batch's integration branch, and each reviewed bead fast-forwards that branch. The owner
+   reviews the integration branch and merges it into `master` with `--no-ff`. Nothing but that merge moves
+   `master`. Commit bodies end with `Bead: <id> (<external ref>)` where the bead has one.
 
-   A commit whose only content is catching the tracker up on work already merged means the tracker had
-   drifted; that is the signal to watch for. Leave `auto_commit` off in `backlog/config.yml` so task changes
-   stay in the working tree and land in the commit you choose.
+4. **Out-of-scope findings become beads, not TODO comments.** A defect of medium severity or higher found while
+   working on something else is filed with the `review-followup` label and a `discovered-from` edge to the bead
+   being worked on. Lesser observations go in that bead's notes. The owner triages `review-followup` beads; they
+   are not picked up automatically.
+
+5. **Beads that need the owner say so.** Labels: `needs-human` for a decision only the owner can make (most
+   `Decide ...` beads), `human-only` for work that needs the owner's hardware, keys or accounts (real phone,
+   car, release signing, store listings). Neither is drained.
 
 ## Conventions
 
@@ -158,27 +161,3 @@ the tracker holds the state. Start from `backlog task list --ready --plain`.
   `private const val` inside a `companion object`. Keep new code consistent with the file around it.
 - Keep the Apache 2.0 header and existing copyright lines on files you touch.
 - Commit subjects are short, lowercase, imperative: `cover browse tree state`, `upgrade android build tooling`.
-
-<!-- BACKLOG.MD GUIDELINES START -->
-<!-- backlog.md-instructions-version: 1.51.0 -->
-<CRITICAL_INSTRUCTION>
-
-## Backlog.md Workflow
-
-This project uses Backlog.md for task and project management.
-
-**At the beginning of each conversation in this project, run `backlog instructions overview` before answering or taking action. Re-read it only if you have not read it yet in the current conversation.**
-
-Use the overview to decide whether to search, read, create, or update Backlog tasks.
-
-Before task lifecycle actions, read the matching detailed guide:
-- `backlog instructions task-creation` before creating or splitting tasks
-- `backlog instructions task-execution` before planning, changing status or assignee, adding a plan or implementation notes, or implementing task work
-- `backlog instructions task-finalization` before checking acceptance criteria, writing final summaries, or moving tasks to terminal statuses
-
-Use `backlog <command> --help` before running unfamiliar commands. Help shows options, fields, and examples.
-
-Do not edit Backlog task, draft, document, decision, or milestone markdown files directly. Use the `backlog` CLI so metadata, relationships, and history stay consistent.
-
-</CRITICAL_INSTRUCTION>
-<!-- BACKLOG.MD GUIDELINES END -->
