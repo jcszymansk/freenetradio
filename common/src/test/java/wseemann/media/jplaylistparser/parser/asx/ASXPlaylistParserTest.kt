@@ -33,9 +33,9 @@ import java.io.StringReader
 
 /**
  * Pins how [ASXPlaylistParser] reads an ASX playlist through the public [AutoDetectParser] entry
- * point: which `REF` of an `ENTRY` names the stream and how its address is found, titles and track
- * numbers, case insensitive element names, the repair of real world malformed XML, ampersand and
- * entity handling, that no external DTD is ever read, and how `ENTRYREF` is followed through the
+ * point: which `REF` of an `ENTRY` names the stream and how its address is found, titles, case
+ * insensitive element names, the repair of real world malformed XML, ampersand and entity
+ * handling, that no external DTD is ever read, and how `ENTRYREF` is followed through the
  * [PlaylistFetcher] with its failure modes, cycles and the depth limit.
  *
  * Every read beyond the top level stream goes to a [RecordingFetcher]; the urls are only strings
@@ -132,7 +132,7 @@ class ASXPlaylistParserTest {
     }
 
     @Test
-    fun entryWithoutRefIsDroppedAndTakesNoTrackNumber() {
+    fun entryWithoutRefIsDropped() {
         val fetcher = RecordingFetcher()
 
         val playlist = parse(
@@ -146,7 +146,6 @@ class ASXPlaylistParserTest {
 
         val entry = playlist.playlistEntries.single()
         assertEquals("$HOST/kept", entry[PlaylistEntry.URI])
-        assertEquals("1", entry[PlaylistEntry.TRACK])
         assertEquals(emptyList<String>(), fetcher.reads)
     }
 
@@ -182,7 +181,7 @@ class ASXPlaylistParserTest {
     }
 
     @Test
-    fun entriesKeepDocumentOrderAndAreNumberedFromOne() {
+    fun entriesKeepDocumentOrder() {
         val playlist = parse(
             "<ASX>" +
                     "<ENTRY><TITLE>One</TITLE><REF href=\"$HOST/one\"/></ENTRY>" +
@@ -194,23 +193,6 @@ class ASXPlaylistParserTest {
 
         assertEquals(listOf("$HOST/one", "$HOST/two", "$HOST/three"), uris(playlist))
         assertEquals(listOf("One", "Two", "Three"), titles(playlist))
-        assertEquals(listOf("1", "2", "3"), tracks(playlist))
-    }
-
-    @Test
-    fun everyParseNumbersItsEntriesFromOne() {
-        val xml = "<ASX>" +
-                "<ENTRY><REF href=\"$HOST/one\"/></ENTRY>" +
-                "<ENTRY><REF href=\"$HOST/two\"/></ENTRY>" +
-                "</ASX>"
-
-        val first = parse(xml, RecordingFetcher())
-        val second = parse(xml, RecordingFetcher())
-
-        assertEquals(listOf("1", "2"), tracks(first))
-        // Track numbers once came from a counter shared by every parse, so the second playlist
-        // of a process started where the first had stopped.
-        assertEquals(listOf("1", "2"), tracks(second))
     }
 
     @Test
@@ -237,7 +219,6 @@ class ASXPlaylistParserTest {
 
             assertEquals(fixture.name, listOf("$HOST/stream"), uris(playlist))
             assertEquals(fixture.name, listOf("Station"), titles(playlist))
-            assertEquals(fixture.name, listOf("1"), tracks(playlist))
         }
     }
 
@@ -253,7 +234,6 @@ class ASXPlaylistParserTest {
 
         assertEquals(listOf("$HOST/one", "$HOST/two"), uris(playlist))
         assertEquals(listOf("Repaired", ""), titles(playlist))
-        assertEquals(listOf("1", "2"), tracks(playlist))
     }
 
     @Test
@@ -742,7 +722,6 @@ class ASXPlaylistParserTest {
 
         assertEquals(listOf("$HOST/one", "$HOST/two"), uris(playlist))
         assertEquals(listOf("One", ""), titles(playlist))
-        assertEquals(listOf("1", "2"), tracks(playlist))
         assertEquals(emptyList<String>(), fetcher.reads)
     }
 
@@ -839,7 +818,5 @@ class ASXPlaylistParserTest {
 
         fun titles(playlist: Playlist): List<String> =
             playlist.playlistEntries.map { it[PlaylistEntry.PLAYLIST_METADATA] }
-
-        fun tracks(playlist: Playlist): List<String> = playlist.playlistEntries.map { it[PlaylistEntry.TRACK] }
     }
 }

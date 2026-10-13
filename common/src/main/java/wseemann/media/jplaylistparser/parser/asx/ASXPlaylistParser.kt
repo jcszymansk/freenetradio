@@ -41,8 +41,6 @@ import java.util.Locale
  */
 class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
-    private var mNumberOfFiles = 0
-
     override val supportedTypes: Set<MediaType?>
         get() = setOf(video("x-ms-asf"))
 
@@ -112,8 +110,6 @@ class ASXPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
             AppLogger.w("$TAG dropping an entry without a REF")
             return
         }
-        mNumberOfFiles += 1
-        playlistEntry[PlaylistEntry.TRACK] = mNumberOfFiles.toString()
         parseEntry(playlistEntry, playlist)
     }
 

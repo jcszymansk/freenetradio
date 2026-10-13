@@ -124,7 +124,6 @@ class PlaylistEntry {
     }
 
     companion object {
-        const val TRACK = "track"
         const val URI = "uri"
         const val PLAYLIST_METADATA = "playlist_metadata"
     }
