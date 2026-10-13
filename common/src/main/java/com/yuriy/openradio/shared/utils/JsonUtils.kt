@@ -25,10 +25,10 @@ object JsonUtils {
     fun getShortArray(jsonObject: JSONObject, key: String): ShortArray {
         if (jsonObject.has(key)) {
             val obj = jsonObject.getString(key)
-            val array = obj.split(",".toRegex()).toTypedArray()
-            if (array.size <= 1) {
+            if (obj.isEmpty()) {
                 return shortArrayOf()
             }
+            val array = obj.split(",".toRegex()).toTypedArray()
             val list = ShortArray(array.size)
             for (i in list.indices) {
                 list[i] = array[i].toShort()
@@ -42,10 +42,10 @@ object JsonUtils {
     fun getIntArray(jsonObject: JSONObject, key: String): IntArray {
         if (jsonObject.has(key)) {
             val obj = jsonObject.getString(key)
-            val array = obj.split(",".toRegex()).toTypedArray()
-            if (array.size <= 1) {
+            if (obj.isEmpty()) {
                 return intArrayOf()
             }
+            val array = obj.split(",".toRegex()).toTypedArray()
             val list = IntArray(array.size)
             for (i in list.indices) {
                 list[i] = array[i].toInt()
