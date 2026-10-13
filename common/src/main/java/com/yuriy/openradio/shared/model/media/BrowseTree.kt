@@ -104,9 +104,6 @@ class BrowseTree {
     /**
      * Rebuilds the id indexes from everything still held. Removing the entries of a list that went
      * away would also drop ids another list, or the playlist, still holds.
-     *
-     * The tree is read from more than one thread, so the new indexes are built aside and swapped
-     * in whole rather than emptied and refilled where a reader could see them empty.
      */
     private fun reindex() {
         val mediaItems = mutableMapOf<String, MediaItem>()
