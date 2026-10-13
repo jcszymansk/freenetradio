@@ -38,17 +38,12 @@ import java.lang.ref.WeakReference
  * [AbstractRadioStationsStorage.getAll] sorts the stored stations by sort id and renumbers them
  * `0..n-1` before handing them over, so the set the rule walks is always contiguous, ascending,
  * and numbered from zero whatever the file held. Walking it, the dragged station takes the
- * requested sort id and every other station takes a running counter. Both increments are Kotlin
- * post increments, so a station is given the counter as it stands when the walk reaches it and
- * the counter moves on afterwards: a station that currently holds the requested sort id is bumped
- * once before it is read and once after, which pushes it one past the number it would otherwise
- * have taken, and every station after it along with it.
- *
- * The double increment is meant to leave the requested slot free for the dragged station, and it
- * does that only when the station holding that slot comes after the counter has reached it, which
- * is to say only when the station is dragged towards the top of the list. The tests below pin both
- * outcomes, the working one and the two that leave two stations sharing one sort id; TASK-075
- * carries the fix.
+ * requested sort id and every other station takes a running counter that steps over the requested
+ * sort id, so the dragged station is the only one left holding it. The skip has to follow the
+ * counter, not the sort id a station held before the drag: the station that held the requested
+ * sort id comes after the counter has passed it whenever the drag goes towards the bottom of the
+ * list, and is the dragged station itself when a row is dropped back where it was picked up, and
+ * keying the skip on it left two stations sharing one sort id in both cases (TASK-075).
  *
  * Nothing here reaches a device: the storages are the production ones driven by the in memory
  * preferences of [preferencesContext], as the storage suites do.
@@ -65,9 +60,9 @@ class SortUtilsTest {
 
     /**
      * The walk behind the expected order, since counting it out by hand is easy to get wrong:
-     * `a` holds 0, is not the requested 1, and takes the counter at 0, leaving it at 1. `b` holds
-     * 1, so the counter is bumped to 2 before `b` reads it, `b` takes 2, and the counter ends at
-     * 3. `c` takes 3. `d` is the dragged station and takes 1, the number `b` was pushed off.
+     * `a` takes the counter at 0, leaving it at 1. The counter has reached the requested 1, so it
+     * steps over it before `b` reads it, `b` takes 2, and the counter ends at 3. `c` takes 3. `d`
+     * is the dragged station and takes 1, the number the counter stepped over.
      */
     @Test
     fun movingAStationUpPutsItAtTheRequestedSortIdAndShiftsTheRestDown() {
@@ -79,39 +74,50 @@ class SortUtilsTest {
     }
 
     /**
-     * Dragging towards the bottom of the list is where the rule breaks. The counter reaches the
-     * requested sort id before the walk gets to the station that holds it, hands that value to
-     * whichever station happens to be there, and only then makes the room the dragged station was
-     * already given. Two stations come out of it sharing one sort id, and which of the two the
-     * next read puts first is decided by the station name, not by where the user dropped the row.
+     * Dragging towards the bottom of the list: the counter reaches the requested sort id before
+     * the walk gets to `c`, which held it, and the slot has to be kept for `a` all the same. A
+     * collision here is invisible in the next read, which renumbers apart by station name, so the
+     * test reads the stored sort ids; the user would only see the row land one place off.
      */
     @Test
-    fun movingAStationDownLeavesItSharingASortIdWithTheStationThatHeldIt() {
+    fun movingAStationDownPutsItAtTheRequestedSortIdAndShiftsTheRestUp() {
         mFavorites.addAll(stations("a", "b", "c", "d"))
 
         SortUtils.updateSortIds("a", 2, MediaId.MEDIA_ID_FAVORITES_LIST, mFavorites, mLocals)
 
-        assertEquals(mapOf("b" to 0, "a" to 2, "c" to 2, "d" to 3), storedSortIds(mFavorites))
+        assertEquals(mapOf("b" to 0, "c" to 1, "a" to 2, "d" to 3), storedSortIds(mFavorites))
     }
 
     /**
-     * Picking a row up and putting it back where it was is the same defect seen from its other
-     * side: the station that holds the requested sort id is the dragged one, so no station in the
-     * walk triggers the extra increment and the counter never skips the reserved slot.
+     * Picking a row up and putting it back where it was: the station holding the requested sort
+     * id is the dragged one, so the slot has to be kept even though no other station held it.
      */
     @Test
-    fun droppingAStationBackOnItsOwnPositionCollidesWithTheStationBelowIt() {
+    fun droppingAStationBackOnItsOwnPositionChangesNoSortId() {
         mFavorites.addAll(stations("a", "b", "c", "d"))
 
         SortUtils.updateSortIds("b", 1, MediaId.MEDIA_ID_FAVORITES_LIST, mFavorites, mLocals)
 
-        assertEquals(mapOf("a" to 0, "b" to 1, "c" to 1, "d" to 2), storedSortIds(mFavorites))
+        assertEquals(mapOf("a" to 0, "b" to 1, "c" to 2, "d" to 3), storedSortIds(mFavorites))
     }
 
     /**
-     * With no station holding the requested sort id there is no extra increment anywhere, which
-     * leaves the bare counter rule visible: the stations that were not dragged are numbered from
-     * zero in the order they were read.
+     * The same downward drag among the stations added on the device, which go through their own
+     * storage and their own branch of the rule.
+     */
+    @Test
+    fun movingAStationAddedOnTheDeviceDownPutsItAtTheRequestedSortId() {
+        mLocals.addAll((0 until 3).map { localStation("local-$it", sortId = it) }.toSet())
+
+        SortUtils.updateSortIds("local-0", 1, MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST, mFavorites, mLocals)
+
+        assertEquals(mapOf("local-1" to 0, "local-0" to 1, "local-2" to 2), storedSortIds(mLocals))
+    }
+
+    /**
+     * A requested sort id the counter never reaches leaves nothing to step over, which leaves the
+     * bare counter rule visible: the stations that were not dragged are numbered from zero in the
+     * order they were read.
      */
     @Test
     fun aRequestedSortIdPastTheEndOfTheListRenumbersTheRestFromZero() {
