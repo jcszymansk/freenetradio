@@ -89,6 +89,20 @@ class SortUtilsTest {
     }
 
     /**
+     * Dragging to the last position, the most common downward drag at its boundary: the counter
+     * only reaches the requested sort id after the last station that was not dragged has taken
+     * its number, so nothing is ever stepped over.
+     */
+    @Test
+    fun movingAStationToTheLastPositionShiftsEveryOtherStationUp() {
+        mFavorites.addAll(stations("a", "b", "c", "d"))
+
+        SortUtils.updateSortIds("a", 3, MediaId.MEDIA_ID_FAVORITES_LIST, mFavorites, mLocals)
+
+        assertEquals(mapOf("b" to 0, "c" to 1, "d" to 2, "a" to 3), storedSortIds(mFavorites))
+    }
+
+    /**
      * Picking a row up and putting it back where it was: the station holding the requested sort
      * id is the dragged one, so the slot has to be kept even though no other station held it.
      */
@@ -109,7 +123,9 @@ class SortUtilsTest {
     fun movingAStationAddedOnTheDeviceDownPutsItAtTheRequestedSortId() {
         mLocals.addAll((0 until 3).map { localStation("local-$it", sortId = it) }.toSet())
 
-        SortUtils.updateSortIds("local-0", 1, MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST, mFavorites, mLocals)
+        SortUtils.updateSortIds(
+            "local-0", 1, MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST, mFavorites, mLocals
+        )
 
         assertEquals(mapOf("local-1" to 0, "local-0" to 1, "local-2" to 2), storedSortIds(mLocals))
     }
