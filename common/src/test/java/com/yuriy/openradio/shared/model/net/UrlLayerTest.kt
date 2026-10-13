@@ -65,20 +65,23 @@ class UrlLayerTest {
     }
 
     /**
-     * Radio Browser is the one place a caller supplied value reaches an address unencoded, and the
-     * assertion says so rather than hiding it behind an ISO code that encodes to itself. Nothing
-     * guarantees two letters: the code is the tail of a browse id, so any MediaBrowser client can
-     * name one. TASK-074 carries the fix; until it lands this is the behaviour.
+     * Nothing guarantees two letters: the code is the tail of a browse id, so any MediaBrowser
+     * client can name one. Left raw, a question mark would turn the paging arguments into part of
+     * a query string that starts inside the path, and Radio Browser would answer for a country
+     * named after the first character.
      */
     @Test
-    fun radioBrowserLeavesTheCountryCodeUnencoded() {
+    fun radioBrowserEncodesTheCountryCode() {
         val urlLayer = UrlLayerRadioBrowserImpl()
+        val url = urlLayer.getStationsByCountry(DELIMITER_COUNTRY_CODE, 1)
 
         assertEquals(
-            "$RADIO_BROWSER/stations/bycountrycodeexact/$AMBIGUOUS_COUNTRY_CODE" +
-                    "?offset=251&limit=$PAGE_SIZE",
-            urlLayer.getStationsByCountry(AMBIGUOUS_COUNTRY_CODE, 1).toString()
+            "$RADIO_BROWSER/stations/bycountrycodeexact/A%3F?offset=251&limit=$PAGE_SIZE",
+            url.toString()
         )
+        assertEquals(DELIMITER_COUNTRY_CODE, url.lastPathSegment)
+        assertEquals("251", url.getQueryParameter("offset"))
+        assertEquals("$PAGE_SIZE", url.getQueryParameter("limit"))
     }
 
     @Test
@@ -160,5 +163,11 @@ class UrlLayerTest {
          * Two characters, like every real code, and the second one means something in an address.
          */
         const val AMBIGUOUS_COUNTRY_CODE = "A&"
+
+        /**
+         * Two characters, the second one the delimiter that starts a query string, which is what
+         * matters in a path segment where an ampersand means nothing.
+         */
+        const val DELIMITER_COUNTRY_CODE = "A?"
     }
 }

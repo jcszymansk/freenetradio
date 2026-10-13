@@ -19,7 +19,7 @@ class UrlLayerRadioBrowserImpl : UrlLayer {
 
     override fun getStationsByCountry(countryCode: String, pageNumber: Int): Uri {
         return Uri.parse(
-            BASE_URL + "stations/bycountrycodeexact/" + countryCode
+            BASE_URL + "stations/bycountrycodeexact/" + encodeValue(countryCode)
                     + "?offset=" + (pageNumber * (DependencyRegistryCommon.PAGE_SIZE + 1))
                     + "&limit=" + DependencyRegistryCommon.PAGE_SIZE
         )
