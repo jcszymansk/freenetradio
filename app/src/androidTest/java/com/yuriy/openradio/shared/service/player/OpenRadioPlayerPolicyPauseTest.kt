@@ -18,14 +18,10 @@ package com.yuriy.openradio.shared.service.player
 
 import android.content.Context
 import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.yuriy.openradio.shared.model.eq.EqualizerLayer
-import com.yuriy.openradio.shared.model.eq.EqualizerState
-import com.yuriy.openradio.shared.model.media.BrowseTree
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import org.junit.After
@@ -72,7 +68,7 @@ class OpenRadioPlayerPolicyPauseTest {
             LocalAudioFixture.BYTES_PER_SECOND
         )
         mPlayer = onMain {
-            OpenRadioPlayer(mContext, IgnoringListener(), InertEqualizerLayer(), BrowseTree())
+            newOpenRadioPlayer(mContext)
         }
     }
 
@@ -320,43 +316,6 @@ class OpenRadioPlayerPolicyPauseTest {
             Thread.sleep(POLL_MILLIS)
         }
         fail("Timed out waiting for $what")
-    }
-
-    /**
-     * ExoPlayer is bound to the looper it was built on, and the service builds it on the main one.
-     */
-    private fun <T> onMain(block: () -> T): T {
-        var result: Result<T>? = null
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            result = runCatching(block)
-        }
-        return result?.getOrThrow() ?: throw IllegalStateException("The main thread ran nothing")
-    }
-
-    private class IgnoringListener : OpenRadioPlayer.Listener {
-
-        override fun onHandledError(error: PlaybackException) = Unit
-
-        override fun onPlaybackStateChanged(mediaItem: MediaItem) = Unit
-    }
-
-    /**
-     * An equalizer that is never attached: the audio effect is not what is under test, and the
-     * real one changes the device's stored equalizer state.
-     */
-    private class InertEqualizerLayer : EqualizerLayer {
-
-        override fun init(audioSessionId: Int) = Unit
-
-        override fun deinit() = Unit
-
-        override fun isInit(): Boolean = false
-
-        override fun saveState(state: EqualizerState) = Unit
-
-        override fun loadState(): EqualizerState = EqualizerState()
-
-        override fun applyState(state: EqualizerState, onSuccess: (state: EqualizerState) -> Unit) = Unit
     }
 
     private companion object {
