@@ -202,7 +202,8 @@ class AutoDetectParserTest {
 
     /**
      * An entry that names nothing is no stream, and the service would otherwise put its empty url
-     * on the station it plays (TASK-043).
+     * on the station it plays (TASK-043). Only the pls and xspf parsers ever made such an entry; the
+     * m3u and asx parsers already skip one themselves, so their fixtures guard against a regression.
      */
     @Test
     fun anEntryThatNamesNothingIsDroppedInEveryFormat() {
