@@ -378,6 +378,7 @@ class OpenRadioService : MediaLibraryService() {
                 when (read) {
                     PlaylistRead.Blocked -> advancePlaylistFallback(mPlaylistFallback.onReadBlocked(resolution))
                     is PlaylistRead.Urls -> advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, read.urls))
+                    PlaylistRead.Failed -> advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, emptyList()))
                 }
             }
         }
