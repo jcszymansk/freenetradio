@@ -15,3 +15,8 @@ sign.properties
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# Gas City
+.beads/*
+!.beads/identity.toml
+.claude/skills/
