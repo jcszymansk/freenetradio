@@ -630,7 +630,7 @@ class OpenRadioService : MediaLibraryService() {
             mUiScope.launch {
                 // This is needed for Media Browser when framework will require media item by id and the view will contain
                 // Browsables only:
-                mBrowseTree[rs.id] = BrowseTree.BrowseData(list, radioStations)
+                mBrowseTree.setPlaylist(BrowseTree.BrowseData(list, radioStations))
                 val pos = list.indexOf(rsPlayable)
                 mPlayer.setMediaItems(list, pos, C.TIME_UNSET)
                 handlePlayRequestUiThread()
@@ -879,7 +879,7 @@ class OpenRadioService : MediaLibraryService() {
                 )
             }
             return Futures.immediateFuture(
-                mBrowseTree.getMediaItemsByMediaId(mediaItems[0].mediaId)
+                mBrowseTree.getMediaItemsByMediaId(mediaItems[0].mediaId, mCurrentParentId)
             )
         }
 
@@ -930,7 +930,8 @@ class OpenRadioService : MediaLibraryService() {
                 return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
             }
             val mediaId = mediaItems[0].mediaId
-            var items = mBrowseTree.getMediaItemsByMediaId(mediaId)
+            // The selection carries no parent, and the list the client browsed last is the one it was made from.
+            var items = mBrowseTree.getMediaItemsByMediaId(mediaId, mCurrentParentId)
 
             // This is a case when Google Assistant ask to play music but nothing selected.
             if (items.isEmpty()) {
@@ -959,7 +960,7 @@ class OpenRadioService : MediaLibraryService() {
 //                for (i in items) {
 //                    radioStations.add(***)
 //                }
-                mBrowseTree[items[0].mediaId] = BrowseTree.BrowseData(items, radioStations)
+                mBrowseTree.setPlaylist(BrowseTree.BrowseData(items, radioStations))
                 mPlayer.setMediaItems(items, 0, C.TIME_UNSET)
             }
 

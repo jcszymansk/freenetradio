@@ -22,6 +22,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.R
+import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import org.junit.After
@@ -309,6 +310,40 @@ class OpenRadioServicePlaybackTest {
         assertEquals(0, mBrowser.mediaItemCount())
         assertNull(mBrowser.currentMediaId())
         assertFalse(mBrowser.isPlaying())
+    }
+
+    /**
+     * TASK-041. A page-0 browse with an active station and an empty queue makes the service build
+     * a playlist of its own and play it. That playlist used to be stored under the active
+     * station's id, and from then on selecting the station from any list played that playlist
+     * instead of the list it was selected from.
+     *
+     * The active station is the only favorite, so the service builds the playlist out of storage
+     * and never asks the provider for new stations.
+     */
+    @Test
+    fun aStationSelectedAfterTheInitialPlaylistPlaysTheListItWasSelectedFrom() {
+        val stations = seedStations(2)
+        val active = stations[0]
+        selectAndPlay(active)
+        mBrowser.awaitPlaying()
+        clearTheQueue()
+        mBrowser.awaitPlayback("the service to hold an active station and an empty queue") {
+            mBrowser.canABrowseStartPlayback()
+        }
+        assertEquals(active.id, mBrowser.activeStationId())
+        mStorages.favorites.add(active)
+
+        mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        mBrowser.awaitPlayback("the service to play the playlist it built") {
+            mBrowser.queueMediaIds() == listOf(active.id)
+        }
+        selectAndPlay(active)
+
+        mBrowser.awaitPlayback("the selection to load the list it was made from") {
+            mBrowser.queueMediaIds() == stations.map { it.id }
+        }
+        assertEquals(active.id, mBrowser.currentMediaId())
     }
 
     /**
