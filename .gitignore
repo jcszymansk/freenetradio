@@ -6,8 +6,6 @@
 sign.properties
 
 # Review loop artifacts
-/reviews
-/.claude/review-loop*
 
 # Beads / Dolt files (added by bd init)
 .dolt/
