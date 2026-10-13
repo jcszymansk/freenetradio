@@ -16,6 +16,7 @@
 
 package wseemann.media.jplaylistparser.parser
 
+import com.yuriy.openradio.shared.utils.AppLogger
 import org.jdom2.input.SAXBuilder
 import org.xml.sax.InputSource
 import wseemann.media.jplaylistparser.playlist.Playlist
@@ -31,9 +32,14 @@ abstract class AbstractParser(private val mSession: AutoDetectParser) : Parser {
     /**
      * Adds [playlistEntry] to [playlist] as a stream, or, when its url has a playlist extension
      * other than HLS, adds what that playlist names instead. See [AutoDetectParser.isHlsUrl].
+     * An entry whose url is blank names nothing and is dropped.
      */
     protected fun parseEntry(playlistEntry: PlaylistEntry, playlist: Playlist) {
         val uri = playlistEntry[PlaylistEntry.URI]
+        if (uri.isBlank()) {
+            AppLogger.w("${javaClass.simpleName} dropping an entry that names no url: $playlistEntry")
+            return
+        }
         if (mSession.isFollowedEntryUrl(uri)) {
             mSession.follow(uri, playlist)
         } else {
