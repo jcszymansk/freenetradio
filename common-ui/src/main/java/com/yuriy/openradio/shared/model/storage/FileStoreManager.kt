@@ -103,18 +103,8 @@ class FileStoreManager : StorageManagerDependency {
             REQUEST_CODE_CREATE_FILE -> {
                 val uri: Uri? = intent.data
                 AppLogger.d("Save data file to:$uri")
-                if (uri != null) {
-                    context.contentResolver?.openOutputStream(uri)?.use { outputStream ->
-                        val data = hashMapOf(
-                            KEY_FAV to mStorageManagerLayer.getAllFavoritesAsString(),
-                            KEY_LOC to mStorageManagerLayer.getAllDeviceLocalsAsString()
-                        )
-                        outputStream.write(AppUtils.encodeBase64(AppUtils.serializeMap(data)))
-                        onSuccess()
-                    } ?: run {
-                        AppLogger.e("Error opening output stream for uri: $uri")
-                        onFailure()
-                    }
+                if (uri != null && writeDataFile(context, uri)) {
+                    onSuccess()
                 } else {
                     onFailure()
                 }
@@ -151,6 +141,36 @@ class FileStoreManager : StorageManagerDependency {
                     }
                 } ?: onFailure()
             }
+        }
+    }
+
+    /**
+     * Writes favorites and device local stations to the document at [uri].
+     *
+     * The document comes from a picker the user left a while ago, so it may be gone or no longer
+     * writable by the time the result arrives; the content resolver throws in that case, and the
+     * caller has to report a failure rather than crash.
+     *
+     * @return true when the whole data file was written.
+     */
+    private fun writeDataFile(context: Context, uri: Uri): Boolean {
+        return try {
+            val outputStream = context.contentResolver?.openOutputStream(uri)
+            if (outputStream == null) {
+                AppLogger.e("$TAG no output stream for uri: $uri")
+                return false
+            }
+            outputStream.use {
+                val data = hashMapOf(
+                    KEY_FAV to mStorageManagerLayer.getAllFavoritesAsString(),
+                    KEY_LOC to mStorageManagerLayer.getAllDeviceLocalsAsString()
+                )
+                it.write(AppUtils.encodeBase64(AppUtils.serializeMap(data)))
+            }
+            true
+        } catch (e: Exception) {
+            AppLogger.e("$TAG error writing data file to uri: $uri", e)
+            false
         }
     }
 

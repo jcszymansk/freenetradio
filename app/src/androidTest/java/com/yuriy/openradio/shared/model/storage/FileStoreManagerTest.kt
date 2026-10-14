@@ -8,13 +8,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
-import java.io.FileNotFoundException
 import java.lang.ref.WeakReference
 
 /**
@@ -186,16 +184,15 @@ class FileStoreManagerTest {
     }
 
     @Test
-    fun anExportToAnUnwritableLocationCurrentlyThrows() {
-        // Pins the defect tracked as TASK-026: the export branch has no error handling, so the
-        // failure callback is never reached. Update this test together with the fix.
+    fun anExportToALocationThatCannotBeOpenedIsReportedAsAFailure() {
+        // The content resolver throws FileNotFoundException for a document that is gone or cannot
+        // be written; the user has to hear about it instead of the app crashing (TASK-026).
         val unreachable = Uri.fromFile(File(mContext.filesDir, "no-such-directory/$FILE_NAME"))
 
-        assertThrows(FileNotFoundException::class.java) {
-            deliver(FileStoreManager.REQUEST_CODE_CREATE_FILE, Activity.RESULT_OK, unreachable)
-        }
+        deliver(FileStoreManager.REQUEST_CODE_CREATE_FILE, Activity.RESULT_OK, unreachable)
+
         assertEquals(0, mSuccesses)
-        assertEquals(0, mFailures)
+        assertEquals(1, mFailures)
     }
 
     private fun deliverExport() {
