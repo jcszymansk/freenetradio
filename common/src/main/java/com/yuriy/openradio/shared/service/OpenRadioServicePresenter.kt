@@ -58,8 +58,8 @@ interface OpenRadioServicePresenter {
 
     /**
      * Stations matching [query], with ids made by [mediaIdBuilder]. There is no default builder:
-     * a caller that searches says how its results are tagged, so none can hand out search results
-     * that look like plain catalogue stations.
+     * a caller that searches has to choose how its results are tagged, so none gets plain
+     * catalogue ids by omission.
      */
     fun getSearchStations(query: String, mediaIdBuilder: MediaIdBuilder): Set<RadioStation>
 
