@@ -61,7 +61,8 @@ class BTConnectionReceiver(private val mListener: Listener) : AbstractReceiver()
             }
             BluetoothAdapter.STATE_DISCONNECTED -> {
                 AppLogger.i("$TAG disconnected from ${device.address}")
-                if (mConnectedDevice.isNotEmpty()) {
+                // The listener pauses playback, so only the device the audio was going to counts.
+                if (device.address == mConnectedDevice) {
                     mListener.onDisconnected()
                 }
             }
