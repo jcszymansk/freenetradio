@@ -51,10 +51,12 @@ class BrowseTreeTest {
         val tree = BrowseTree()
         val parentId = "parent"
         val child = MediaItem.Builder().setMediaId("child").build()
-        tree[parentId] = BrowseTree.BrowseData(mutableListOf(child), mutableSetOf())
+        val stored = BrowseTree.BrowseData(mutableListOf(child), mutableSetOf())
+        tree[parentId] = stored
 
-        assertEquals(tree[parentId], tree.getMediaItemsByMediaId(parentId))
-        assertEquals(tree[parentId], tree.getMediaItemsByMediaId(child.mediaId))
+        assertSame(stored.children, tree[parentId])
+        assertSame(stored.children, tree.getMediaItemsByMediaId(parentId))
+        assertSame(stored.children, tree.getMediaItemsByMediaId(child.mediaId))
         assertTrue(tree.getMediaItemsByMediaId("missing").isEmpty())
     }
 
@@ -85,12 +87,13 @@ class BrowseTreeTest {
         val tree = BrowseTree()
         val listed = station("listed")
         val sibling = station("sibling")
-        tree["parent"] = data(listed, sibling)
+        val browsed = data(listed, sibling)
+        tree["parent"] = browsed
 
         tree.setPlaylist(data(listed))
 
         assertNull(tree[listed.id])
-        assertSame(tree["parent"], tree.getMediaItemsByMediaId(listed.id))
+        assertSame(browsed.children, tree.getMediaItemsByMediaId(listed.id))
     }
 
     @Test
@@ -98,10 +101,11 @@ class BrowseTreeTest {
         val tree = BrowseTree()
         val listed = station("listed")
         tree.setPlaylist(data(listed))
+        val browsed = data(listed, station("sibling"))
 
-        tree["parent"] = data(listed, station("sibling"))
+        tree["parent"] = browsed
 
-        assertSame(tree["parent"], tree.getMediaItemsByMediaId(listed.id))
+        assertSame(browsed.children, tree.getMediaItemsByMediaId(listed.id))
     }
 
     @Test
@@ -124,17 +128,17 @@ class BrowseTreeTest {
         val tree = BrowseTree()
         val shared = station("shared")
         val alone = station("alone")
-        tree["favorites"] = data(shared)
-        tree["country"] = data(station("other"), shared)
-        tree.setPlaylist(data(shared, alone))
+        val favorites = data(shared)
+        val country = data(station("other"), shared)
+        val playlist = data(shared, alone)
+        tree["favorites"] = favorites
+        tree["country"] = country
+        tree.setPlaylist(playlist)
 
-        assertSame(tree["country"], tree.getMediaItemsByMediaId(shared.id, "country"))
-        assertSame(tree["favorites"], tree.getMediaItemsByMediaId(shared.id, "favorites"))
-        assertSame(tree["favorites"], tree.getMediaItemsByMediaId(shared.id, "unrelated"))
-        assertSame(
-            tree.getMediaItemsByMediaId(alone.id),
-            tree.getMediaItemsByMediaId(alone.id, "country")
-        )
+        assertSame(country.children, tree.getMediaItemsByMediaId(shared.id, "country"))
+        assertSame(favorites.children, tree.getMediaItemsByMediaId(shared.id, "favorites"))
+        assertSame(favorites.children, tree.getMediaItemsByMediaId(shared.id, "unrelated"))
+        assertSame(playlist.children, tree.getMediaItemsByMediaId(alone.id, "country"))
         assertTrue(tree.getMediaItemsByMediaId("missing", "country").isEmpty())
     }
 
@@ -144,12 +148,13 @@ class BrowseTreeTest {
         val listed = station("listed")
         val dropped = station("dropped")
         val added = station("added")
-        tree["parent"] = data(listed)
+        val browsed = data(listed)
+        tree["parent"] = browsed
         tree.setPlaylist(data(listed, dropped))
 
         tree.setPlaylist(data(added))
 
-        assertSame(tree["parent"]!![0], tree.getMediaItemByMediaId(listed.id))
+        assertSame(browsed.children[0], tree.getMediaItemByMediaId(listed.id))
         assertSame(listed, tree.getRadioStationByMediaId(listed.id))
         assertNull(tree.getMediaItemByMediaId(dropped.id))
         assertSame(RadioStation.INVALID_INSTANCE, tree.getRadioStationByMediaId(dropped.id))
@@ -179,14 +184,15 @@ class BrowseTreeTest {
     fun replacingAListKeepsWhatAnotherListHolds() {
         val tree = BrowseTree()
         val shared = station("shared")
+        val kept = data(shared)
         tree["one"] = data(shared)
-        tree["two"] = data(shared)
+        tree["two"] = kept
 
         tree["one"] = data(station("replacement"))
 
         assertSame(shared, tree.getRadioStationByMediaId(shared.id))
-        assertNotNull(tree.getMediaItemByMediaId(shared.id))
-        assertSame(tree["two"], tree.getMediaItemsByMediaId(shared.id))
+        assertSame(kept.children[0], tree.getMediaItemByMediaId(shared.id))
+        assertSame(kept.children, tree.getMediaItemsByMediaId(shared.id))
     }
 
     private fun station(id: String) = RadioStation.makeDefaultInstance(id)
