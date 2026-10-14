@@ -153,7 +153,9 @@ object DependencyRegistryCommon {
         val equalizerStorage = EqualizerStorage(contextRef)
         sEqualizerLayer = EqualizerLayerImpl(equalizerStorage)
         val imagesDatabase = ImagesDatabase.getInstance(context)
-        sImagesPersistenceLayer = ImagesPersistenceLayerImpl(context, downloader, imagesDatabase)
+        sImagesPersistenceLayer = ImagesPersistenceLayerImpl(
+            context, downloader, imagesDatabase, sNetworkLayer
+        )
 
         sRadioStationManagerLayer = RadioStationManagerLayerImpl(
             RadioStationValidatorImpl(
