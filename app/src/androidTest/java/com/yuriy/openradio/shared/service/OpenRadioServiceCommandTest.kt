@@ -346,6 +346,25 @@ class OpenRadioServiceCommandTest {
         )
     }
 
+    /**
+     * Android Auto shows the favorite button the session publishes for the playing station, and
+     * pressing it sends back exactly the command the service put in it, naming no station. The
+     * button has to mark the station while it is not a favorite, and the one that replaces it has
+     * to unmark it again.
+     */
+    @Test
+    fun theFavoriteButtonTheSessionPublishesMarksAndUnmarksThePlayingStation() {
+        val station = playAStation()
+
+        pressTheFavoriteButton(OpenRadioService.CMD_MARK_FAVORITE)
+        assertEquals(listOf(station.id), mStorages.freshFavorites().getAll().map { it.id })
+
+        pressTheFavoriteButton(OpenRadioService.CMD_UNMARK_FAVORITE)
+        assertTrue(mStorages.freshFavorites().getAll().isEmpty())
+
+        awaitTheFavoriteButton(OpenRadioService.CMD_MARK_FAVORITE)
+    }
+
     @Test
     fun sortUpdateReordersLocalsAndRefreshesThem() {
         val stations = (0 until 3).map {
@@ -587,6 +606,32 @@ class OpenRadioServiceCommandTest {
             mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST).isEmpty()
         )
         return station
+    }
+
+    /**
+     * Presses the favorite button the session publishes once it is the one that sends [action],
+     * the way a head unit does: with the button's own command, and its extras as the arguments.
+     */
+    private fun pressTheFavoriteButton(action: String) {
+        val command = awaitTheFavoriteButton(action)
+        assertEquals(
+            "The session refused its own favorite button",
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(command.customAction, command.customExtras).resultCode
+        )
+    }
+
+    /**
+     * Waits until the session's custom layout is a single favorite button that sends [action].
+     *
+     * The layout is pushed to the controller, and the service publishes it from a coroutine after
+     * the station starts, so it is not there the instant playback or a command returns.
+     */
+    private fun awaitTheFavoriteButton(action: String): SessionCommand {
+        mBrowser.awaitPlayback("a favorite button that sends $action") {
+            mBrowser.customLayout().map { it.sessionCommand?.customAction } == listOf(action)
+        }
+        return checkNotNull(mBrowser.customLayout().single().sessionCommand)
     }
 
     /**
