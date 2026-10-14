@@ -66,6 +66,23 @@ internal class LocalAudioFixture(private val mContext: Context) {
     }
 
     /**
+     * One frame of MPEG-1 Layer III silence, for a server to repeat at [MP3_BYTES_PER_SECOND] for
+     * as long as a client keeps reading. Unlike [endlessWavHeader], a run of these frames declares
+     * neither a length nor a duration, which is how a radio station's MP3 stream reaches the
+     * player, and the player treats such a stream as live: one it cannot resume where it left
+     * off, only load again from wherever the station is now.
+     *
+     * The header names 128 kbit/s at 48 kHz, mono, with no CRC, which makes every frame exactly
+     * 384 bytes long with no padding. Everything after the header is zero, and zeroed side
+     * information names no main data, which decodes as silence.
+     */
+    fun silentMp3Frame(): ByteArray {
+        val frame = ByteArray(MP3_FRAME_SIZE)
+        MP3_FRAME_HEADER.copyInto(frame)
+        return frame
+    }
+
+    /**
      * Removes every file this fixture wrote. A url handed out before this is no longer readable.
      */
     fun delete() {
@@ -142,6 +159,22 @@ internal class LocalAudioFixture(private val mContext: Context) {
          * How many bytes of samples one second of the fixture's audio takes.
          */
         const val BYTES_PER_SECOND = SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE
+
+        /**
+         * How many bytes one second of [silentMp3Frame] takes: 128 kbit/s.
+         */
+        const val MP3_BYTES_PER_SECOND = 16_000
+
+        /**
+         * 144 times the bit rate over the sample rate, the length of a Layer III frame without
+         * padding.
+         */
+        private const val MP3_FRAME_SIZE = 384
+
+        /**
+         * Frame sync, MPEG-1, Layer III, no CRC; 128 kbit/s, 48 kHz, no padding; mono.
+         */
+        private val MP3_FRAME_HEADER = byteArrayOf(0xFF.toByte(), 0xFB.toByte(), 0x94.toByte(), 0xC0.toByte())
 
         private const val HEADER_SIZE = 44
 

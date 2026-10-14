@@ -94,12 +94,20 @@ internal class LoopbackHttpFixture {
     }
 
     /**
-     * Broadcasts at [path] the way a radio station does: [head] first, then zeroed bytes at
-     * [bytesPerSecond] for as long as the client keeps the connection open, with no length
-     * declared. The returned [Broadcast] counts what was sent and how many connections are open.
+     * Broadcasts at [path] the way a radio station does: [head] first, then [body] over and over
+     * at [bytesPerSecond] for as long as the client keeps the connection open, with no length
+     * declared. The returned [Broadcast] counts what was sent and how many connections are open,
+     * and can take the station off the air.
      */
-    fun broadcast(path: String, contentType: String, head: ByteArray, bytesPerSecond: Int): Broadcast {
-        val broadcast = Broadcast(url(path), contentType, head, bytesPerSecond)
+    fun broadcast(
+        path: String,
+        contentType: String,
+        head: ByteArray,
+        bytesPerSecond: Int,
+        body: ByteArray = SILENT_BODY
+    ): Broadcast {
+        require(body.isNotEmpty()) { "A broadcast needs something to repeat" }
+        val broadcast = Broadcast(url(path), contentType, head, body, bytesPerSecond)
         mBroadcasts[path] = broadcast
         return broadcast
     }
@@ -226,6 +234,7 @@ internal class LoopbackHttpFixture {
         val url: String,
         private val mContentType: String,
         private val mHead: ByteArray,
+        private val mBody: ByteArray,
         private val mBytesPerSecond: Int
     ) {
 
@@ -234,6 +243,9 @@ internal class LoopbackHttpFixture {
         private val mOpenConnections = AtomicInteger()
 
         private val mConnections = AtomicInteger()
+
+        @Volatile
+        private var mIsOnAir = true
 
         /**
          * Bytes written to every connection so far, head included. A write the client never read
@@ -244,17 +256,35 @@ internal class LoopbackHttpFixture {
         }
 
         /**
-         * Connections that are still being written to.
+         * Connections that are still open, whether they are being written to or not.
          */
         fun openConnections(): Int {
             return mOpenConnections.get()
         }
 
         /**
-         * Connections ever made, open or closed.
+         * Connections ever made, open or closed, answered or not.
          */
         fun connections(): Int {
             return mConnections.get()
+        }
+
+        /**
+         * Takes the station off the air the way a lost signal does, as the client sees it: a
+         * connection that is open stays open but nothing more arrives over it, and a new one is
+         * accepted but never answered. Nothing is closed or refused, because a client in a dead
+         * zone is told neither and finds out only by timing out. A connection that went quiet
+         * stays quiet until the client closes it, as one would that outlived the signal.
+         */
+        fun goOffAir() {
+            mIsOnAir = false
+        }
+
+        /**
+         * Puts the station back on the air: a connection made from now on is answered again.
+         */
+        fun goOnAir() {
+            mIsOnAir = true
         }
 
         /**
@@ -266,6 +296,10 @@ internal class LoopbackHttpFixture {
             mConnections.incrementAndGet()
             mOpenConnections.incrementAndGet()
             try {
+                if (mIsOnAir.not()) {
+                    awaitClientClose(socket)
+                    return
+                }
                 val output = socket.getOutputStream()
                 val head = buildString {
                     append("HTTP/1.1 $HTTP_OK OK\r\n")
@@ -277,7 +311,16 @@ internal class LoopbackHttpFixture {
                 write(output, head.toByteArray(Charsets.US_ASCII))
                 write(output, mHead)
                 val chunk = ByteArray(maxOf(1, mBytesPerSecond / CHUNKS_PER_SECOND))
+                var bodyOffset = 0
                 while (Thread.currentThread().isInterrupted.not()) {
+                    if (mIsOnAir.not()) {
+                        awaitClientClose(socket)
+                        return
+                    }
+                    for (index in chunk.indices) {
+                        chunk[index] = mBody[bodyOffset]
+                        bodyOffset = (bodyOffset + 1) % mBody.size
+                    }
                     write(output, chunk)
                     Thread.sleep(MILLIS_PER_SECOND / CHUNKS_PER_SECOND)
                 }
@@ -334,7 +377,7 @@ internal class LoopbackHttpFixture {
 
         /**
          * Sends what this stall sends, then waits until the client closes [socket] or the fixture
-         * stops. The wait polls, because a blocked socket read cannot be interrupted.
+         * stops.
          */
         internal fun hold(socket: Socket) {
             mConnections.incrementAndGet()
@@ -352,29 +395,12 @@ internal class LoopbackHttpFixture {
                     output.write(mHead)
                     output.flush()
                 }
-                socket.soTimeout = POLL_MILLIS
-                val input = socket.getInputStream()
-                while (Thread.currentThread().isInterrupted.not()) {
-                    try {
-                        if (input.read() == END_OF_STREAM) {
-                            return
-                        }
-                    } catch (exception: SocketTimeoutException) {
-                        /* Still open; look again. */
-                    }
-                }
+                awaitClientClose(socket)
             } catch (exception: IOException) {
                 /* The client reset the connection, which ends a stall too. */
             } finally {
                 mOpenConnections.decrementAndGet()
             }
-        }
-
-        private companion object {
-
-            const val POLL_MILLIS = 100
-
-            const val END_OF_STREAM = -1
         }
     }
 
@@ -400,6 +426,8 @@ internal class LoopbackHttpFixture {
 
         const val AUDIO_WAV = "audio/wav"
 
+        const val AUDIO_MPEG = "audio/mpeg"
+
         const val AUDIO_PLS = "audio/x-scpls"
 
         const val TEXT_PLAIN = "text/plain"
@@ -413,5 +441,35 @@ internal class LoopbackHttpFixture {
         private const val HOST = "127.0.0.1"
 
         private const val BACKLOG = 16
+
+        private const val POLL_MILLIS = 100
+
+        private const val END_OF_STREAM = -1
+
+        /**
+         * What a broadcast repeats unless told otherwise: zeroed bytes, which are silence in the
+         * PCM a WAV head announces.
+         */
+        private val SILENT_BODY = ByteArray(1)
+
+        /**
+         * Keeps a connection open, sending nothing, until the client closes [socket] or the fixture
+         * stops. The wait polls, because a blocked socket read cannot be interrupted.
+         *
+         * @throws IOException when the client resets the connection, which ends the wait as well.
+         */
+        private fun awaitClientClose(socket: Socket) {
+            socket.soTimeout = POLL_MILLIS
+            val input = socket.getInputStream()
+            while (Thread.currentThread().isInterrupted.not()) {
+                try {
+                    if (input.read() == END_OF_STREAM) {
+                        return
+                    }
+                } catch (exception: SocketTimeoutException) {
+                    /* Still open; look again. */
+                }
+            }
+        }
     }
 }
