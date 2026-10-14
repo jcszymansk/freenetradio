@@ -133,9 +133,9 @@ class BTConnectionReceiverTest {
     }
 
     /**
-     * The service pauses on every reported disconnection, so a device that was never carrying the
-     * audio must not be reported: a smartwatch going out of range would otherwise pause the music
-     * playing through the car stereo. This is TASK-044.
+     * The service pauses on every reported disconnection, so a device other than the one last seen
+     * connecting must not be reported: a smartwatch going out of range would otherwise pause the
+     * music playing through the car stereo. This is TASK-044.
      */
     @Test
     fun aDisconnectionOfAnotherDeviceIsIgnored() {
@@ -147,6 +147,10 @@ class BTConnectionReceiverTest {
         assertEquals(0, mListener.sameDeviceConnections)
     }
 
+    /**
+     * The newer connection displaced the first device, so the first device's disconnection no
+     * longer counts while the second one's still does.
+     */
     @Test
     fun aDisconnectionOfTheDeviceConnectedBeforeTheLastOneIsIgnored() {
         mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
