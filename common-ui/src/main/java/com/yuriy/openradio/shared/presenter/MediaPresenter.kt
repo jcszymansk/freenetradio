@@ -79,6 +79,12 @@ interface MediaPresenter {
 
     fun getCurrentCategory(): String
 
+    /**
+     * @return a copy of the node stack, bottom first, so that whoever reads it can decide what to
+     *   do with the stack without the stack changing under that decision.
+     */
+    fun getMediaItemsStack(): List<String>
+
     fun getServiceCommander(): ServiceCommander
 
     fun updateActiveItem(position: Int)

@@ -614,6 +614,10 @@ class MediaPresenterImpl(
         return mMediaItemsStack.last
     }
 
+    override fun getMediaItemsStack(): List<String> {
+        return mMediaItemsStack.toList()
+    }
+
     /**
      * Handles action of the Radio Station deletion.
      *
