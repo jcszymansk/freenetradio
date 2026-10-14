@@ -706,18 +706,12 @@ class OpenRadioService : MediaLibraryService() {
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            AppLogger.d("$TAG [$controller] Playback Resumption")
-            val mediaItemCount = mPlayer.mediaItemCount
-            if (mediaItemCount != 0) {
-                return Futures.immediateFuture(
-                    MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0)
-                )
-            }
-            return Futures.immediateFuture(
-                MediaSession.MediaItemsWithStartPosition(
-                    mPlayer.getPlaylist(), mPlayer.currentMediaItemIndex, 0
-                )
+            val resumption = mPlayer.getResumption()
+            AppLogger.d(
+                "$TAG [$controller] Playback Resumption of ${resumption.mediaItems.size} items " +
+                        "at ${resumption.startIndex}"
             )
+            return Futures.immediateFuture(resumption)
         }
 
         override fun onPlayerCommandRequest(

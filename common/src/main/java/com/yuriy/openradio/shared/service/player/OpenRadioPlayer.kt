@@ -45,6 +45,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
+import androidx.media3.session.MediaSession
 import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.media.BrowseTree
@@ -96,6 +97,13 @@ class OpenRadioPlayer(
     private val mListeners = arrayListOf<Player.Listener>()
 
     private val mPlaylist: MutableList<MediaItem> = arrayListOf()
+
+    /**
+     * The last queue that held anything, as it stood before the latest change that could have
+     * emptied it, at the item that was current then. It outlives the queue on purpose, see
+     * [getResumption].
+     */
+    private var mLastQueue = MediaSession.MediaItemsWithStartPosition(emptyList(), 0, C.TIME_UNSET)
 
     /**
      * Handler for the ExoPlayer to handle events.
@@ -173,6 +181,16 @@ class OpenRadioPlayer(
         return ArrayList(mPlaylist)
     }
 
+    /**
+     * What a play request that finds the queue empty loads: the queue as it stood just before it
+     * was emptied, at the item that was current then, which is what was playing. Media3 asks only
+     * when the player has no current item, which for this player means an empty queue, so the
+     * answer is not meant for a loaded one.
+     */
+    fun getResumption(): MediaSession.MediaItemsWithStartPosition {
+        return mLastQueue
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Player interface
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -231,6 +249,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size}")
+        rememberQueue()
         forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems)
         mPlaylist.clear()
@@ -239,6 +258,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size} $resetPosition")
+        rememberQueue()
         forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems, resetPosition)
         mPlaylist.clear()
@@ -247,6 +267,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size} $startIndex $startPositionMs")
+        rememberQueue()
         forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems, startIndex, startPositionMs)
         mPlaylist.clear()
@@ -316,11 +337,13 @@ class OpenRadioPlayer(
     }
 
     override fun removeMediaItem(index: Int) {
+        rememberQueue()
         mPlayer.removeMediaItem(index)
         mPlaylist.removeAt(index)
     }
 
     override fun removeMediaItems(fromIndex: Int, toIndex: Int) {
+        rememberQueue()
         mPlayer.removeMediaItems(fromIndex, toIndex)
         val removedItemsLength = toIndex - fromIndex
         for (i in removedItemsLength - 1 downTo 0) {
@@ -330,6 +353,7 @@ class OpenRadioPlayer(
 
     override fun clearMediaItems() {
         forgetAwaitedStream("clear media items")
+        rememberQueue()
         mPlayer.clearMediaItems()
         mPlaylist.clear()
     }
@@ -782,7 +806,7 @@ class OpenRadioPlayer(
     /**
      * Resets the player to its uninitialized state.
      */
-    fun reset() {
+    private fun reset() {
         AppLogger.d("$TAG reset")
         updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "reset")
         forgetAwaitedStream("reset")
@@ -833,6 +857,19 @@ class OpenRadioPlayer(
      */
     fun resumesOnReconnect(): Boolean {
         return mNetworkRecovery.resumesOnReconnect
+    }
+
+    /**
+     * Keeps the queue before a change that may empty it, so that [getResumption] can still offer
+     * it once the change has. An empty queue leaves the one kept earlier in place.
+     */
+    private fun rememberQueue() {
+        if (mPlaylist.isEmpty()) {
+            return
+        }
+        mLastQueue = MediaSession.MediaItemsWithStartPosition(
+            ArrayList(mPlaylist), mPlayer.currentMediaItemIndex, C.TIME_UNSET
+        )
     }
 
     private fun forgetAwaitedStream(event: String) {
