@@ -23,6 +23,7 @@ import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 
 /**
  * Covers what [SleepTimerImpl] does with a timestamp: whether it fires, when it fires, and what a
@@ -183,6 +184,49 @@ class SleepTimerImplTest {
     }
 
     /**
+     * Calls that race each other must still leave exactly one timer armed. Each thread asks for a
+     * different delay, so a call whose start picked up another call's delay, or whose timer
+     * survived being replaced, shows up as a second completion.
+     */
+    @Test
+    fun concurrentCallsLeaveOneTimerArmed() {
+        val listener = RecordingListener()
+        val timer = SleepTimerImpl(listener)
+        val ready = CountDownLatch(RACING_THREADS)
+        val go = CountDownLatch(1)
+        val startedAt = System.currentTimeMillis()
+        val threads = (0 until RACING_THREADS).map { index ->
+            thread {
+                ready.countDown()
+                go.await()
+                timer.handle(startedAt + DELAY_MS + index, true)
+            }
+        }
+        ready.await()
+        go.countDown()
+        threads.forEach { it.join() }
+
+        assertTrue("No timer completed", listener.awaitCompletion())
+        Thread.sleep(SILENCE_MS)
+        assertEquals("More than one racing call left a timer armed", 1, listener.completions)
+    }
+
+    /**
+     * A listener may arm the next timer while it hears the current one complete. The timer that
+     * just completed must not take the new one down with it as it finishes.
+     */
+    @Test
+    fun aTimerArmedFromACompletionStillCompletes() {
+        val listener = RearmingListener()
+        val timer = SleepTimerImpl(listener)
+        listener.mTimer = timer
+
+        timer.handle(System.currentTimeMillis() + DELAY_MS, true)
+
+        assertTrue("The timer armed on completion never completed", listener.awaitSecondCompletion())
+    }
+
+    /**
      * Counts completions and lets a test wait for the first one, or wait out a window in which
      * none may arrive.
      */
@@ -209,6 +253,31 @@ class SleepTimerImplTest {
         }
     }
 
+    /**
+     * Arms the timer again, one delay ahead, when it hears the first completion, and lets a test
+     * wait for the second.
+     */
+    private class RearmingListener : SleepTimerListener {
+
+        lateinit var mTimer: SleepTimer
+
+        private val mCompletions = AtomicInteger(0)
+
+        private val mSecondCompletion = CountDownLatch(1)
+
+        override fun onComplete() {
+            if (mCompletions.incrementAndGet() == 1) {
+                mTimer.handle(System.currentTimeMillis() + DELAY_MS, true)
+            } else {
+                mSecondCompletion.countDown()
+            }
+        }
+
+        fun awaitSecondCompletion(): Boolean {
+            return mSecondCompletion.await(COMPLETION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        }
+    }
+
     private companion object {
 
         /**
@@ -222,5 +291,7 @@ class SleepTimerImplTest {
         const val COMPLETION_TIMEOUT_MS = 5_000L
 
         const val SILENCE_MS = 1_000L
+
+        const val RACING_THREADS = 16
     }
 }

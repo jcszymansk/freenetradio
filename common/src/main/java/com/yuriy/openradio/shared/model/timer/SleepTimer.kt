@@ -22,7 +22,7 @@ interface SleepTimer {
      * Replaces whatever timer is running with one that completes at [time], or with none when
      * [enabled] is false or [time] is not accepted.
      */
-    fun handle(time: Long, enabled:Boolean)
+    fun handle(time: Long, enabled: Boolean)
 
     /**
      * Stops the running timer, if any, so that it never completes.

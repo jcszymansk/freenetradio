@@ -35,7 +35,7 @@ class SleepTimerImpl(
         mListener.onComplete()
     }
 
-    override fun handle(time: Long, enabled:Boolean) {
+    override fun handle(time: Long, enabled: Boolean) {
         cancel()
         if (!enabled) {
             return
@@ -45,9 +45,8 @@ class SleepTimerImpl(
             AppLogger.e("Sleep timer can not be started for a time that is not in the future")
             return
         }
-        mTimerTask.mDelay = delay
-        mTimerTask.start()
-        AppLogger.i("Sleep timer started for ${mTimerTask.mDelay} ms")
+        mTimerTask.start(delay)
+        AppLogger.i("Sleep timer started for $delay ms")
     }
 
     override fun cancel() {
