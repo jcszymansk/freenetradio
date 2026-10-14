@@ -125,6 +125,22 @@ class OpenRadioServicePresenterImplTest {
         )
     }
 
+    /**
+     * A search from the service pages through the command the presenter holds for
+     * [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE]: the page index lives on that instance, so a second
+     * copy would restart every search at its first page.
+     */
+    @Test
+    fun theSearchCommandIsTheInstanceRegisteredForTheServiceSearch() {
+        for (presenter in listOf(presenter(isCar = false), presenter(isCar = true))) {
+            assertSame(
+                presenter.getMediaItemCommand(MediaId.MEDIA_ID_SEARCH_FROM_SERVICE),
+                presenter.getSearchCommand()
+            )
+            assertSame(presenter.getSearchCommand(), presenter.getSearchCommand())
+        }
+    }
+
     @Test
     fun eachCatalogueRequestCarriesItsOwnUrlToTheModel() {
         val urlLayer = RecordingUrlLayer()

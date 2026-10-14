@@ -61,6 +61,8 @@ class OpenRadioServicePresenterImpl(
      */
     private val mMediaItemCommands = HashMap<String, MediaItemCommand>()
 
+    private val mSearchCommand = MediaItemSearchFromService()
+
     init {
         if (isCar) {
             mMediaItemCommands[MediaId.MEDIA_ID_ROOT] = MediaItemRootCar(source)
@@ -74,13 +76,17 @@ class OpenRadioServicePresenterImpl(
         mMediaItemCommands[MediaId.MEDIA_ID_CHILD_CATEGORIES] = MediaItemChildCategories()
         mMediaItemCommands[MediaId.MEDIA_ID_FAVORITES_LIST] = MediaItemFavoritesList()
         mMediaItemCommands[MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST] = MediaItemLocalsList()
-        mMediaItemCommands[MediaId.MEDIA_ID_SEARCH_FROM_SERVICE] = MediaItemSearchFromService()
+        mMediaItemCommands[MediaId.MEDIA_ID_SEARCH_FROM_SERVICE] = mSearchCommand
         mMediaItemCommands[MediaId.MEDIA_ID_POPULAR_STATIONS] = MediaItemPopularStations()
         mMediaItemCommands[MediaId.MEDIA_ID_NEW_STATIONS] = MediaItemNewStations()
     }
 
     override fun getMediaItemCommand(commandId: String): MediaItemCommand? {
         return mMediaItemCommands[commandId]
+    }
+
+    override fun getSearchCommand(): MediaItemCommand {
+        return mSearchCommand
     }
 
     override fun startNetworkMonitor(context: Context, listener: NetworkMonitorListener) {

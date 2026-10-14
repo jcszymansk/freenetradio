@@ -1150,7 +1150,6 @@ class OpenRadioService : MediaLibraryService() {
             action: (size: Int) -> LibraryResult<V>
         ): ListenableFuture<LibraryResult<V>> {
             val id = MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
-            val command = mPresenter.getMediaItemCommand(id)
             val future = SettableFuture.create<LibraryResult<V>>()
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, Country.COUNTRY_CODE_DEFAULT, id,
@@ -1170,17 +1169,12 @@ class OpenRadioService : MediaLibraryService() {
                     }
                 }
             )
-            if (command != null) {
-                command.execute(
-                    MediaItemCommand.IUpdatePlaybackState { error ->
-                        AppLogger.e("$TAG update playback state error $error")
-                    },
-                    dependencies
-                )
-            } else {
-                AppLogger.w("$TAG no command for parentId: $id")
-                future.set(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
-            }
+            mPresenter.getSearchCommand().execute(
+                MediaItemCommand.IUpdatePlaybackState { error ->
+                    AppLogger.e("$TAG update playback state error $error")
+                },
+                dependencies
+            )
             return future
         }
 
