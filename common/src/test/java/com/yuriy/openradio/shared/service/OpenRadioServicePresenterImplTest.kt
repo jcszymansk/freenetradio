@@ -38,6 +38,7 @@ import com.yuriy.openradio.shared.model.media.item.MediaItemPopularStations
 import com.yuriy.openradio.shared.model.media.item.MediaItemRoot
 import com.yuriy.openradio.shared.model.media.item.MediaItemRootCar
 import com.yuriy.openradio.shared.model.media.item.MediaItemSearchFromService
+import com.yuriy.openradio.shared.model.media.setVariant
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
 import com.yuriy.openradio.shared.model.source.Source
@@ -201,21 +202,33 @@ class OpenRadioServicePresenterImplTest {
         assertEquals(0, modelLayer.countriesRequests)
     }
 
+    /**
+     * Every answer after a change is asked of a second presenter on the same preferences as well.
+     * [FavoritesStorage] remembers the answers it gave in memory, so the presenter that made the
+     * change would answer the same way if nothing reached the preferences at all. The station
+     * has a stream because the storage reads back only stations that can be played.
+     */
     @Test
     fun markingAStationAsFavoriteIsVisibleToTheNextLookup() {
-        val presenter = presenter()
-        val station = RadioStation.makeDefaultInstance("station")
+        val context = preferencesContext()
+        val presenter = presenter(settingsContext = context)
+        val station = RadioStation.makeDefaultInstance("station").apply {
+            setVariant(128, "https://radio.example/station.mp3")
+        }
 
         assertFalse(presenter.isRadioStationFavorite(station))
 
         presenter.updateRadioStationFavorite(station)
         assertTrue(presenter.isRadioStationFavorite(station))
+        assertTrue(presenter(settingsContext = context).isRadioStationFavorite(station))
 
         presenter.updateRadioStationFavorite(station)
         assertFalse(presenter.isRadioStationFavorite(station))
+        assertFalse(presenter(settingsContext = context).isRadioStationFavorite(station))
 
         presenter.updateRadioStationFavorite(station, true)
         assertTrue(presenter.isRadioStationFavorite(station))
+        assertTrue(presenter(settingsContext = context).isRadioStationFavorite(station))
     }
 
     @Test
@@ -293,10 +306,15 @@ class OpenRadioServicePresenterImplTest {
     }
 
     @Test
-    fun settingsAnswerWithTheirStoredDefaults() {
-        val presenter = presenter()
+    fun theCountryCodeIsTheStoredOneAndTheDefaultUntilOneIsStored() {
+        val context = preferencesContext()
+        val presenter = presenter(settingsContext = context)
 
         assertEquals(Country.COUNTRY_CODE_DEFAULT, presenter.getCountryCode())
+
+        LocationStorage(StrongContextReference(context)).setCountryCode("PL")
+
+        assertEquals("PL", presenter.getCountryCode())
     }
 
     /**
@@ -314,13 +332,20 @@ class OpenRadioServicePresenterImplTest {
 
     /**
      * Streaming over mobile is allowed until the user says otherwise, so a profile that has never
-     * opened the network settings must not have playback blocked on it.
+     * opened the network settings must not have playback blocked on it. Turning mobile data off
+     * afterwards blocks the same presenter, which shows that the first answer was read from the
+     * preferences rather than produced without them.
      */
     @Test
     fun anUntouchedProfileStreamsOverMobile() {
-        val presenter = presenter(networkLayer = RecordingNetworkLayer(mobile = true))
+        val context = preferencesContext()
+        val presenter = presenter(networkLayer = RecordingNetworkLayer(mobile = true), settingsContext = context)
 
         assertFalse(presenter.isPlaybackBlockedByMobileNetwork())
+
+        NetworkSettingsStorage(StrongContextReference(context)).setUseMobile(false)
+
+        assertTrue(presenter.isPlaybackBlockedByMobileNetwork())
     }
 
     private fun gate(isMobile: Boolean, useMobile: Boolean): OpenRadioServicePresenter {
@@ -355,7 +380,7 @@ class OpenRadioServicePresenterImplTest {
         memoryCache: RecordingApiCache = RecordingApiCache(),
         sleepTimer: RecordingSleepTimerModel = RecordingSleepTimerModel(),
         countriesCache: TreeSet<Country> = TreeSet(),
-        settingsContext: Context = ContextWrapper(null)
+        settingsContext: Context = preferencesContext()
     ): OpenRadioServicePresenter {
         val contextRef = StrongContextReference(settingsContext)
         val favoritesStorage = FavoritesStorage(contextRef)
