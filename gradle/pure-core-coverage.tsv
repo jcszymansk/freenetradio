@@ -98,6 +98,7 @@ com/yuriy/openradio/shared/model/net/UrlLayerWebRadioImpl	com.yuriy.openradio.sh
 com/yuriy/openradio/shared/model/filter/FilterImpl	com.yuriy.openradio.shared.model.filter.FilterImplTest	:common
 com/yuriy/openradio/shared/model/timer/SleepTimerImpl	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/model/timer/CoroutineTimerTask	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
+com/yuriy/openradio/shared/model/logging/DiagnosticReportFiles	com.yuriy.openradio.shared.model.logging.DiagnosticReportFilesTest	:common-ui
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback$Exhausted	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
@@ -122,6 +123,7 @@ wseemann/media/jplaylistparser/parser/asx/ASXPlaylistParser	wseemann.media.jplay
 wseemann/media/jplaylistparser/parser/xspf/XSPFPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/mime/MediaType	wseemann.media.jplaylistparser.mime.MediaTypeTest	:common
 
+com/yuriy/openradio/shared/model/logging/LoggingLayerImpl	EXCLUDED	rule 3: its report is what logcat, Build and the PackageManager answer.
 com/yuriy/openradio/shared/model/media/MediaResourcesManager	EXCLUDED	rule 3: its behaviour is a Media3 MediaBrowser session connected to the service.
 com/yuriy/openradio/shared/model/media/MediaResourcesManager$BrowserListener	EXCLUDED	rule 3: it answers Media3 MediaBrowser callbacks by re-reading the browser's children.
 com/yuriy/openradio/shared/model/media/MediaResourcesManager$PlayerListener	EXCLUDED	rule 3: it relays Media3 Player events and reads the player's state.
