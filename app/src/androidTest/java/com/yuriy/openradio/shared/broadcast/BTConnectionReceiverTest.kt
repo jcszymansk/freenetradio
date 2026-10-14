@@ -269,7 +269,10 @@ class BTConnectionReceiverTest {
 
         val log = ownLog()
 
-        assertTrue("The log of this process is empty, so it was not read", log.contains(TAG))
+        assertTrue(
+            "The receiver's own lines are not in the log, so it was not read",
+            log.contains("$TAG device connected")
+        )
         assertFalse("The log holds a hardware address", log.contains(LOGGED_ADDRESS))
     }
 
