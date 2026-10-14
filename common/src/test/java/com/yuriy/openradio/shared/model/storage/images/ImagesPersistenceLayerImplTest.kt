@@ -66,6 +66,21 @@ class ImagesPersistenceLayerImplTest {
         assertEquals(emptyList<String>(), mDao.inserted)
     }
 
+    /**
+     * A local station's artwork is a file on the device, so the offline gate must not reach it.
+     * The file does not exist, so the read fails quietly after the gate has been passed.
+     */
+    @Test
+    fun aLocalArtworkMissWhileOfflineIsNotGatedOnTheNetwork() {
+        val network = RecordingNetworkLayer(connected = false)
+
+        layer(network).open(ImagesStore.buildImageUri(STATION_ID, LOCAL_IMAGE_PATH))
+
+        assertEquals("a local file needs no network", 0, network.silentChecks)
+        assertEquals("the toasting check may not be asked", 0, network.notifyingChecks)
+        assertEquals("a local file is never downloaded", emptyList<String>(), mDownloader.urls)
+    }
+
     @Test
     fun anArtworkMissWhileOnlineDownloadsTheImage() {
         val network = RecordingNetworkLayer(connected = true)
@@ -173,5 +188,6 @@ class ImagesPersistenceLayerImplTest {
     companion object {
         private const val STATION_ID = "station-1"
         private const val IMAGE_URL = "http://127.0.0.1:1/logo.png"
+        private const val LOCAL_IMAGE_PATH = "/nonexistent/freenetradio/logo.png"
     }
 }
