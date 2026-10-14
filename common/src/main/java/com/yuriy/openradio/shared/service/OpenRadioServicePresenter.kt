@@ -24,7 +24,6 @@ import com.yuriy.openradio.shared.model.media.item.MediaItemCommand
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
-import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
 
 interface OpenRadioServicePresenter {
@@ -57,7 +56,12 @@ interface OpenRadioServicePresenter {
 
     fun getPopularStations(): Set<RadioStation>
 
-    fun getSearchStations(query: String, mediaIdBuilder: MediaIdBuilder = MediaIdBuilderDefault()): Set<RadioStation>
+    /**
+     * Stations matching [query], with ids made by [mediaIdBuilder]. There is no default builder:
+     * a caller that searches says how its results are tagged, so none can hand out search results
+     * that look like plain catalogue stations.
+     */
+    fun getSearchStations(query: String, mediaIdBuilder: MediaIdBuilder): Set<RadioStation>
 
     fun getAllCategories(): Set<Category>
 
