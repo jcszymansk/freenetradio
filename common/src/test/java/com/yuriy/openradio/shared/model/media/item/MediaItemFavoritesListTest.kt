@@ -22,7 +22,6 @@ import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.MediaItemHelper
 import java.util.TreeSet
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -44,8 +43,8 @@ class MediaItemFavoritesListTest {
         assertEquals(0, listener.pageNumber)
         for (item in listener.items) {
             val metadata = item.mediaMetadata
-            assertTrue("${item.mediaId} is not playable", metadata.isPlayable == true)
-            assertFalse("${item.mediaId} is browsable", metadata.isBrowsable == true)
+            assertEquals("${item.mediaId} isPlayable", true, metadata.isPlayable)
+            assertEquals("${item.mediaId} isBrowsable", false, metadata.isBrowsable)
             assertEquals(MediaMetadata.MEDIA_TYPE_MUSIC, metadata.mediaType)
             assertTrue(MediaItemHelper.isFavoriteField(metadata))
         }

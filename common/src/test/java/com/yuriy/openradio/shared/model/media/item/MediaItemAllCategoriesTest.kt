@@ -21,7 +21,6 @@ import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.MediaId
 import java.util.TreeSet
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -52,8 +51,8 @@ class MediaItemAllCategoriesTest {
         assertEquals("7 $STRING_RESOURCE", listener.items[1].mediaMetadata.subtitle)
         assertEquals("7 $STRING_RESOURCE", listener.items[2].mediaMetadata.subtitle)
         for (item in listener.items) {
-            assertTrue("${item.mediaId} is not browsable", item.mediaMetadata.isBrowsable == true)
-            assertFalse("${item.mediaId} is playable", item.mediaMetadata.isPlayable == true)
+            assertEquals("${item.mediaId} isBrowsable", true, item.mediaMetadata.isBrowsable)
+            assertEquals("${item.mediaId} isPlayable", false, item.mediaMetadata.isPlayable)
             assertEquals(MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS, item.mediaMetadata.mediaType)
         }
         listener.assertNoError()

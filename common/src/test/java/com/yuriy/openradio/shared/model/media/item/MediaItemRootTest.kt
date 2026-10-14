@@ -22,7 +22,6 @@ import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.MediaItemHelper
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -168,8 +167,8 @@ class MediaItemRootTest {
         )
         for (item in listener.items) {
             val metadata = item.mediaMetadata
-            assertTrue("${item.mediaId} is not browsable", metadata.isBrowsable == true)
-            assertFalse("${item.mediaId} is playable", metadata.isPlayable == true)
+            assertEquals("${item.mediaId} isBrowsable", true, metadata.isBrowsable)
+            assertEquals("${item.mediaId} isPlayable", false, metadata.isPlayable)
             assertEquals(MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS, metadata.mediaType)
             assertTrue(
                 "${item.mediaId} has no icon",
