@@ -44,7 +44,8 @@ class SleepTimerModelImpl(
     private val mTimer = SleepTimerImpl(mTimerListener, mClock)
 
     /**
-     * Current implementation of the calendar.
+     * The time the settings dialog is editing. [Calendar] is not thread safe and the model is
+     * shared across threads, so every access holds the calendar's monitor.
      */
     private val mCalendar = Calendar.getInstance()
 
@@ -85,10 +86,9 @@ class SleepTimerModelImpl(
      * @param enabled Whether or not timer is enabled by the user.
      */
     override fun updateTime(enabled: Boolean) {
-        if (enabled) {
-            mCalendar.time = mSleepTimerStorage.loadDate()
-        } else {
-            mCalendar.time = Date(mClock())
+        val time = if (enabled) mSleepTimerStorage.loadDate() else Date(mClock())
+        synchronized(mCalendar) {
+            mCalendar.time = time
         }
     }
 
@@ -110,9 +110,11 @@ class SleepTimerModelImpl(
      * @param day Day of the month. This is a synonym for DATE. The first day of the month has value 1.
      */
     override fun setDate(year: Int, month: Int, day: Int) {
-        mCalendar.set(Calendar.YEAR, year)
-        mCalendar.set(Calendar.MONTH, month)
-        mCalendar.set(Calendar.DAY_OF_MONTH, day)
+        synchronized(mCalendar) {
+            mCalendar.set(Calendar.YEAR, year)
+            mCalendar.set(Calendar.MONTH, month)
+            mCalendar.set(Calendar.DAY_OF_MONTH, day)
+        }
     }
 
     /**
@@ -123,10 +125,12 @@ class SleepTimerModelImpl(
      * @param minute Minute within the hour. E.g., at 10:04:15.250 PM the MINUTE is 4.
      */
     override fun setTime(hourOfDay: Int, minute: Int) {
-        mCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
-        mCalendar.set(Calendar.MINUTE, minute)
-        mCalendar.set(Calendar.SECOND, 0)
-        mCalendar.set(Calendar.MILLISECOND, 0)
+        synchronized(mCalendar) {
+            mCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+            mCalendar.set(Calendar.MINUTE, minute)
+            mCalendar.set(Calendar.SECOND, 0)
+            mCalendar.set(Calendar.MILLISECOND, 0)
+        }
     }
 
     /**
@@ -135,7 +139,9 @@ class SleepTimerModelImpl(
      * @return Time representation.
      */
     override fun getTime(): Date {
-        return mCalendar.time
+        synchronized(mCalendar) {
+            return mCalendar.time
+        }
     }
 
     /**

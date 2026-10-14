@@ -32,6 +32,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 
 /**
  * Covers the half of the sleep timer that [SleepTimerImpl] does not own: what reaches Shared
@@ -175,6 +177,55 @@ class SleepTimerModelImplTest {
 
         assertEquals(expected.timeInMillis, mModel.getTimestamp())
         assertEquals(expected.time, mModel.getTime())
+    }
+
+    /**
+     * The dialog sets the calendar on the main thread while other threads may read it, and
+     * [Calendar] is not thread safe: a read that lands between the fields of one [setTime] call
+     * sees an hour from one call and a minute from the other. Every read must see one whole call.
+     */
+    @Test
+    fun aReadDuringSetTimeSeesOneWholeCall() {
+        mModel.setTime(ALARM_HOUR, ALARM_MINUTE)
+        val deadline = System.currentTimeMillis() + RACE_MS
+        val failure = AtomicReference<Throwable?>(null)
+        val writer = thread {
+            try {
+                while (System.currentTimeMillis() < deadline && failure.get() == null) {
+                    mModel.setTime(ALARM_HOUR, ALARM_MINUTE)
+                    mModel.setTime(OTHER_HOUR, OTHER_MINUTE)
+                }
+            } catch (e: Throwable) {
+                failure.compareAndSet(null, e)
+            }
+        }
+        val reader = thread {
+            try {
+                val seen = Calendar.getInstance()
+                while (System.currentTimeMillis() < deadline && failure.get() == null) {
+                    seen.time = mModel.getTime()
+                    val read = listOf(
+                        seen.get(Calendar.HOUR_OF_DAY),
+                        seen.get(Calendar.MINUTE),
+                        seen.get(Calendar.SECOND),
+                        seen.get(Calendar.MILLISECOND)
+                    )
+                    if (read != listOf(ALARM_HOUR, ALARM_MINUTE, 0, 0) &&
+                        read != listOf(OTHER_HOUR, OTHER_MINUTE, 0, 0)
+                    ) {
+                        failure.compareAndSet(
+                            null, AssertionError("Read $read, which no single setTime call wrote")
+                        )
+                    }
+                }
+            } catch (e: Throwable) {
+                failure.compareAndSet(null, e)
+            }
+        }
+        writer.join()
+        reader.join()
+
+        failure.get()?.let { throw AssertionError("The calendar was read mid-write", it) }
     }
 
     @Test
@@ -395,6 +446,18 @@ class SleepTimerModelImplTest {
         const val ALARM_DAY = 7
         const val ALARM_HOUR = 22
         const val ALARM_MINUTE = 15
+
+        /**
+         * A second time of day that shares neither its hour nor its minute with the alarm, so a
+         * read mixing the two is told apart from both.
+         */
+        const val OTHER_HOUR = 7
+        const val OTHER_MINUTE = 40
+
+        /**
+         * How long the calendar is written and read at once.
+         */
+        const val RACE_MS = 3_000L
 
         /**
          * Mirrors the private file name of [SleepTimerStorage].
