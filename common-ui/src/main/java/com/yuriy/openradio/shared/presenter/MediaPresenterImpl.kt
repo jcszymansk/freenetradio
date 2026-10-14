@@ -536,14 +536,15 @@ class MediaPresenterImpl(
         children: List<MediaItem>,
         replace: Boolean
     ) {
-        // Check whether category has changed.
-        val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
-        mCurrentParentId = parentId
-
-        // No need to go on if indexed list ended with last item.
+        // An ended page changes no state at all: were mCurrentParentId to advance to a node whose
+        // rows are not shown yet, that node's first real page would count as the same catalogue
+        // and be appended to the rows of the node the user came from.
         if (PlayerUtils.isEndOfList(children)) {
             return
         }
+        // Check whether category has changed.
+        val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
+        mCurrentParentId = parentId
         mAdapter?.parentId = parentId
         mAdapter?.updateData(children, replace || isSameCatalogue.not())
         mAdapter?.notifyDataSetChanged()

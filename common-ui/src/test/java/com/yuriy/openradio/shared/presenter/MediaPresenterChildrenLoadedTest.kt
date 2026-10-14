@@ -16,7 +16,9 @@
 
 package com.yuriy.openradio.shared.presenter
 
+import android.os.Bundle
 import com.yuriy.openradio.shared.model.media.MediaId
+import com.yuriy.openradio.shared.service.OpenRadioStore
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import com.yuriy.openradio.shared.view.list.TestMediaItemsAdapter
 import com.yuriy.openradio.shared.view.list.TestMediaItemsAdapter.Companion.mediaItem
@@ -74,6 +76,34 @@ class MediaPresenterChildrenLoadedTest {
 
         assertEquals(listOf("a", "b"), mAdapter.mediaIds())
         assertEquals(COUNTRY_STATIONS, mAdapter.parentId)
+        assertEquals(COUNTRY_STATIONS, savedParentId())
+    }
+
+    /**
+     * An ended page for a node the list is not showing yet must not make the presenter believe it
+     * is showing that node: otherwise the node's first real page counts as a further page of the
+     * same catalogue and is appended to the rows of the node the user came from.
+     */
+    @Test
+    fun firstRealPageAfterAnEndedPageForAnotherNodeReplacesTheRows() {
+        mPresenter.handleChildrenLoaded(MediaId.MEDIA_ID_COUNTRIES_LIST, listOf(mediaItem("pl")), false)
+        mPresenter.handleChildrenLoaded(
+            COUNTRY_STATIONS, listOf(MediaItemBuilder.buildMediaItemListEnded()), false
+        )
+
+        mPresenter.handleChildrenLoaded(COUNTRY_STATIONS, listOf(mediaItem("a")), false)
+
+        assertEquals(listOf("a"), mAdapter.mediaIds())
+        assertEquals(COUNTRY_STATIONS, mAdapter.parentId)
+    }
+
+    /**
+     * The node the presenter believes it shows, read back the way the activity persists it.
+     */
+    private fun savedParentId(): String {
+        val state = Bundle()
+        mPresenter.handleSaveInstanceState(state)
+        return OpenRadioStore.getCurrentParentId(state)
     }
 
     private companion object {
