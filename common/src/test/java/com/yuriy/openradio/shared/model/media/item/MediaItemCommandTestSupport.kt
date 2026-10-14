@@ -353,10 +353,11 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
      * That the result was delivered inline is the whole claim. An empty result on its own is bit
      * for bit what a command that never ran delivers, and so is one a coroutine delivers later.
      *
-     * The inline delivery is read off the thread, which cannot race: every command that does its
-     * work launches it on [Dispatchers.IO], which never runs a block on the thread that launched
-     * it, so the caller's own thread delivering the result is something only the branch that
-     * returns before the launch can produce. Call this from the thread that called `execute`.
+     * The inline delivery is read off the thread. The work itself runs on [Dispatchers.IO], which
+     * never runs a block on the thread that launched it; only the deadline guard's empty answer
+     * can arrive inline, because the guard starts undispatched. A command that reached its work
+     * and answered that way passes this check, so the caller's presenter counters, which show the
+     * work was reached, are what catch it. Call this from the thread that called `execute`.
      *
      * The scope is [settle]d before anything is counted, so a command that answers inline and then
      * launches its fetch anyway has finished that fetch by the time the single result is asserted,
