@@ -545,7 +545,8 @@ class OpenRadioServiceBrowseTest {
      * one. This case does that first browse itself, so it holds whichever case ran before it, and
      * then clears the app data the way the settings do. A clear that left the memo behind would
      * answer the second browse with the seeded countries although nothing is cached any more
-     * (TASK-035).
+     * (TASK-035). The settings stop at the clear, but it leaves the node in the browse tree, so the
+     * case invalidates the node itself to make the second browse reach the presenter.
      */
     @Test
     fun theCountriesNodeIsEmptyAgainAfterAClearOnceItWasBrowsed() {

@@ -35,7 +35,7 @@ import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.SortUtils
-import java.util.TreeSet
+import java.util.concurrent.ConcurrentSkipListSet
 
 class OpenRadioServicePresenterImpl(
     isCar: Boolean,
@@ -53,7 +53,7 @@ class OpenRadioServicePresenterImpl(
     private val mApiCachePersistent: ApiCache,
     private val mApiCacheInMemory: ApiCache,
     private val mSleepTimerModel: SleepTimerModel,
-    private val mCountriesCache:TreeSet<Country>
+    private val mCountriesCache: ConcurrentSkipListSet<Country>
 ) : OpenRadioServicePresenter {
 
     /**

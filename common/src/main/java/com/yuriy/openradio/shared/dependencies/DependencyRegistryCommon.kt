@@ -67,7 +67,7 @@ import com.yuriy.openradio.shared.utils.RadioStationValidatorImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import java.lang.ref.WeakReference
-import java.util.TreeSet
+import java.util.concurrent.ConcurrentSkipListSet
 import java.util.concurrent.atomic.AtomicBoolean
 
 object DependencyRegistryCommon {
@@ -131,7 +131,9 @@ object DependencyRegistryCommon {
         sNetworkLayer = NetworkLayerImpl(
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         )
-        val countriesCache = TreeSet<Country>()
+        // The countries browse and the WebRadio parser iterate this set without the presenter's lock
+        // while a clear may empty it, so it needs iterators that never throw on a concurrent change.
+        val countriesCache = ConcurrentSkipListSet<Country>()
         val source = sSourcesLayer.getActiveSource()
         val parser = getParserLayer(source, countriesCache)
         val urlLayer = getUrlLayer(source)

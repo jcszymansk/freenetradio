@@ -57,7 +57,7 @@ import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
 import java.util.Date
-import java.util.TreeSet
+import java.util.concurrent.ConcurrentSkipListSet
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -210,7 +210,7 @@ class OpenRadioServicePresenterImplTest {
     @Test
     fun aSeededCountryCacheIsServedWithoutTouchingTheModel() {
         val modelLayer = RecordingModelLayer(countries = setOf(Country("Germany", "DE")))
-        val cache = TreeSet<Country>()
+        val cache = ConcurrentSkipListSet<Country>()
         cache.add(Country("Poland", "PL"))
         val presenter = presenter(modelLayer = modelLayer, countriesCache = cache)
 
@@ -312,7 +312,7 @@ class OpenRadioServicePresenterImplTest {
     @Test
     fun clearingForgetsTheCountriesSoTheNextLookupAsksTheModelAgain() {
         val modelLayer = RecordingModelLayer(countries = setOf(Country("Poland", "PL")))
-        val cache = TreeSet<Country>()
+        val cache = ConcurrentSkipListSet<Country>()
         val presenter = presenter(modelLayer = modelLayer, countriesCache = cache)
         assertEquals(setOf(Country("Poland", "PL")), presenter.getAllCountries())
 
@@ -322,6 +322,29 @@ class OpenRadioServicePresenterImplTest {
         modelLayer.countries = setOf(Country("Germany", "DE"))
         assertEquals(setOf(Country("Germany", "DE")), presenter.getAllCountries())
         assertEquals(2, modelLayer.countriesRequests)
+    }
+
+    /**
+     * The countries browse and the WebRadio parser walk the set the presenter hands out without
+     * its lock, and a settings clear runs on another thread, so it can land mid-walk. A set whose
+     * iterator fails fast would throw from that walk and take the service scope down with it.
+     */
+    @Test
+    fun aClearDuringAWalkOfTheCountriesLetsTheWalkFinish() {
+        val modelLayer = RecordingModelLayer(
+            countries = setOf(Country("Germany", "DE"), Country("Poland", "PL"))
+        )
+        val presenter = presenter(modelLayer = modelLayer)
+        val countries = presenter.getAllCountries()
+        val walked = ArrayList<Country>()
+
+        for (country in countries) {
+            walked.add(country)
+            presenter.clear()
+        }
+
+        assertEquals(Country("Germany", "DE"), walked.first())
+        assertTrue("The clear left countries behind: $countries", countries.isEmpty())
     }
 
     @Test
@@ -449,7 +472,7 @@ class OpenRadioServicePresenterImplTest {
         persistentCache: RecordingApiCache = RecordingApiCache(),
         memoryCache: RecordingApiCache = RecordingApiCache(),
         sleepTimer: RecordingSleepTimerModel = RecordingSleepTimerModel(),
-        countriesCache: TreeSet<Country> = TreeSet(),
+        countriesCache: ConcurrentSkipListSet<Country> = ConcurrentSkipListSet(),
         settingsContext: Context = preferencesContext()
     ): OpenRadioServicePresenter {
         val contextRef = StrongContextReference(settingsContext)
