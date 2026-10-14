@@ -96,8 +96,7 @@ object DependencyRegistryCommonUi :
             sNetworkLayer,
             sLocationStorage,
             sSleepTimerModel,
-            sSourcesLayer,
-            sFavoritesStorage
+            sSourcesLayer
         )
         sEditStationPresenter = EditStationPresenterImpl(
             sFavoritesStorage,

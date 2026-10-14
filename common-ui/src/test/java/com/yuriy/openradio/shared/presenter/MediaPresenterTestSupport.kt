@@ -22,7 +22,6 @@ import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
 import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.source.SourcesLayer
-import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.timer.SleepTimerListener
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
@@ -42,8 +41,7 @@ internal fun listOnlyPresenter(adapter: TestMediaItemsAdapter): MediaPresenterIm
         UnusedNetworkLayer(),
         LocationStorage(WeakReference(context)),
         UnusedSleepTimerModel(),
-        UnusedSourcesLayer(),
-        FavoritesStorage(WeakReference(context))
+        UnusedSourcesLayer()
     )
     presenter.attachList(null, adapter)
     return presenter

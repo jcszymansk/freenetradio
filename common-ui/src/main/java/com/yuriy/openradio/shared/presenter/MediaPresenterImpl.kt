@@ -55,7 +55,6 @@ import com.yuriy.openradio.shared.model.media.PlaybackState
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
-import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.images.ImagesStore
 import com.yuriy.openradio.shared.model.timer.SleepTimerListener
@@ -89,8 +88,7 @@ class MediaPresenterImpl(
     private val mNetworkLayer: NetworkLayer,
     private val mLocationStorage: LocationStorage,
     private val mSleepTimerModel: SleepTimerModel,
-    private val mSourcesLayer: SourcesLayer,
-    private val mFavoritesStorage: FavoritesStorage
+    private val mSourcesLayer: SourcesLayer
 ) : MediaPresenter {
     /**
      * Manager object that acts as interface between Media Resources and current Activity.
@@ -429,10 +427,6 @@ class MediaPresenterImpl(
         mAdapter?.activeItemId = position
         mAdapter?.notifyItemChanged(prevPos)
         mAdapter?.notifyItemChanged(position)
-    }
-
-    override fun isFavorite(mediaId: String): Boolean {
-        return false
     }
 
     override fun isAdapterEmpty(): Boolean {

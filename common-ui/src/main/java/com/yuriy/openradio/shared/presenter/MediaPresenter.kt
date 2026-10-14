@@ -89,8 +89,6 @@ interface MediaPresenter {
 
     fun updateActiveItem(position: Int)
 
-    fun isFavorite(mediaId: String): Boolean
-
     fun isAdapterEmpty(): Boolean
 
     fun unsubscribeFromItem(mediaId: String?)
