@@ -19,6 +19,7 @@ package com.yuriy.openradio.shared.utils
 import android.content.Context
 import android.net.Uri
 import androidx.core.util.Pair
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -90,6 +91,41 @@ class PlaylistResolutionTest {
         )
 
         assertArrayEquals(arrayOf(first, second), resolve(playlist))
+    }
+
+    /**
+     * A playlist entry carries no type, so the stream it names is typed from its url, and the
+     * player opens it with the media source that url calls for.
+     */
+    @Test
+    fun aStreamAPlaylistNamesIsTypedFromItsUrl() {
+        val stream = mServer.serve("/live.mp3", AUDIO_MPEG, "not really audio")
+        val playlist = mServer.serve("/typed.pls", LoopbackHttpFixture.AUDIO_PLS, pls(stream))
+
+        assertEquals(listOf(ResolvedStream(stream, MimeTypes.AUDIO_MPEG)), resolveStreams(playlist))
+    }
+
+    /**
+     * A station url without the `.m3u8` extension that serves HLS reaches this read after the
+     * player opened it as a progressive stream (TASK-097). It answers with itself, typed so the
+     * player opens it as HLS, and not with the segments or variants the playlist lists, whatever
+     * type the server declares.
+     */
+    @Test
+    fun anHlsStationUrlWithoutItsExtensionResolvesToItselfTypedAsHls() {
+        val media = "#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXTINF:10,\nsegment1.ts\n#EXTINF:10,\nsegment2.ts\n"
+        val master = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\nlow/index.m3u8\n" +
+                "#EXT-X-STREAM-INF:BANDWIDTH=128000\nhigh/index.m3u8\n"
+        listOf(
+            Triple("/hls/media", "application/vnd.apple.mpegurl", media),
+            Triple("/hls/master", "application/vnd.apple.mpegurl", master),
+            Triple("/hls/media-as-m3u", "audio/x-mpegurl", media),
+            Triple("/hls/master-as-text", LoopbackHttpFixture.TEXT_PLAIN, master)
+        ).forEach { (path, contentType, body) ->
+            val station = mServer.serve(path, contentType, body)
+
+            assertEquals(path, listOf(ResolvedStream(station, MimeTypes.APPLICATION_M3U8)), resolveStreams(station))
+        }
     }
 
     @Test
@@ -499,8 +535,18 @@ class PlaylistResolutionTest {
         url: String,
         downloader: DownloaderLayer = HTTPDownloaderImpl(DirectUrlResolver())
     ): Array<String> {
+        return resolveStreams(url, downloader).map { it.url }.toTypedArray()
+    }
+
+    /**
+     * Reads [url] on a network playback may use, where every read runs and answers with streams.
+     */
+    private fun resolveStreams(
+        url: String,
+        downloader: DownloaderLayer = HTTPDownloaderImpl(DirectUrlResolver())
+    ): List<ResolvedStream> {
         return when (val answer = read(url, downloader) { true }) {
-            is PlaylistRead.Streams -> answer.streams.map { it.url }.toTypedArray()
+            is PlaylistRead.Streams -> answer.streams
             PlaylistRead.Failed -> throw AssertionError("The read of $url failed")
             PlaylistRead.Blocked -> throw AssertionError("A read on a usable network was blocked")
         }
