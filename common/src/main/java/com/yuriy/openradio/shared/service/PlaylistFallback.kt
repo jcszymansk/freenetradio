@@ -221,7 +221,8 @@ sealed class PlaylistFallback {
         data class Resolve(val resolution: Resolution) : Action()
 
         /**
-         * Play [streamUrl] in place of the stream of [mediaId].
+         * Play [streamUrl] in place of the stream of [mediaId]. A station paused while the stream
+         * was being found keeps it in place and stays paused.
          */
         data class Play(val mediaId: String, val streamUrl: String) : Action()
 

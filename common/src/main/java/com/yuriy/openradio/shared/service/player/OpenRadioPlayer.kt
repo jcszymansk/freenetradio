@@ -874,6 +874,28 @@ class OpenRadioPlayer(
     }
 
     /**
+     * Puts [mediaItem], the stream the service found for the current station after
+     * [stopForReplacementStream], in place of the one the player could not read, and tells whether
+     * to start it.
+     *
+     * The station keeps the stream either way, so playing it later does not search again. It
+     * starts only while the station is still meant to play: a pause stays a pause, whether a
+     * controller sent it or the service paused the player itself on noisy audio or a disconnected
+     * Bluetooth device, which starts no new play request and so lets the search answer
+     * (TASK-105). Losing the audio focus for good pauses the player in the same way.
+     *
+     * @return Whether the service should prepare and play the station now.
+     */
+    fun replaceAwaitedStream(mediaItem: MediaItem): Boolean {
+        replaceMediaItem(mPlayer.currentMediaItemIndex, mediaItem)
+        if (mPlayer.playWhenReady.not()) {
+            AppLogger.i("$TAG hold the replacement stream of a paused station")
+            return false
+        }
+        return true
+    }
+
+    /**
      * Whether a regained network connection should start playback again, which it should only for
      * a station the network stopped while the user wanted it playing.
      */

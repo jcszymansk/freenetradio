@@ -408,7 +408,10 @@ class OpenRadioService : MediaLibraryService() {
         }
         AppLogger.i("$TAG play $streamUrl in place of $mediaId")
         mPlayer.stopForReplacementStream()
-        mPlayer.replaceMediaItem(mPlayer.currentMediaItemIndex, MediaItemBuilder.withStreamUrl(current, streamUrl))
+        if (mPlayer.replaceAwaitedStream(MediaItemBuilder.withStreamUrl(current, streamUrl)).not()) {
+            AppLogger.i("$TAG keep $streamUrl of $mediaId paused")
+            return
+        }
         if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
             AppLogger.i("$TAG hold $streamUrl of $mediaId until a network it may use connects")
             pauseForNetworkPolicyUiThread()
