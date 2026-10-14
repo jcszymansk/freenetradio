@@ -126,5 +126,11 @@ class PlaylistEntry {
     companion object {
         const val URI = "uri"
         const val PLAYLIST_METADATA = "playlist_metadata"
+
+        /**
+         * The MIME type the player is to open [URI] with, for an entry whose url does not tell it.
+         * An entry without one is typed from its url.
+         */
+        const val MIME_TYPE = "mime_type"
     }
 }

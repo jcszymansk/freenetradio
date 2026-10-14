@@ -16,6 +16,7 @@
 
 package wseemann.media.jplaylistparser.parser
 
+import androidx.media3.common.MimeTypes
 import com.yuriy.openradio.shared.extentions.equalsIgnoreCase
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
@@ -27,6 +28,7 @@ import wseemann.media.jplaylistparser.parser.m3u8.M3U8PlaylistParser
 import wseemann.media.jplaylistparser.parser.pls.PLSPlaylistParser
 import wseemann.media.jplaylistparser.parser.xspf.XSPFPlaylistParser
 import wseemann.media.jplaylistparser.playlist.Playlist
+import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -42,6 +44,7 @@ import java.util.Locale
  *
  * ```
  *   parse(url, mimeType, stream)                       depth 0, url counts as followed
+ *     │ HLS content ──► url itself, typed as HLS
  *     │ dispatch on MIME type and extension, then content
  *     ▼
  *   parser ── entry with a playlist extension, or an ASX ENTRYREF
@@ -50,7 +53,10 @@ import java.util.Locale
  *   follow(url) ── already followed, or depth limit ──► skipped
  *     │ fetcher.fetch(url)
  *     ▼
- *   child session, depth + 1 ── dispatch on extension, then content ──► parser ── …
+ *   child session, depth + 1 ── HLS content ──► url itself, typed as HLS
+ *     │ dispatch on extension, then content
+ *     ▼
+ *   parser ── …
  * ```
  *
  * Nothing here opens a connection: every read beyond the stream handed to [parse] goes through
@@ -74,17 +80,23 @@ class AutoDetectParser private constructor(
      * itself is not read twice.
      * @param mimeType Content type the server declared for [stream], with or without parameters.
      * @param stream Content of the playlist.
-     * @param playlist Receives every stream the playlist resolves to.
+     * @param playlist Receives every stream the playlist resolves to: [url] itself when it serves
+     * HLS, see [addHlsStream].
      * @throws JPlaylistParserException When neither the MIME type, the extension nor the content
      * identifies a supported format.
      */
     @Throws(IOException::class, JPlaylistParserException::class)
     fun parse(url: String, mimeType: String?, stream: InputStream, playlist: Playlist) {
         mFollowed.add(url)
-        val declaredType = MediaType.parse(mimeType.orEmpty().substringBefore(';'))
         val content = BufferedInputStream(stream)
+        val head = peek(content)
+        if (isHlsContent(head)) {
+            addHlsStream(url, playlist)
+            return
+        }
+        val declaredType = MediaType.parse(mimeType.orEmpty().substringBefore(';'))
         val parser = parserFor(getFileExtension(url), declaredType)
-            ?: parserForContent(peek(content))
+            ?: parserForContent(head)
             ?: throw JPlaylistParserException("Unsupported format:$url")
         AppLogger.d("$TAG parsing $url (type '$mimeType') with ${parser.javaClass.simpleName}")
         parser.parse(url, content, playlist)
@@ -134,9 +146,14 @@ class AutoDetectParser private constructor(
             AppLogger.w("$TAG nothing could be read from $url")
             return
         }
+        val head = head(content)
+        if (isHlsContent(head)) {
+            addHlsStream(url, playlist)
+            return
+        }
         val child = AutoDetectParser(mFetcher, mDepth + 1, mFollowed)
         val parser = child.parserFor(getFileExtension(url), null)
-            ?: child.parserForContent(head(content))
+            ?: child.parserForContent(head)
         if (parser == null) {
             AppLogger.w("$TAG $url is in no supported playlist format")
             return
@@ -149,6 +166,21 @@ class AutoDetectParser private constructor(
         } catch (e: JPlaylistParserException) {
             AppLogger.e("$TAG can not parse $url", e)
         }
+    }
+
+    /**
+     * Adds [url] to [playlist] as a stream the player opens as HLS, for a url found to serve HLS
+     * only by reading it. Its own address does not say so, which is why the player failed on it
+     * or why it was read at all, so the entry carries the type. Read here instead, a master
+     * playlist would become one of its variants and lose adaptive bitrate, and a media playlist
+     * would become its segments, of which the station would play one and stop.
+     */
+    private fun addHlsStream(url: String, playlist: Playlist) {
+        AppLogger.d("$TAG $url serves HLS, kept as a stream")
+        val playlistEntry = PlaylistEntry()
+        playlistEntry[PlaylistEntry.URI] = url
+        playlistEntry[PlaylistEntry.MIME_TYPE] = MimeTypes.APPLICATION_M3U8
+        playlist.add(playlistEntry)
     }
 
     /**
@@ -180,17 +212,12 @@ class AutoDetectParser private constructor(
     /**
      * Recognises a playlist by how it starts, for a url that has no playlist extension and a
      * response whose type is unknown. A plain M3U without its `#EXTM3U` header has no signature
-     * and is not recognised.
+     * and is not recognised. HLS never reaches this, see [isHlsContent].
      */
     private fun parserForContent(head: String): Parser? {
-        val text = head.trimStart('﻿', ' ', '\t', '\r', '\n')
+        val text = trimHead(head)
         return when {
-            text.startsWith(M3U_SIGNATURE, ignoreCase = true) ->
-                if (text.contains(HLS_TAG_SIGNATURE, ignoreCase = true)) {
-                    M3U8PlaylistParser(this)
-                } else {
-                    M3UPlaylistParser(this)
-                }
+            text.startsWith(M3U_SIGNATURE, ignoreCase = true) -> M3UPlaylistParser(this)
             text.startsWith(PLS_SIGNATURE, ignoreCase = true) -> PLSPlaylistParser(this)
             else -> when (rootElementName(text)) {
                 ASX_ROOT_ELEMENT -> ASXPlaylistParser(this)
@@ -260,6 +287,21 @@ class AutoDetectParser private constructor(
          */
         private fun Parser.accepts(mimeType: MediaType?): Boolean {
             return mimeType != null && supportedTypes.contains(mimeType)
+        }
+
+        /**
+         * Whether [head] opens an HLS playlist: an extended M3U carrying an `#EXT-X-` tag, which
+         * an ordinary M3U has no use for. It is told by its content before its extension and its
+         * declared type, because servers type HLS in many ways, often as a plain M3U.
+         */
+        private fun isHlsContent(head: String): Boolean {
+            val text = trimHead(head)
+            return text.startsWith(M3U_SIGNATURE, ignoreCase = true)
+                    && text.contains(HLS_TAG_SIGNATURE, ignoreCase = true)
+        }
+
+        private fun trimHead(head: String): String {
+            return head.trimStart('﻿', ' ', '\t', '\r', '\n')
         }
 
         private fun rootElementName(text: String): String? {
