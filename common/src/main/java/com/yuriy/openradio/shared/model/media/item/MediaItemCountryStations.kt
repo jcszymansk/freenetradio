@@ -17,10 +17,6 @@
 package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Created by Yuriy Chernyshov
@@ -39,25 +35,21 @@ class MediaItemCountryStations : IndexableMediaItemCommand() {
             deliverResult(dependencies)
             return
         }
-        dependencies.mScope.launch(Dispatchers.IO) {
-            runBlocking {
-                // Call this API to make sure countries are cached.
-                dependencies.presenter.getAllCountries()
+        dependencies.launchWithDeadline {
+            // Call this API to make sure countries are cached.
+            dependencies.presenter.getAllCountries()
+            // Load all categories into menu
+            val pageNumber = pageNumber
+            val set = dependencies.presenter.getStationsByCountry(dependencies.countryCode, pageNumber)
+            if (set.isEmpty().not()) {
+                nextPageNumber()
             }
-            withTimeoutOrNull(MediaItemCommand.CMD_TIMEOUT_MS) {
-                // Load all categories into menu
-                val pageNumber = pageNumber
-                val set = dependencies.presenter.getStationsByCountry(dependencies.countryCode, pageNumber)
-                if (set.isEmpty().not()) {
-                    nextPageNumber()
-                }
-                handleDataLoaded(
-                    playbackStateListener,
-                    dependencies,
-                    set,
-                    pageNumber
-                )
-            } ?: dependencies.resultListener.onResult()
+            handleDataLoaded(
+                playbackStateListener,
+                dependencies,
+                set,
+                pageNumber
+            )
         }
     }
 }

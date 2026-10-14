@@ -19,9 +19,6 @@ package com.yuriy.openradio.shared.model.media.item
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.utils.AppUtils
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Created by Yuriy Chernyshov
@@ -40,22 +37,20 @@ class MediaItemChildCategories : IndexableMediaItemCommand() {
             deliverResult(dependencies)
             return
         }
-        dependencies.mScope.launch(Dispatchers.IO) {
-            withTimeoutOrNull(MediaItemCommand.CMD_TIMEOUT_MS) {
-                val childMenuId = dependencies.parentId
-                    .replace(MediaId.MEDIA_ID_CHILD_CATEGORIES, AppUtils.EMPTY_STRING)
-                val pageNumber = pageNumber
-                val set = dependencies.presenter.getStationsInCategory(childMenuId, pageNumber)
-                if (set.isEmpty().not()) {
-                    nextPageNumber()
-                }
-                handleDataLoaded(
-                    playbackStateListener,
-                    dependencies,
-                    set,
-                    pageNumber
-                )
-            } ?: dependencies.resultListener.onResult()
+        dependencies.launchWithDeadline {
+            val childMenuId = dependencies.parentId
+                .replace(MediaId.MEDIA_ID_CHILD_CATEGORIES, AppUtils.EMPTY_STRING)
+            val pageNumber = pageNumber
+            val set = dependencies.presenter.getStationsInCategory(childMenuId, pageNumber)
+            if (set.isEmpty().not()) {
+                nextPageNumber()
+            }
+            handleDataLoaded(
+                playbackStateListener,
+                dependencies,
+                set,
+                pageNumber
+            )
         }
     }
 }

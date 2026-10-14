@@ -70,6 +70,8 @@ com/yuriy/openradio/shared/model/media/RadioStationManagerLayerImpl	com.yuriy.op
 com/yuriy/openradio/shared/model/media/Category	com.yuriy.openradio.shared.model.media.CategoryTest	:common
 com/yuriy/openradio/shared/model/media/item/IndexableMediaItemCommand	com.yuriy.openradio.shared.model.media.item.IndexableMediaItemCommandTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandImpl	com.yuriy.openradio.shared.model.media.item.MediaItemCommandImplTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemCommandDependencies	com.yuriy.openradio.shared.model.media.item.MediaItemCommandDependenciesTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemCommandDependencies$FirstResultListener	com.yuriy.openradio.shared.model.media.item.MediaItemCommandDependenciesTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemAllCategories	com.yuriy.openradio.shared.model.media.item.MediaItemAllCategoriesTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemChildCategories	com.yuriy.openradio.shared.model.media.item.MediaItemChildCategoriesTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCountriesList	com.yuriy.openradio.shared.model.media.item.MediaItemCountriesListTest	:common

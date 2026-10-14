@@ -125,7 +125,8 @@ internal fun dependencies(
     countryCode: String = DEFAULT_COUNTRY_CODE,
     isSameCatalogue: Boolean = false,
     isSavedInstance: Boolean = false,
-    options: Bundle = Bundle()
+    options: Bundle = Bundle(),
+    timeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS
 ): MediaItemCommandDependencies {
     return MediaItemCommandDependencies(
         testContext(),
@@ -136,7 +137,8 @@ internal fun dependencies(
         isSavedInstance,
         options,
         listener.scope,
-        listener
+        listener,
+        timeoutMillis
     )
 }
 
@@ -249,6 +251,16 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
     fun awaitResult(): RecordingCommandListener {
         awaitSignal(mResultLatch, RESULT_MISSING)
         return this
+    }
+
+    /**
+     * Waits for the first result without settling, for a provider fake that has to stay blocked
+     * until the command has answered: settling would wait for the blocked provider instead.
+     *
+     * @return Whether a result arrived within [AWAIT_MILLIS].
+     */
+    fun awaitDelivery(): Boolean {
+        return mResultLatch.await(AWAIT_MILLIS, TimeUnit.MILLISECONDS)
     }
 
     /**
@@ -394,6 +406,10 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
  * Canned answers plus a record of what the command asked for. Anything a browse command is not
  * meant to touch throws, and [RecordingCommandListener.settle] hands a throw from the command's
  * coroutine back to the test that made the call.
+ *
+ * Every call that would reach a provider runs [mBeforeAnswer] after recording the request and
+ * before answering, so a test can hold the answer back the way a provider stuck on the network
+ * does.
  */
 internal class RecordingPresenter(
     private val mCategories: Set<Category> = emptySet(),
@@ -405,7 +421,8 @@ internal class RecordingPresenter(
     private val mCategoryStations: Set<RadioStation> = emptySet(),
     private val mCountryStations: Set<RadioStation> = emptySet(),
     private val mSearchStations: Set<RadioStation> = emptySet(),
-    private val mFavoriteIds: Set<String> = emptySet()
+    private val mFavoriteIds: Set<String> = emptySet(),
+    private val mBeforeAnswer: () -> Unit = {}
 ) : OpenRadioServicePresenter {
 
     // A command asks from its IO coroutines, which may run at once, so every record is safe to
@@ -450,26 +467,31 @@ internal class RecordingPresenter(
 
     override fun getStationsInCategory(categoryId: String, pageNumber: Int): Set<RadioStation> {
         categoryRequests.add(categoryId to pageNumber)
+        mBeforeAnswer()
         return pageOf(mCategoryStations, pageNumber)
     }
 
     override fun getStationsByCountry(countryCode: String, pageNumber: Int): Set<RadioStation> {
         countryRequests.add(countryCode to pageNumber)
+        mBeforeAnswer()
         return pageOf(mCountryStations, pageNumber)
     }
 
     override fun getNewStations(): Set<RadioStation> {
         mNewStationsRequests.incrementAndGet()
+        mBeforeAnswer()
         return mNewStations
     }
 
     override fun getPopularStations(): Set<RadioStation> {
         mPopularStationsRequests.incrementAndGet()
+        mBeforeAnswer()
         return mPopularStations
     }
 
     override fun getSearchStations(query: String, mediaIdBuilder: MediaIdBuilder): Set<RadioStation> {
         searchRequests.add(query)
+        mBeforeAnswer()
         val result = TreeSet<RadioStation>()
         for (radioStation in mSearchStations) {
             val built = RadioStation.makeCopyInstance(radioStation)
@@ -481,21 +503,25 @@ internal class RecordingPresenter(
 
     override fun getAllCategories(): Set<Category> {
         mCategoriesRequests.incrementAndGet()
+        mBeforeAnswer()
         return mCategories
     }
 
     override fun getAllCountries(): Set<Country> {
         mCountriesRequests.incrementAndGet()
+        mBeforeAnswer()
         return mCountries
     }
 
     override fun getAllFavorites(): Set<RadioStation> {
         mFavoritesRequests.incrementAndGet()
+        mBeforeAnswer()
         return mFavorites
     }
 
     override fun getAllDeviceLocal(): Set<RadioStation> {
         mDeviceLocalsRequests.incrementAndGet()
+        mBeforeAnswer()
         return mDeviceLocals
     }
 

@@ -20,9 +20,6 @@ import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.utils.AppUtils
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Created by Yuriy Chernyshov
@@ -44,22 +41,20 @@ class MediaItemSearchFromService : IndexableMediaItemCommand() {
             deliverResult(dependencies)
             return
         }
-        dependencies.mScope.launch(Dispatchers.IO) {
-            withTimeoutOrNull(MediaItemCommand.CMD_TIMEOUT_MS) {
-                handleDataLoaded(
-                    playbackStateListener,
-                    dependencies,
-                    dependencies.presenter.getSearchStations(
-                        AppUtils.getSearchQueryFromBundle(dependencies.options),
-                        object : MediaIdBuilder {
+        dependencies.launchWithDeadline {
+            handleDataLoaded(
+                playbackStateListener,
+                dependencies,
+                dependencies.presenter.getSearchStations(
+                    AppUtils.getSearchQueryFromBundle(dependencies.options),
+                    object : MediaIdBuilder {
 
-                            override fun build(value: String): String {
-                                return MediaId.makeSearchId(value)
-                            }
+                        override fun build(value: String): String {
+                            return MediaId.makeSearchId(value)
                         }
-                    )
+                    }
                 )
-            } ?: dependencies.resultListener.onResult()
+            )
         }
     }
 }

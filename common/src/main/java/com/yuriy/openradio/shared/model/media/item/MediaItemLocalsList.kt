@@ -20,10 +20,7 @@ import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Created by Yuriy Chernyshov
@@ -40,24 +37,22 @@ class MediaItemLocalsList : MediaItemCommand {
 
     override fun execute(playbackStateListener: IUpdatePlaybackState, dependencies: MediaItemCommandDependencies) {
         mJob?.cancel()
-        mJob = dependencies.mScope.launch(Dispatchers.IO) {
-            withTimeoutOrNull(MediaItemCommand.CMD_TIMEOUT_MS) {
-                val list = dependencies.presenter.getAllDeviceLocal()
-                for (radioStation in list) {
-                    if (radioStation.isInvalid()) {
-                        AppLogger.w("Skip invalid local $radioStation")
-                        continue
-                    }
-                    dependencies.addMediaItem(
-                        MediaItemBuilder.buildPlayable(
-                            radioStation,
-                            dependencies.presenter.isRadioStationFavorite(radioStation),
-                            true
-                        )
-                    )
+        mJob = dependencies.launchWithDeadline {
+            val list = dependencies.presenter.getAllDeviceLocal()
+            for (radioStation in list) {
+                if (radioStation.isInvalid()) {
+                    AppLogger.w("Skip invalid local $radioStation")
+                    continue
                 }
-                dependencies.resultListener.onResult(dependencies.getMediaItems(), list)
-            } ?: dependencies.resultListener.onResult()
+                dependencies.addMediaItem(
+                    MediaItemBuilder.buildPlayable(
+                        radioStation,
+                        dependencies.presenter.isRadioStationFavorite(radioStation),
+                        true
+                    )
+                )
+            }
+            dependencies.resultListener.onResult(dependencies.getMediaItems(), list)
         }
     }
 }

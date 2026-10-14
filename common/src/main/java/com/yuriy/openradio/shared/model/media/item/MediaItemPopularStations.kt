@@ -16,9 +16,6 @@
 package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Created by Yuriy Chernyshov
@@ -41,15 +38,13 @@ class MediaItemPopularStations : MediaItemCommandImpl() {
             deliverResult(dependencies)
             return
         }
-        dependencies.mScope.launch(Dispatchers.IO) {
-            withTimeoutOrNull(MediaItemCommand.CMD_TIMEOUT_MS) {
-                // Load all categories into menu
-                handleDataLoaded(
-                    playbackStateListener,
-                    dependencies,
-                    dependencies.presenter.getPopularStations()
-                )
-            } ?: dependencies.resultListener.onResult()
+        dependencies.launchWithDeadline {
+            // Load all categories into menu
+            handleDataLoaded(
+                playbackStateListener,
+                dependencies,
+                dependencies.presenter.getPopularStations()
+            )
         }
     }
 
