@@ -22,8 +22,9 @@ package com.yuriy.openradio.shared.service.player
 sealed class PlaybackErrorDecision {
 
     /**
-     * The stream stopped because the network went away. Playback is resumable once connectivity
-     * returns, so the player remembers that the network, not the stream, ended it.
+     * The stream stopped because the network went away or stopped carrying it. Playback is
+     * resumable once the network carries it again, so the player remembers that the network, not
+     * the stream, ended it.
      */
     object NetworkLost : PlaybackErrorDecision()
 

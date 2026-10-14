@@ -25,6 +25,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 
 /**
  * Classification of playback errors, which decides what the listener hears about a broken stream.
@@ -37,6 +38,20 @@ class PlaybackErrorClassifierTest {
         val classifier = PlaybackErrorClassifier()
 
         val decision = classifier.classify(networkFailure())
+
+        assertEquals(PlaybackErrorDecision.NetworkLost, decision)
+    }
+
+    /**
+     * A stream whose signal is gone fails with a timeout rather than a refused connection: in a
+     * dead zone the phone keeps the network it had, the connection stays open, and nothing more
+     * arrives over it (TASK-018).
+     */
+    @Test
+    fun aConnectionTimeoutIsReportedAsLostNetwork() {
+        val classifier = PlaybackErrorClassifier()
+
+        val decision = classifier.classify(networkTimeout())
 
         assertEquals(PlaybackErrorDecision.NetworkLost, decision)
     }
@@ -125,6 +140,7 @@ class PlaybackErrorClassifierTest {
 
         repeat(TOLERATED_ERRORS * 2) {
             classifier.classify(networkFailure())
+            classifier.classify(networkTimeout())
             classifier.classify(httpFailure(HttpURLConnection.HTTP_NOT_FOUND))
         }
 
@@ -136,6 +152,18 @@ class PlaybackErrorClassifierTest {
             "Unable to connect", IOException("Unable to connect"),
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
         )
+    }
+
+    /**
+     * The exception the player raises for a stream whose connection timed out, built the way its
+     * HTTP data source builds it from the socket's timeout.
+     */
+    private fun networkTimeout(): PlaybackException {
+        val cause = HttpDataSource.HttpDataSourceException.createForIOException(
+            SocketTimeoutException("timeout"), DataSpec(Uri.parse(STREAM_URL)),
+            HttpDataSource.HttpDataSourceException.TYPE_READ
+        )
+        return PlaybackException(cause.message, cause, cause.reason)
     }
 
     private fun httpFailure(responseCode: Int): PlaybackException {
