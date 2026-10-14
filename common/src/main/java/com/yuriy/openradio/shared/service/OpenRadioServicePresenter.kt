@@ -34,8 +34,8 @@ interface OpenRadioServicePresenter {
     /**
      * The command that answers a search from the service. It is the instance
      * [getMediaItemCommand] returns for [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE], because the
-     * search page index lives on it, and every presenter holds one, so the caller has no missing
-     * case to handle.
+     * search page index lives on it. Every presenter holds one, so the caller has no missing case
+     * to handle.
      */
     fun getSearchCommand(): MediaItemCommand
 
