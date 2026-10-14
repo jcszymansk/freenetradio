@@ -232,7 +232,9 @@ internal class LoopbackHttpFixture {
             if (gate != null && gate.pass().not()) {
                 return
             }
-            val response = mTurns[path]?.next() ?: mRoutes[path] ?: Response(HTTP_NOT_FOUND, "Not Found", TEXT_PLAIN, ByteArray(0))
+            val response = mTurns[path]?.next()
+                ?: mRoutes[path]
+                ?: Response(HTTP_NOT_FOUND, "Not Found", TEXT_PLAIN, ByteArray(0))
             val head = buildString {
                 append("HTTP/1.1 ${response.status} ${response.reason}\r\n")
                 append("Content-Type: ${response.contentType}\r\n")
