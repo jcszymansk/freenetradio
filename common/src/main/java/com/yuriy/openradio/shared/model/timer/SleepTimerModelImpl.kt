@@ -27,24 +27,32 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * [SleepTimerModelImpl] is a class that is responsible for preparing and managing the data for an Activity or a Fragment.
  * It also handles the communication of the Activity / Fragment with the rest of the application
  * (e.g. calling the business logic classes).
+ *
+ * @param contextRef Weak reference to the application context, for the stored timer state.
+ * @param mClock Wall clock milliseconds. The timer measures its delay from the same clock, so the
+ * model and the timer agree about which timestamps are in the future.
  */
-class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel {
+class SleepTimerModelImpl(
+    contextRef: WeakReference<Context>,
+    private val mClock: () -> Long = System::currentTimeMillis
+) : SleepTimerModel {
 
     private val mSleepTimerStorage = SleepTimerStorage(contextRef)
     private var mTimerListenerExt = ConcurrentLinkedQueue<SleepTimerListener>()
     private val mTimerListener = SleepTimerListenerImpl()
-    private val mTimer = SleepTimerImpl(mTimerListener)
+    private val mTimer = SleepTimerImpl(mTimerListener, mClock)
 
     /**
      * Current implementation of the calendar.
      */
     private val mCalendar = Calendar.getInstance()
 
+    /**
+     * Arms the stored alarm, if it is enabled, without writing anything back: an unset date reads
+     * as the current time, and storing that would turn it into an alarm nobody set.
+     */
     override fun init() {
-        updateTimer(
-            mSleepTimerStorage.loadDate().time,
-            isEnabled()
-        )
+        mTimer.handle(mSleepTimerStorage.loadDate().time, isEnabled())
     }
 
     /**
@@ -57,12 +65,17 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
     }
 
     /**
-     * Sets whether or not timer is enabled.
+     * Sets whether or not timer is enabled. Disabling also cancels a timer that is running, so it
+     * cannot close the service once the timer is off. Enabling arms nothing: the stored date may be
+     * unset, which reads as the current time, and [updateTimer] arms the time the user picked.
      *
      * @param value True if enabled, false otherwise.
      */
     override fun setEnabled(value: Boolean) {
         mSleepTimerStorage.saveEnabled(value)
+        if (!value) {
+            mTimer.cancel()
+        }
     }
 
     /**
@@ -74,7 +87,7 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
         if (enabled) {
             mCalendar.time = mSleepTimerStorage.loadDate()
         } else {
-            mCalendar.time = Date(System.currentTimeMillis())
+            mCalendar.time = Date(mClock())
         }
     }
 
@@ -134,12 +147,13 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
     }
 
     /**
-     * Helper function to validate whether or not timestamp is not valid for processing.
+     * Helper function to validate whether or not timestamp is not valid for processing. The timer
+     * owns the rule, so a timestamp rejected here is one the timer would refuse to arm.
      *
      * @return True if not valid, false otherwise.
      */
     override fun isTimestampNotValid(value: Long): Boolean {
-        return value <= System.currentTimeMillis()
+        return !mTimer.accepts(value)
     }
 
     override fun addSleepTimerListener(listener: SleepTimerListener) {

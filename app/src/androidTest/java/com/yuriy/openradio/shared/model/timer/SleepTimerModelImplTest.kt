@@ -32,7 +32,6 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.math.abs
 
 /**
  * Covers the half of the sleep timer that [SleepTimerImpl] does not own: what reaches Shared
@@ -112,6 +111,25 @@ class SleepTimerModelImplTest {
         assertTrue("The stored alarm was not armed", listener.awaitCompletion())
     }
 
+    /**
+     * A fresh install has no alarm, and starting the application must not invent one. The storage
+     * answers an unset date with the current time, so an unset date keeps moving with the clock
+     * while a stored one stays where it was written.
+     */
+    @Test
+    fun initDoesNotStoreAnAlarmNobodySet() {
+        newModel().init()
+        val afterInit = System.currentTimeMillis()
+
+        Thread.sleep(GAP_MS)
+
+        val loaded = mStorage.loadDate().time
+        assertTrue(
+            "init stored an alarm at $loaded, $GAP_MS ms or more before $afterInit + $GAP_MS",
+            loaded >= afterInit + GAP_MS
+        )
+    }
+
     @Test
     fun initArmsNothingWhenTheStoredAlarmIsOff() {
         mStorage.saveDate(System.currentTimeMillis() + DELAY_MS)
@@ -140,11 +158,11 @@ class SleepTimerModelImplTest {
     @Test
     fun updateTimeWithTheTimerDisabledStartsFromNow() {
         mStorage.saveDate(ALARM_TIMESTAMP)
+        val model = newModel { CLOCK_NOW }
 
-        mModel.updateTime(false)
+        model.updateTime(false)
 
-        val drift = abs(System.currentTimeMillis() - mModel.getTimestamp())
-        assertTrue("A disabled timer started from $drift ms away from now", drift < NOW_TOLERANCE_MS)
+        assertEquals(CLOCK_NOW, model.getTimestamp())
     }
 
     @Test
@@ -165,18 +183,49 @@ class SleepTimerModelImplTest {
         assertEquals(expected.time, mModel.getTime())
     }
 
-    /**
-     * The exact boundary, a timestamp equal to the current millisecond, cannot be pinned from a
-     * test: the model reads the system clock itself, so by the time the assertion runs the
-     * timestamp is already in the past either way.
-     */
     @Test
     fun onlyATimestampInTheFutureIsValid() {
-        val now = System.currentTimeMillis()
+        val model = newModel { CLOCK_NOW }
 
-        assertTrue(mModel.isTimestampNotValid(now))
-        assertTrue(mModel.isTimestampNotValid(now - FUTURE_MS))
-        assertFalse(mModel.isTimestampNotValid(now + FUTURE_MS))
+        assertTrue(model.isTimestampNotValid(CLOCK_NOW - 1))
+        assertTrue(model.isTimestampNotValid(CLOCK_NOW))
+        assertFalse(model.isTimestampNotValid(CLOCK_NOW + 1))
+    }
+
+    /**
+     * The settings dialog lets through what the model calls valid and hands it to the timer, so a
+     * timestamp the model rejects must be one the timer refuses as well, and the instant where the
+     * two used to part is the current millisecond.
+     */
+    @Test
+    fun theTimerRefusesTheTimestampTheModelRejects() {
+        val listener = RecordingListener()
+        val model = newModel { CLOCK_NOW }
+        model.addSleepTimerListener(listener)
+
+        assertTrue(model.isTimestampNotValid(CLOCK_NOW))
+        model.updateTimer(CLOCK_NOW, true)
+
+        assertFalse(
+            "The timer fired for a timestamp the model rejects",
+            listener.awaitCompletionDuring(SILENCE_MS)
+        )
+    }
+
+    /**
+     * The other half of the agreement: the model's clock is the one the timer measures its delay
+     * from, so a timestamp the model accepts is armed rather than refused as past.
+     */
+    @Test
+    fun theTimerArmsTheTimestampTheModelAccepts() {
+        val listener = RecordingListener()
+        val model = newModel { CLOCK_NOW }
+        model.addSleepTimerListener(listener)
+
+        assertFalse(model.isTimestampNotValid(CLOCK_NOW + DELAY_MS))
+        model.updateTimer(CLOCK_NOW + DELAY_MS, true)
+
+        assertTrue("The timer never completed", listener.awaitCompletion())
     }
 
     @Test
@@ -217,6 +266,39 @@ class SleepTimerModelImplTest {
     }
 
     /**
+     * Turning the timer off has to stop the one that is counting down, not only the stored flag:
+     * otherwise it would still close the service while the settings say it is off.
+     */
+    @Test
+    fun disablingCancelsATimerThatIsRunning() {
+        val listener = RecordingListener()
+        mModel.addSleepTimerListener(listener)
+        mModel.setEnabled(true)
+        mModel.updateTimer(System.currentTimeMillis() + DELAY_MS, true)
+
+        mModel.setEnabled(false)
+
+        assertFalse("A disabled timer completed", listener.awaitCompletionDuring(SILENCE_MS))
+        assertFalse(mStorage.loadEnabled())
+    }
+
+    /**
+     * Enabling only records the choice. The stored date may be unset, which reads as the current
+     * time, so arming it here could fire at once; the dialog arms the time the user picked.
+     */
+    @Test
+    fun enablingArmsNothingByItself() {
+        val listener = RecordingListener()
+        mModel.addSleepTimerListener(listener)
+        mStorage.saveDate(System.currentTimeMillis() + DELAY_MS)
+
+        mModel.setEnabled(true)
+
+        assertFalse("Enabling armed the timer", listener.awaitCompletionDuring(SILENCE_MS))
+        assertTrue(mStorage.loadEnabled())
+    }
+
+    /**
      * The alarm is a one shot, so the stored flag has to go down with it. A flag left up would arm
      * the timer again at the next start for a timestamp already in the past.
      */
@@ -251,8 +333,8 @@ class SleepTimerModelImplTest {
         assertEquals(alarm, mStorage.loadDate().time)
     }
 
-    private fun newModel(): SleepTimerModelImpl {
-        return SleepTimerModelImpl(WeakReference(mContext))
+    private fun newModel(clock: () -> Long = System::currentTimeMillis): SleepTimerModelImpl {
+        return SleepTimerModelImpl(WeakReference(mContext), clock)
     }
 
     /**
@@ -288,9 +370,13 @@ class SleepTimerModelImplTest {
 
         const val DELAY_MS = 300L
 
-        const val FUTURE_MS = 60_000L
+        /**
+         * The instant a fixed clock reports, years before the real one, so a timer that measured
+         * its delay from the system clock instead would refuse everything as past.
+         */
+        const val CLOCK_NOW = 1_500_000_000_000L
 
-        const val NOW_TOLERANCE_MS = 10_000L
+        const val GAP_MS = 100L
 
         const val COMPLETION_TIMEOUT_MS = 5_000L
 
