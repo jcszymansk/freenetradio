@@ -56,6 +56,8 @@ import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.PlayerUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.min
@@ -132,6 +134,14 @@ class OpenRadioPlayer(
      * meanwhile. Written and read on the main thread.
      */
     private var mIsAwaitingStream = false
+
+    /**
+     * The pending retry of a stream ExoPlayer gave up for a lost network. A network-connected
+     * event resumes such a stream too, but a phone that loses its signal in a dead zone usually
+     * keeps reporting the network it had, so that event may never come (TASK-018). Pending only
+     * while [mNetworkRecovery] awaits the network. Started and cancelled on the main thread.
+     */
+    private var mStreamRetry: Job? = null
 
     private val mExoPlayer: Player by lazy {
         AppLogger.i("Init ExoPlayer")
@@ -843,6 +853,9 @@ class OpenRadioPlayer(
             "network policy pause"
         )
         forgetAwaitedStream("network policy pause")
+        // A station that is still awaiting the network stays one to resume on a network it may
+        // use, but it must not be tried on the network it was paused for.
+        cancelStreamRetry("network policy pause")
         mPlayer.pause()
         mPlayer.stop()
     }
@@ -881,6 +894,35 @@ class OpenRadioPlayer(
         )
     }
 
+    /**
+     * Tries the stream again after [STREAM_RETRY_DELAY_MS], unless something ends the wait for the
+     * network first. A retry that fails for the network again schedules the next one, so the
+     * stream is tried for as long as the user wants it playing.
+     */
+    private fun scheduleStreamRetry() {
+        cancelStreamRetry("a new retry")
+        AppLogger.i("$TAG retry the stream in $STREAM_RETRY_DELAY_MS ms")
+        mStreamRetry = mUiScope.launch {
+            delay(STREAM_RETRY_DELAY_MS)
+            mStreamRetry = null
+            if (mNetworkRecovery != NetworkRecovery.AWAITING_NETWORK
+                || mPlayer.playbackState != Player.STATE_IDLE
+            ) {
+                AppLogger.d("$TAG stream retry not needed, recovery $mNetworkRecovery")
+                return@launch
+            }
+            AppLogger.i("$TAG retry the stream the network stopped")
+            mPlayer.prepare()
+        }
+    }
+
+    private fun cancelStreamRetry(event: String) {
+        val retry = mStreamRetry ?: return
+        AppLogger.i("$TAG cancel the stream retry on $event")
+        retry.cancel()
+        mStreamRetry = null
+    }
+
     private fun forgetAwaitedStream(event: String) {
         if (mIsAwaitingStream) {
             AppLogger.i("$TAG no longer awaiting a stream on $event")
@@ -891,6 +933,9 @@ class OpenRadioPlayer(
     private fun updateNetworkRecovery(next: NetworkRecovery, event: String) {
         val previous = mNetworkRecovery
         mNetworkRecovery = next
+        if (next != NetworkRecovery.AWAITING_NETWORK) {
+            cancelStreamRetry(event)
+        }
         if (previous != next) {
             AppLogger.i("$TAG network recovery $previous -> $next on $event")
         } else {
@@ -1010,6 +1055,9 @@ class OpenRadioPlayer(
                     updateNetworkRecovery(
                         mNetworkRecovery.onNetworkLost(mPlayer.playWhenReady), "network lost"
                     )
+                    if (mNetworkRecovery == NetworkRecovery.AWAITING_NETWORK) {
+                        scheduleStreamRetry()
+                    }
                     updateStreamMetadata(mContext.getString(R.string.media_stream_network_failed))
                 }
 
@@ -1089,5 +1137,13 @@ class OpenRadioPlayer(
          * String tag to use in logs.
          */
         private const val TAG = "ORP"
+
+        /**
+         * How long the player waits, once ExoPlayer has given up a stream the network stopped,
+         * before it tries the stream again. ExoPlayer has spent its own retries by then, from a
+         * few seconds for a refused connection to over a minute for one that times out, so this
+         * only spaces the attempts out.
+         */
+        const val STREAM_RETRY_DELAY_MS = 10_000L
     }
 }
