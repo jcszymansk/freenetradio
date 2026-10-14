@@ -1178,22 +1178,29 @@ class OpenRadioService : MediaLibraryService() {
         /**
          * Marks or unmarks the station [args] name as a favorite, and answers whether it could.
          *
-         * A station is only changed once both the station and its media item are known, so a
-         * refused command leaves the favorites store as it found it.
+         * The favorites store is written only once the station is known, so a refused command
+         * leaves it as it found it.
          */
         private fun handleFavorite(args: Bundle, isFavorite: Boolean): Boolean {
             // The favorite button the session publishes, which is what the automotive UI shows,
             // names no station: it only ever concerns the now playing one. A command that does
             // name a station is about that station and no other.
             val mediaId = OpenRadioStore.extractMediaId(args).ifEmpty { mActiveRS.id }
-            val rs = getRadioStationByMediaId(mediaId)
-            val mediaItem = mBrowseTree.getMediaItemByMediaId(mediaId)
-            if (rs.isInvalid() || mediaItem == null) {
+            var rs = getRadioStationByMediaId(mediaId)
+            // The now playing station can leave the browse tree while it plays, for instance when
+            // it is unmarked from the favorites list a controller is showing. It is still the
+            // station the button concerns.
+            if (rs.isInvalid() && mediaId == mActiveRS.id) {
+                rs = RadioStation.makeCopyInstance(mActiveRS)
+            }
+            if (rs.isInvalid()) {
                 AppLogger.e("$TAG can't handle fav. for '$mediaId'")
                 return false
             }
             mPresenter.updateRadioStationFavorite(rs, isFavorite)
-            MediaItemHelper.updateFavoriteField(mediaItem.mediaMetadata, isFavorite)
+            mBrowseTree.getMediaItemByMediaId(mediaId)?.let {
+                MediaItemHelper.updateFavoriteField(it.mediaMetadata, isFavorite)
+            }
             val currentMediaItem = mPlayer.currentMediaItem
             if (currentMediaItem?.mediaId == mediaId) {
                 MediaItemHelper.updateFavoriteField(currentMediaItem.mediaMetadata, isFavorite)

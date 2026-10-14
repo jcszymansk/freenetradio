@@ -281,37 +281,70 @@ class OpenRadioServiceCommandTest {
      * A command the service refuses has to leave the favorites store as it found it, which it did
      * not while the store was written before the browse tree was asked about the station.
      *
-     * The playing station is removed from the browse tree, so the command resolves to a station
-     * that is still active but has no media item left to update, and the service refuses it. That
-     * is so whether the command names the station or names nothing and falls back to it.
+     * The playing station is out of the browse tree here, the state in which the old code wrote
+     * the store on its way to refusing a command about a station it had never heard of.
      */
     @Test
     fun aRefusedFavoriteCommandLeavesTheStoreAsItFoundIt() {
         val kept = makeStation("fav-kept", name = "Kept favorite")
         mStorages.favorites.add(kept)
-        val station = playAStation()
+        val station = playAStationThenDropItFromTheBrowseTree()
 
-        mBrowser.subscribe(MediaId.MEDIA_ID_ROOT)
-        mBrowser.subscribe(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-        mStorages.freshLocals().remove(station)
-        updateTreeAndAwaitRefresh()
-        assertTrue(
-            "The station is still in the browse tree, so the command would not be refused",
-            mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST).isEmpty()
+        assertEquals(
+            SessionResult.RESULT_ERROR_NOT_SUPPORTED,
+            mBrowser.command(
+                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioStore.makeUpdateIsFavoriteBundle("never-browsed")
+            ).resultCode
+        )
+        assertEquals(
+            "A refused command changed the favorites, and ${station.id} is the station that " +
+                "was playing",
+            listOf(kept.id),
+            mStorages.freshFavorites().getAll().map { it.id }
+        )
+    }
+
+    /**
+     * The now playing station can leave the browse tree while it plays, as it does when a
+     * controller showing the favorites list unmarks it there. The favorite button still concerns
+     * it, so marking it again has to work whether the command names nothing or names the station.
+     */
+    @Test
+    fun aFavoriteCommandMarksThePlayingStationGoneFromTheBrowseTree() {
+        val kept = makeStation("fav-kept", name = "Kept favorite")
+        mStorages.favorites.add(kept)
+        val station = playAStationThenDropItFromTheBrowseTree()
+
+        assertEquals(
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(OpenRadioService.CMD_FAVORITE_OFF).resultCode
+        )
+        assertEquals(
+            setOf(kept.id, station.id),
+            mStorages.freshFavorites().getAll().map { it.id }.toSet()
         )
 
-        for (args in listOf(Bundle(), OpenRadioStore.makeUpdateIsFavoriteBundle(station.id))) {
-            assertEquals(
-                "A command for the playing station gone from the browse tree with $args",
-                SessionResult.RESULT_ERROR_NOT_SUPPORTED,
-                mBrowser.command(OpenRadioService.CMD_FAVORITE_OFF, args).resultCode
-            )
-            assertEquals(
-                "A refused command with $args changed the favorites",
-                listOf(kept.id),
-                mStorages.freshFavorites().getAll().map { it.id }
-            )
-        }
+        assertEquals(
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(
+                OpenRadioService.CMD_FAVORITE_ON,
+                OpenRadioStore.makeUpdateIsFavoriteBundle(station.id)
+            ).resultCode
+        )
+        assertEquals(listOf(kept.id), mStorages.freshFavorites().getAll().map { it.id })
+
+        assertEquals(
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(
+                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioStore.makeUpdateIsFavoriteBundle(station.id)
+            ).resultCode
+        )
+        assertEquals(
+            setOf(kept.id, station.id),
+            mStorages.freshFavorites().getAll().map { it.id }.toSet()
+        )
     }
 
     @Test
@@ -537,6 +570,23 @@ class OpenRadioServiceCommandTest {
         mBrowser.prepareAndPlay()
         mBrowser.awaitPlaying()
         awaitActiveStation(station.id)
+        return station
+    }
+
+    /**
+     * Plays a station, then removes it from the browse tree while it keeps playing, so the
+     * service still holds it as its active station but no browse tree index knows its id.
+     */
+    private fun playAStationThenDropItFromTheBrowseTree(): RadioStation {
+        val station = playAStation()
+        mBrowser.subscribe(MediaId.MEDIA_ID_ROOT)
+        mBrowser.subscribe(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        mStorages.freshLocals().remove(station)
+        updateTreeAndAwaitRefresh()
+        assertTrue(
+            "The station is still in the browse tree",
+            mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST).isEmpty()
+        )
         return station
     }
 
