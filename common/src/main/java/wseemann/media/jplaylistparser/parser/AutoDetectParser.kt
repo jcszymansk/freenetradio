@@ -186,6 +186,10 @@ class AutoDetectParser private constructor(
     /**
      * Keeps the precedence the parser has always had: the M3U family first, then PLS, XSPF and
      * ASX, each matched on either its extension or its MIME type.
+     *
+     * HLS content is answered before this is asked, see [isHlsContent], so [M3U8PlaylistParser]
+     * only gets a `.m3u8`-named or HLS-typed body with no `#EXT-X-` tag in its first
+     * [SNIFF_LENGTH] bytes.
      */
     private fun parserFor(extension: String, mimeType: MediaType?): Parser? {
         val m3u = M3UPlaylistParser(this)

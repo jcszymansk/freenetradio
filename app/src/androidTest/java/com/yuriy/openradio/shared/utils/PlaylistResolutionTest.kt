@@ -124,7 +124,9 @@ class PlaylistResolutionTest {
         ).forEach { (path, contentType, body) ->
             val station = mServer.serve(path, contentType, body)
 
-            assertEquals(path, listOf(ResolvedStream(station, MimeTypes.APPLICATION_M3U8)), resolveStreams(station))
+            assertEquals(
+                path, listOf(ResolvedStream(station, MimeTypes.APPLICATION_M3U8)), resolveStreams(station)
+            )
         }
     }
 
