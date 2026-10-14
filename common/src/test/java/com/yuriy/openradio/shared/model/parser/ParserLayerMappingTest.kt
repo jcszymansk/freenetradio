@@ -367,16 +367,21 @@ class ParserLayerMappingTest {
             "${UrlLayerWebRadioImpl.KEY_COUNTRY_ID}PL",
             "${UrlLayerWebRadioImpl.KEY_SEARCH_ID}Rock"
         )) {
+            val uri = Uri.parse("https://example.com?$key")
             assertEquals(
                 key,
                 setOf("rock-station"),
-                parser.getRadioStations(data, MediaIdBuilderDefault(), Uri.parse("https://example.com?$key"))
+                parser.getRadioStations(data, MediaIdBuilderDefault(), uri)
                     .map { it.id }
                     .toSet()
             )
         }
         assertTrue(
-            parser.getRadioStations(data, MediaIdBuilderDefault(), Uri.parse("https://example.com")).isEmpty()
+            parser.getRadioStations(
+                data,
+                MediaIdBuilderDefault(),
+                Uri.parse("https://example.com")
+            ).isEmpty()
         )
     }
 

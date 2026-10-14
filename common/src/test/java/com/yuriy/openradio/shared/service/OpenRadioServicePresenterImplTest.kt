@@ -339,7 +339,10 @@ class OpenRadioServicePresenterImplTest {
     @Test
     fun anUntouchedProfileStreamsOverMobile() {
         val context = preferencesContext()
-        val presenter = presenter(networkLayer = RecordingNetworkLayer(mobile = true), settingsContext = context)
+        val presenter = presenter(
+            networkLayer = RecordingNetworkLayer(mobile = true),
+            settingsContext = context
+        )
 
         assertFalse(presenter.isPlaybackBlockedByMobileNetwork())
 
