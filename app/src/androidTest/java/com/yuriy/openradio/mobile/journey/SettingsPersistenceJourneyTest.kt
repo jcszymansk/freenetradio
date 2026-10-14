@@ -42,6 +42,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import com.yuriy.openradio.shared.R as DialogR
@@ -71,6 +72,9 @@ import com.yuriy.openradio.shared.R as DialogR
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class SettingsPersistenceJourneyTest {
+
+    @get:Rule
+    val mStack = PresenterStackRule()
 
     private lateinit var mContext: Context
 

@@ -30,6 +30,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -62,6 +63,9 @@ import org.junit.runner.RunWith
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class FavoriteLifecycleJourneyTest {
+
+    @get:Rule
+    val mStack = PresenterStackRule()
 
     private lateinit var mContext: Context
 
@@ -290,13 +294,20 @@ class FavoriteLifecycleJourneyTest {
                 it.contains(mProfile.favoritesRow())
             }
 
-            list.tapRow(MediaId.MEDIA_ID_FAVORITES_LIST)
+            // The failure this case exists to catch is the node opening, which leaves the stack
+            // inside it.
+            val navigation = JourneyNavigation(scenario)
+            try {
+                list.tapRow(MediaId.MEDIA_ID_FAVORITES_LIST)
 
-            list.assertRowsStay(
-                root,
-                "Tapping the favorites row offline opened it. TASK-049 asks for exactly that, so " +
-                    "this test is what has to change, not the fix"
-            )
+                list.assertRowsStay(
+                    root,
+                    "Tapping the favorites row offline opened it. TASK-049 asks for exactly that, so " +
+                        "this test is what has to change, not the fix"
+                )
+            } finally {
+                navigation.returnToRoot()
+            }
         }
     }
 

@@ -42,6 +42,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import com.yuriy.openradio.shared.R as DialogR
@@ -80,6 +81,9 @@ import com.yuriy.openradio.shared.R as DialogR
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class LocalStationLifecycleJourneyTest {
+
+    @get:Rule
+    val mStack = PresenterStackRule()
 
     private lateinit var mContext: Context
 
@@ -373,18 +377,25 @@ class LocalStationLifecycleJourneyTest {
             addStationThroughTheDialog(scenario, STATION_NAME, serveStream(STATION_PATH))
             val root = list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
 
-            list.tapRow(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+            // The failure this case exists to catch is the node opening, which leaves the stack
+            // inside it.
+            val navigation = JourneyNavigation(scenario)
+            try {
+                list.tapRow(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
 
-            list.assertRowsStay(
-                root,
-                "Tapping the locals row offline opened it. TASK-049 asks for exactly that, so " +
-                    "this test is what has to change, not the fix"
-            )
-            assertEquals(
-                "The add-station button is hidden off the root, so the list did leave it",
-                View.VISIBLE,
-                addStationButtonVisibility(scenario)
-            )
+                list.assertRowsStay(
+                    root,
+                    "Tapping the locals row offline opened it. TASK-049 asks for exactly that, so " +
+                        "this test is what has to change, not the fix"
+                )
+                assertEquals(
+                    "The add-station button is hidden off the root, so the list did leave it",
+                    View.VISIBLE,
+                    addStationButtonVisibility(scenario)
+                )
+            } finally {
+                navigation.returnToRoot()
+            }
         }
     }
 
@@ -395,9 +406,9 @@ class LocalStationLifecycleJourneyTest {
      * This is a precondition rather than a restatement of the cold launch journey. The presenter
      * is one of the registry's singletons and its node stack outlives the Activity: `init` walks
      * back into whatever node the stack ends with, so a case that navigated leaves the next
-     * Activity somewhere other than the root, in the same process. Nothing here navigates, which
-     * this asserts rather than assumes, because Phase 6 asks for a suite with no order
-     * assumptions in it.
+     * Activity somewhere other than the root, in the same process. Every case here walks back out
+     * of the nodes it opens, which this asserts rather than assumes, because Phase 6 asks for a
+     * suite with no order assumptions in it.
      */
     private fun awaitCleanInstallRoot(list: BrowseListView) {
         assertEquals(
