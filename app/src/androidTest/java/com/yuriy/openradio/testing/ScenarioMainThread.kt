@@ -18,6 +18,7 @@ package com.yuriy.openradio.testing
 
 import android.app.Activity
 import androidx.test.core.app.ActivityScenario
+import androidx.test.platform.app.InstrumentationRegistry
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -42,5 +43,21 @@ fun <A : Activity, T> ActivityScenario<A>.withActivity(block: (A) -> T): T {
     onActivity { activity -> outcome.set(runCatching { block(activity) }) }
     val result = outcome.get()
         ?: throw AssertionError("The scenario returned without running the block on its Activity")
+    return result.getOrThrow()
+}
+
+/**
+ * Runs [block] on the main thread and returns what it answered, or throws on the calling thread
+ * whatever it threw: [withActivity] for state that outlives the Activity, such as the registry's
+ * singletons between two cases, which has to be read where the application writes it.
+ *
+ * `Instrumentation.runOnMainSync` catches nothing, for the reason [withActivity] gives, so the
+ * block is caught where it runs.
+ */
+fun <T> onMainThread(block: () -> T): T {
+    val outcome = AtomicReference<Result<T>?>(null)
+    InstrumentationRegistry.getInstrumentation().runOnMainSync { outcome.set(runCatching(block)) }
+    val result = outcome.get()
+        ?: throw AssertionError("The main thread returned without running the block")
     return result.getOrThrow()
 }

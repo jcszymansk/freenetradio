@@ -38,7 +38,7 @@ import org.junit.runner.RunWith
  * [withActivity] is what keeps a failing check inside an Activity from taking the whole run down,
  * so its contract is asserted here directly: the block runs on the main thread, what it answers
  * reaches the caller, and what it throws reaches the caller as the same throwable while the
- * application keeps running.
+ * application keeps running. [onMainThread] is held to the same contract with no Activity up.
  *
  * A broken helper does not fail these cases quietly. A throw that escaped on the main looper would
  * kill the process, and the run would report this class as crashed along with everything after it.
@@ -120,5 +120,24 @@ class ScenarioMainThreadTest {
                 "The caller was handed a different exception than the block threw", failure, thrown
             )
         }
+    }
+
+    @Test
+    fun aBlockRunOnTheMainThreadWithNoActivityAnswersTheCaller() {
+        val mainLooper = Looper.getMainLooper()
+
+        val blockLooper = onMainThread { Looper.myLooper() }
+
+        assertSame("The block did not run on the main thread", mainLooper, blockLooper)
+    }
+
+    @Test
+    fun aThrowOnTheMainThreadWithNoActivityReachesTheCallerAndLeavesTheApplicationRunning() {
+        val failure = AssertionError("raised on the main thread")
+
+        val thrown = assertThrows(AssertionError::class.java) { onMainThread<Unit> { throw failure } }
+
+        assertSame("The caller was handed a different failure than the block raised", failure, thrown)
+        assertTrue("The main thread stopped answering after the block failed", onMainThread { true })
     }
 }
