@@ -144,22 +144,6 @@ class MediaItemHelperTest {
         assertFalse(MediaItemHelper.isFavoriteField(metadata(extras = Bundle())))
     }
 
-    /**
-     * Nothing in the code base reads this flag back through [MediaItemHelper], so the stored key
-     * is the only observable behaviour.
-     */
-    @Test
-    fun theLocalStationFlagIsStoredUnderItsKey() {
-        val bundle = Bundle()
-
-        MediaItemHelper.updateLocalRadioStationField(bundle, true)
-        assertTrue(bundle.getBoolean(KEY_IS_LOCAL))
-
-        MediaItemHelper.updateLocalRadioStationField(bundle, false)
-        assertTrue(bundle.containsKey(KEY_IS_LOCAL))
-        assertFalse(bundle.getBoolean(KEY_IS_LOCAL))
-    }
-
     @Test
     fun aSortIdStoredInTheExtrasIsReadFromTheItem() {
         val extras = Bundle()
@@ -295,7 +279,6 @@ class MediaItemHelperTest {
     companion object {
         private const val DEFAULT = "default"
         private const val DRAWABLE = 42
-        private const val KEY_IS_LOCAL = "KEY_IS_LOCAL"
 
         /** MediaSessionCompat.QueueItem.UNKNOWN_ID, which the helper answers for every missing id. */
         private const val UNDEFINED_ID = -1

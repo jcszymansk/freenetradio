@@ -19,6 +19,7 @@ package com.yuriy.openradio.shared.model.media.item
 import androidx.media3.common.MediaMetadata
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.utils.AppUtils
+import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import com.yuriy.openradio.shared.utils.MediaItemHelper
 import java.util.TreeSet
 import org.junit.Assert.assertEquals
@@ -65,6 +66,31 @@ class MediaItemLocalsListTest {
         assertEquals(listOf("plain", "starred"), presenter.favoriteChecks)
         assertFalse(MediaItemHelper.isFavoriteField(listener.items[0].mediaMetadata))
         assertTrue(MediaItemHelper.isFavoriteField(listener.items[1].mediaMetadata))
+    }
+
+    /**
+     * The browse clients tell a local station by the list it is shown in, not by a marker on the
+     * item, so a local item carries exactly the extras the same station would carry anywhere else.
+     * The stub [android.os.Bundle] prints its values in insertion order, and both items are built
+     * by the same code, so equal text means equal extras.
+     */
+    @Test
+    fun aLocalStationItemCarriesNoMarkerOfBeingLocal() {
+        val locals = stations("starred")
+        val presenter = RecordingPresenter(mDeviceLocals = locals, mFavoriteIds = setOf("starred"))
+        val listener = RecordingCommandListener()
+
+        MediaItemLocalsList().execute(
+            listener.playbackStateListener,
+            dependencies(presenter, listener)
+        )
+
+        listener.awaitResult()
+        val elsewhere = MediaItemBuilder.buildPlayable(locals.first(), isFavorite = true)
+        assertEquals(
+            elsewhere.mediaMetadata.extras.toString(),
+            listener.items.single().mediaMetadata.extras.toString()
+        )
     }
 
     @Test
