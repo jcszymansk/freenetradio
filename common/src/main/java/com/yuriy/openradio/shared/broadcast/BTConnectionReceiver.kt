@@ -44,7 +44,10 @@ class BTConnectionReceiver(private val mListener: Listener) : AbstractReceiver()
 
     override fun onReceive(context: Context, intent: Intent) {
         AppLogger.i("$TAG receive:$intent")
-        AppLogger.i("$TAG    data:" + IntentUtils.intentBundleToString(intent))
+        // Registered exported, the receiver can be sent any action by any application.
+        if (intent.action != BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED) {
+            return
+        }
         val device = IntentUtils.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE, intent)
         if (device == null) {
             AppLogger.w("$TAG no device provided by $intent")
@@ -52,7 +55,8 @@ class BTConnectionReceiver(private val mListener: Listener) : AbstractReceiver()
         }
         when (intent.getIntExtra(BluetoothAdapter.EXTRA_CONNECTION_STATE, BluetoothAdapter.ERROR)) {
             BluetoothAdapter.STATE_CONNECTED -> {
-                AppLogger.i("$TAG connected to ${device.address}")
+                // No address in the log: the diagnostics report attaches the whole logcat.
+                AppLogger.i("$TAG device connected")
                 if (device.address == mConnectedDevice) {
                     AppLogger.i("$TAG connected to the same device.")
                     mListener.onSameDeviceConnected()
@@ -60,7 +64,7 @@ class BTConnectionReceiver(private val mListener: Listener) : AbstractReceiver()
                 mConnectedDevice = device.address
             }
             BluetoothAdapter.STATE_DISCONNECTED -> {
-                AppLogger.i("$TAG disconnected from ${device.address}")
+                AppLogger.i("$TAG device disconnected")
                 // The listener pauses playback, so only the device last seen connecting counts.
                 if (device.address == mConnectedDevice) {
                     mListener.onDisconnected()
