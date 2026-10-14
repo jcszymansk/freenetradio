@@ -30,8 +30,12 @@ import com.yuriy.openradio.shared.utils.AppLogger
  * E-Mail: chernyshov.yuriy@gmail.com
  *
  * Base cass to handle broadcast receivers. For example, register and unregister safely.
+ *
+ * @param mExportFlag [ContextCompat.RECEIVER_NOT_EXPORTED] for a receiver that hears only the system
+ * or this application, [ContextCompat.RECEIVER_EXPORTED] for one whose broadcast is sent by another
+ * application.
  */
-abstract class AbstractReceiver : BroadcastReceiver() {
+abstract class AbstractReceiver(private val mExportFlag: Int) : BroadcastReceiver() {
 
     @Volatile
     private var mIsRegistered = false
@@ -45,7 +49,7 @@ abstract class AbstractReceiver : BroadcastReceiver() {
     fun register(context: Context) {
         if (!mIsRegistered) {
             val filter = makeIntentFilter()
-            val intent = ContextCompat.registerReceiver(context,this, filter, ContextCompat.RECEIVER_EXPORTED)
+            val intent = ContextCompat.registerReceiver(context, this, filter, mExportFlag)
             AppLogger.i("Register receiver $intent for $this by $filter")
         }
         mIsRegistered = true

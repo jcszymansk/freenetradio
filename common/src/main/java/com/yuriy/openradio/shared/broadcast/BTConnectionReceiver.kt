@@ -21,6 +21,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.IntentUtils
@@ -32,8 +33,13 @@ import com.yuriy.openradio.shared.utils.IntentUtils
  * E-Mail: chernyshov.yuriy@gmail.com
  *
  * This is a receiver for Bluetooth device connection events.
+ *
+ * Exported, unlike the other receivers of the service: the Bluetooth application (uid 1002), not
+ * the system, sends [BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED]. A receiver that is not
+ * exported hears only the system and this application, so it would never hear the broadcast, and
+ * Bluetooth auto resume and pause on disconnect would stop.
  */
-class BTConnectionReceiver(private val mListener: Listener) : AbstractReceiver() {
+class BTConnectionReceiver(private val mListener: Listener) : AbstractReceiver(ContextCompat.RECEIVER_EXPORTED) {
 
     interface Listener {
         fun onSameDeviceConnected()
@@ -44,7 +50,8 @@ class BTConnectionReceiver(private val mListener: Listener) : AbstractReceiver()
 
     override fun onReceive(context: Context, intent: Intent) {
         AppLogger.i("$TAG receive:$intent")
-        // Registered exported, the receiver can be sent any action by any application.
+        // Defence in depth: the intent filter already admits only this action, and it is a
+        // protected broadcast no other application can send.
         if (intent.action != BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED) {
             return
         }
