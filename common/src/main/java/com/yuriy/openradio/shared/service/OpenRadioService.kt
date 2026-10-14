@@ -277,10 +277,14 @@ class OpenRadioService : MediaLibraryService() {
      * the last parent it answered a browse for is shared by every connected controller, so the
      * phone UI, Android Auto and any other browser each move it. A notification reaches only the
      * controllers subscribed to the node it names, so naming one nobody shows sends nothing.
+     *
+     * The favorites list is told without being invalidated. A browse always rebuilds it, so it
+     * needs no invalidation to be fresh, and its browse tree entry is what keeps a queue played
+     * from it resolvable while no controller is subscribed to re-browse it.
      */
     private fun notifyFavoritesChanged() {
         notifyChildrenChanged(MediaId.MEDIA_ID_ROOT)
-        notifyChildrenChanged(MediaId.MEDIA_ID_FAVORITES_LIST)
+        mSession.notifyChildrenChanged(MediaId.MEDIA_ID_FAVORITES_LIST, Int.MAX_VALUE, null)
     }
 
     private fun registerReceivers() {

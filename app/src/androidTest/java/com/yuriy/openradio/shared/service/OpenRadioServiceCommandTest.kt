@@ -514,6 +514,45 @@ class OpenRadioServiceCommandTest {
      * button has to mark the station while it is not a favorite, and the one that replaces it has
      * to unmark it again.
      */
+    /**
+     * Playing a station from the favorites list hands the player that list as its queue, and the
+     * queue's stations resolve only through the favorites list's entry in the browse tree. The
+     * phone holds one subscription at a time, so once it moves to the locals nobody re-browses
+     * the favorites list. A favorite change made there must leave the entry alone, or the next
+     * station in the queue resolves to nothing and the service keeps the previous one as active,
+     * which the car's favorite button then marks or unmarks in its place.
+     */
+    @Test
+    fun aFavoriteChangeElsewhereKeepsTheQueuedFavoritesResolvable() {
+        val url = mAudio.wav(WAV_NAME)
+        val first = makeStation("fav-queued-first", name = "Queued first", url = url)
+        val second = makeStation("fav-queued-second", name = "Queued second", url = url)
+        mStorages.favorites.add(first)
+        mStorages.favorites.add(second)
+        val local = mStations.seed(url).first()
+
+        val favorites = mBrowser.children(MediaId.MEDIA_ID_FAVORITES_LIST)
+        assertEquals(listOf(first.id, second.id), favorites.map { it.mediaId })
+        mBrowser.setMediaItem(favorites.first())
+        mBrowser.prepareAndPlay()
+        mBrowser.awaitPlaying()
+        awaitActiveStation(first.id)
+        assertEquals(listOf(first.id, second.id), mBrowser.queueMediaIds())
+
+        // The service resolves a favorite through the browse tree, so the node has to be browsed.
+        assertEquals(listOf(local.id), mBrowser.mediaIds(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST))
+        assertEquals(
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(
+                OpenRadioService.CMD_MARK_FAVORITE,
+                OpenRadioStore.makeUpdateIsFavoriteBundle(local.id)
+            ).resultCode
+        )
+
+        mBrowser.seekToNext()
+        awaitActiveStation(second.id)
+    }
+
     @Test
     fun theFavoriteButtonTheSessionPublishesMarksAndUnmarksThePlayingStation() {
         val station = playAStation()
