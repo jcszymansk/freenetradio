@@ -110,11 +110,11 @@ internal class AppDataReset(private val mContext: Context) {
      * `CMD_CLEAR_CACHE` hands the work to a coroutine and answers immediately, so its success code
      * says nothing about whether anything has been emptied yet.
      *
-     * `OpenRadioServicePresenterImpl.clear` runs its four steps in order: the persistent API cache,
-     * the in-memory one, the stored images, then the latest station. A [cleared] that reads the
-     * latest station is therefore a signal that the whole operation finished rather than only the
-     * step being watched, and each of the other three can then be asserted on its own rather than
-     * inferred from that ordering.
+     * `OpenRadioServicePresenterImpl.clear` runs its five steps in order: the persistent API cache,
+     * the in-memory one, the stored images, the memoized country list, then the latest station. A
+     * [cleared] that reads the latest station is therefore a signal that the whole operation
+     * finished rather than only the step being watched, and each of the other four can then be
+     * asserted on its own rather than inferred from that ordering.
      */
     fun clearCaches(browser: ServiceBrowser, cleared: () -> Boolean) {
         assertEquals(
