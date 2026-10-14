@@ -113,21 +113,15 @@ class SleepTimerModelImplTest {
 
     /**
      * A fresh install has no alarm, and starting the application must not invent one. The storage
-     * answers an unset date with the current time, so an unset date keeps moving with the clock
-     * while a stored one stays where it was written.
+     * answers an unset date with the current time, so its own API cannot tell a stored alarm from
+     * none; the file it writes to is read by name instead.
      */
     @Test
     fun initDoesNotStoreAnAlarmNobodySet() {
         newModel().init()
-        val afterInit = System.currentTimeMillis()
 
-        Thread.sleep(GAP_MS)
-
-        val loaded = mStorage.loadDate().time
-        assertTrue(
-            "init stored an alarm at $loaded, $GAP_MS ms or more before $afterInit + $GAP_MS",
-            loaded >= afterInit + GAP_MS
-        )
+        val stored = mContext.getSharedPreferences(SLEEP_TIMER_FILE_NAME, Context.MODE_PRIVATE).all
+        assertEquals("init wrote to the sleep timer storage", emptyMap<String, Any?>(), stored)
     }
 
     @Test
@@ -368,6 +362,11 @@ class SleepTimerModelImplTest {
         const val ALARM_HOUR = 22
         const val ALARM_MINUTE = 15
 
+        /**
+         * Mirrors the private file name of [SleepTimerStorage].
+         */
+        const val SLEEP_TIMER_FILE_NAME = "SleepTimerStorage"
+
         const val DELAY_MS = 300L
 
         /**
@@ -375,8 +374,6 @@ class SleepTimerModelImplTest {
          * its delay from the system clock instead would refuse everything as past.
          */
         const val CLOCK_NOW = 1_500_000_000_000L
-
-        const val GAP_MS = 100L
 
         const val COMPLETION_TIMEOUT_MS = 5_000L
 
