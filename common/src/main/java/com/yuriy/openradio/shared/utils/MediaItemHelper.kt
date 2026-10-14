@@ -125,27 +125,20 @@ object MediaItemHelper {
     }
 
     /**
-     * Try to extract useful information from the media description. In good case - this is metadata associated
-     * with the stream, subtitles otherwise, in worse case - default string.
+     * Picks the description line of the now-playing view: the subtitle, else the description, else
+     * the artist stored in the extras, else [defaultValue]. A field that is missing and a field that
+     * is empty both have nothing to show, so either moves on to the next one.
      *
-     * @param value Media description to parse.
+     * @param value Metadata of the playing item.
+     * @param defaultValue Answered when none of the fields has text.
      *
      * @return Display description.
      */
     fun getDisplayDescription(value: MediaMetadata, defaultValue: String): String {
-        val descChars = value.subtitle ?: return defaultValue
-        var result = descChars.toString()
-        if (result.isNotEmpty()) {
-            return result
-        }
-        val subTitleChars = value.description ?: return defaultValue
-        result = subTitleChars.toString()
-        if (result.isNotEmpty()) {
-            return result
-        }
-        if (value.extras != null) {
-            result = value.extras!!.getString(MediaMetadataCompat.METADATA_KEY_ARTIST, defaultValue)
-        }
-        return result.ifEmpty { defaultValue }
+        return listOf(
+            value.subtitle,
+            value.description,
+            value.extras?.getString(MediaMetadataCompat.METADATA_KEY_ARTIST)
+        ).firstOrNull { !it.isNullOrEmpty() }?.toString() ?: defaultValue
     }
 }
