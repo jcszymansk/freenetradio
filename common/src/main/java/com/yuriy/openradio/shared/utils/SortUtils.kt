@@ -49,19 +49,25 @@ object SortUtils {
         }
     }
 
+    /**
+     * Gives the station with [mediaId] the [sortId] and numbers every other station in [all] from
+     * zero, in iteration order, stepping over [sortId] so no other station shares it.
+     *
+     * The skip is keyed on the counter rather than on the sort id a station held before the drag:
+     * that station is met after the counter has passed [sortId] whenever the drag goes towards the
+     * bottom of the list, and is the dragged station itself when a row is dropped where it was.
+     */
     private fun resortIds(all: Set<RadioStation>, sortId: Int, mediaId: String) {
         var counter = 0
-        var value: Int
         for (item in all) {
-            value = if (mediaId == item.id) {
+            item.sortId = if (mediaId == item.id) {
                 sortId
             } else {
-                if (item.sortId == sortId) {
+                if (counter == sortId) {
                     counter++
                 }
                 counter++
             }
-            item.sortId = value
         }
     }
 }

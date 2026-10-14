@@ -32,8 +32,6 @@ import java.io.StringReader
 
 class XSPFPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
-    private var mNumberOfFiles = 0
-
     /**
      * Retrieves the files listed in a .asx file
      *
@@ -95,8 +93,6 @@ class XSPFPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
                 }
             }
         }
-        mNumberOfFiles += 1
-        playlistEntry[PlaylistEntry.TRACK] = mNumberOfFiles.toString()
         parseEntry(playlistEntry, playlist)
     }
 

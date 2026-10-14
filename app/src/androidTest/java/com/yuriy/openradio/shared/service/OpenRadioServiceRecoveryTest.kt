@@ -142,6 +142,48 @@ class OpenRadioServiceRecoveryTest {
     }
 
     /**
+     * A station url the player cannot read and that is no playlist either leaves nothing to try.
+     * The service stops and says so, and the station keeps its url rather than an empty one
+     * (TASK-043).
+     */
+    @Test
+    fun aStationUrlInNoPlaylistFormatStopsPlaybackAndKeepsItsUrl() {
+        val noise = mServer.serve("/noise", LoopbackHttpFixture.TEXT_PLAIN, NOT_AUDIO)
+
+        selectAndPlay(mStations.seed(noise).first())
+
+        mBrowser.awaitPlayback("the station url to be read as a playlist") {
+            requestsFor("/noise") == READ_ONCE
+        }
+        mBrowser.awaitMetadataSubtitle(string(R.string.media_stream_unplayable))
+        awaitSettled()
+        assertEquals(noise, mBrowser.currentMediaItemUri())
+        assertFalse(mBrowser.isPlaying())
+        assertEquals(READ_ONCE, requestsFor("/noise"))
+    }
+
+    /**
+     * An entry that names nothing is no stream to try, so a playlist with no other entry is one
+     * that names nothing: the station keeps its url, and the service stops.
+     */
+    @Test
+    fun aPlaylistWhoseOnlyEntryNamesNothingStopsPlaybackAndKeepsItsUrl() {
+        val playlist = mServer.serve(
+            "/blank.pls", LoopbackHttpFixture.AUDIO_PLS, plsPointingAt("")
+        )
+
+        selectAndPlay(mStations.seed(playlist).first())
+
+        mBrowser.awaitPlayback("the playlist to be read") {
+            requestsFor("/blank.pls") == READ_ONCE
+        }
+        mBrowser.awaitMetadataSubtitle(string(R.string.media_stream_unplayable))
+        awaitSettled()
+        assertEquals(playlist, mBrowser.currentMediaItemUri())
+        assertFalse(mBrowser.isPlaying())
+    }
+
+    /**
      * A playlist whose stream the player cannot read either is not read again: it would only name
      * the same stream. The service gives up after trying what it named, and says so.
      */

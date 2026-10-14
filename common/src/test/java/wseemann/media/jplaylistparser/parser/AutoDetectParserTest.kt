@@ -200,6 +200,46 @@ class AutoDetectParserTest {
         assertTrue(playlist.playlistEntries.isEmpty())
     }
 
+    /**
+     * An entry that names nothing is no stream, and the service would otherwise put its empty url
+     * on the station it plays (TASK-043). Only the pls and xspf parsers ever made such an entry; the
+     * m3u and asx parsers already skip one themselves, so their fixtures guard against a regression.
+     */
+    @Test
+    fun anEntryThatNamesNothingIsDroppedInEveryFormat() {
+        data class Fixture(val extension: String, val content: String)
+
+        val fixtures = listOf(
+            Fixture(".m3u", "#EXTM3U\n   \nhttps://example.com/kept\n"),
+            Fixture(
+                ".pls",
+                "[playlist]\nFile1=\nLength1=-1\nFile2=  \nLength2=-1\nFile3=https://example.com/kept\nLength3=-1"
+            ),
+            Fixture(
+                ".asx",
+                "<ASX><ENTRY><REF href=\"\"/></ENTRY><ENTRY><REF href=\"https://example.com/kept\"/></ENTRY></ASX>"
+            ),
+            Fixture(
+                ".xspf",
+                "<playlist><trackList><track><location> </location></track>" +
+                        "<track><location>https://example.com/kept</location></track></trackList></playlist>"
+            )
+        )
+
+        fixtures.forEach { fixture ->
+            val playlist = Playlist()
+
+            AutoDetectParser(NO_READS).parse(
+                "https://example.com/playlist${fixture.extension}",
+                null,
+                ByteArrayInputStream(fixture.content.toByteArray()),
+                playlist
+            )
+
+            assertEquals(fixture.extension, listOf("https://example.com/kept"), uris(playlist))
+        }
+    }
+
     @Test
     fun unsupportedFormatIsRejectedWithoutNetworking() {
         assertThrows(JPlaylistParserException::class.java) {

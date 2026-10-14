@@ -307,12 +307,12 @@ class OpenRadioPlayer(
     }
 
     override fun moveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int) {
-        val removedItems: ArrayDeque<MediaItem> = ArrayDeque()
-        val removedItemsLength = toIndex - fromIndex
-        for (i in removedItemsLength - 1 downTo 0) {
-            removedItems.addFirst(mPlaylist.removeAt(fromIndex + i))
-        }
-        mPlaylist.addAll(min(newIndex, mPlaylist.size), removedItems)
+        mPlayer.moveMediaItems(fromIndex, toIndex, newIndex)
+        // The player clamps a range that runs past the end of the queue, so the copy does too.
+        val range = mPlaylist.subList(min(fromIndex, mPlaylist.size), min(toIndex, mPlaylist.size))
+        val movedItems = range.toList()
+        range.clear()
+        mPlaylist.addAll(min(newIndex, mPlaylist.size), movedItems)
     }
 
     override fun removeMediaItem(index: Int) {

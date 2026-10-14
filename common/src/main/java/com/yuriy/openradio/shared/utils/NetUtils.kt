@@ -257,8 +257,9 @@ object NetUtils {
      * @param permit Whether playback may use the network, for this read alone. It is asked on the
      * thread this runs on and on the threads [downloader] reads on, and may be revoked from any.
      * @return [PlaylistRead.Blocked] when the permit ended before the read finished,
-     * otherwise [PlaylistRead.Urls] with the stream urls, none when the playlist names none, or
-     * one empty string when [playlistUrl] cannot be opened.
+     * [PlaylistRead.Failed] when [playlistUrl] cannot be opened, is refused, or serves no playlist
+     * that can be read, otherwise [PlaylistRead.Urls] with the stream urls, none when the playlist
+     * names none.
      */
     fun extractUrlsFromPlaylist(
         context: Context, downloader: DownloaderLayer, playlistUrl: String, permit: NetworkPermit
@@ -269,30 +270,33 @@ object NetUtils {
                 AppLogger.i("$CLASS_NAME playlist $playlistUrl not opened, the network may not be used")
                 return PlaylistRead.Blocked
             }
-            return PlaylistRead.Urls(listOf(AppUtils.EMPTY_STRING))
+            AppLogger.e("$CLASS_NAME playlist $playlistUrl can not be opened")
+            return PlaylistRead.Failed
         }
-        var result = listOf(AppUtils.EMPTY_STRING)
+        var read: PlaylistRead = PlaylistRead.Failed
         val parser = AutoDetectParser { url -> fetchPlaylist(context, downloader, url, permit) }
         val playlist = Playlist()
         val contentType = connection.contentType
         var gated: GatedInputStream? = null
         try {
             val held = permit.hold(connection) {
-                val stream = GatedInputStream(connection.inputStream, permit::mayContinue)
-                gated = stream
-                parser.parse(playlistUrl, contentType, stream, playlist)
+                val status = connection.responseCode
+                if (status !in HttpURLConnection.HTTP_OK until HttpURLConnection.HTTP_MULT_CHOICE) {
+                    AppLogger.e("$CLASS_NAME playlist $playlistUrl answered with status $status")
+                    PlaylistRead.Failed
+                } else {
+                    val stream = GatedInputStream(connection.inputStream, permit::mayContinue)
+                    gated = stream
+                    parser.parse(playlistUrl, contentType, stream, playlist)
+                    PlaylistRead.Urls(playlist.playlistEntries.map { it[PlaylistEntry.URI] })
+                }
             }
-            if (held == NetworkPermit.Held.Revoked) {
-                AppLogger.i("$CLASS_NAME playlist $playlistUrl read revoked")
-            }
-            result = playlist.playlistEntries.map { it[PlaylistEntry.URI] }
-            AppLogger.d("Found ${result.size} streams associated with $playlistUrl:")
-            for (url in result) {
-                AppLogger.d(" - $url")
+            when (held) {
+                is NetworkPermit.Held.Answered -> read = held.value
+                NetworkPermit.Held.Revoked -> AppLogger.i("$CLASS_NAME playlist $playlistUrl read revoked")
             }
         } catch (e: Exception) {
-            val errorMessage = "Can not get urls from playlist at $playlistUrl"
-            AppLogger.e(errorMessage, e)
+            AppLogger.e("$CLASS_NAME can not get urls from playlist at $playlistUrl", e)
         } finally {
             closeHttpURLConnection(connection)
             try {
@@ -305,7 +309,8 @@ object NetUtils {
             AppLogger.i("$CLASS_NAME playlist $playlistUrl read cut short, the network may not be used")
             return PlaylistRead.Blocked
         }
-        return PlaylistRead.Urls(result)
+        AppLogger.d("$CLASS_NAME playlist $playlistUrl read as $read")
+        return read
     }
 
     /**

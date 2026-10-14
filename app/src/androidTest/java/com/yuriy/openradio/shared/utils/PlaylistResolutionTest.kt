@@ -111,14 +111,12 @@ class PlaylistResolutionTest {
     }
 
     /**
-     * A url that cannot be opened is answered with one empty string rather than with no urls, and
-     * the two are indistinguishable to the caller. `handlePlayListUrlsExtracted` only asks whether
-     * the answer is empty, so it puts this empty string on the station as its stream url, which is
-     * TASK-043. This pins the answer as it stands so the fix has something to change.
+     * A url that cannot be opened is answered as a failure, never as urls: the service used to
+     * put the empty string it answered with on the station as its stream url (TASK-043).
      */
     @Test
-    fun aPlaylistThatCannotBeOpenedResolvesToOneEmptyUrl() {
-        assertArrayEquals(arrayOf(""), resolve("$UNREACHABLE_ORIGIN/unreachable.pls"))
+    fun aPlaylistThatCannotBeOpenedFails() {
+        assertEquals(PlaylistRead.Failed, read("$UNREACHABLE_ORIGIN/unreachable.pls") { true })
     }
 
     /**
@@ -127,8 +125,30 @@ class PlaylistResolutionTest {
      * any other scheme fails before it is ever read.
      */
     @Test
-    fun aPlaylistOnANonHttpSchemeResolvesToOneEmptyUrl() {
-        assertArrayEquals(arrayOf(""), resolve("file:///does/not/matter.pls"))
+    fun aPlaylistOnANonHttpSchemeFails() {
+        assertEquals(PlaylistRead.Failed, read("file:///does/not/matter.pls") { true })
+    }
+
+    /**
+     * A server that refuses the url answers with an error page, which is no playlist.
+     */
+    @Test
+    fun aRefusedPlaylistFails() {
+        val refused = mServer.refuse("/gone.pls", LoopbackHttpFixture.HTTP_NOT_FOUND, "Not Found")
+
+        assertEquals(PlaylistRead.Failed, read(refused) { true })
+    }
+
+    /**
+     * What a station url serves when the player cannot read it is not always a playlist. Content
+     * in no playlist format is not a playlist that names nothing, so it fails rather than
+     * resolving to no urls.
+     */
+    @Test
+    fun aStationUrlInNoPlaylistFormatFails() {
+        val noise = mServer.serve("/noise", LoopbackHttpFixture.TEXT_PLAIN, "only text, in no playlist format")
+
+        assertEquals(PlaylistRead.Failed, read(noise) { true })
     }
 
     /**
@@ -481,6 +501,7 @@ class PlaylistResolutionTest {
     ): Array<String> {
         return when (val answer = read(url, downloader) { true }) {
             is PlaylistRead.Urls -> answer.urls.toTypedArray()
+            PlaylistRead.Failed -> throw AssertionError("The read of $url failed")
             PlaylistRead.Blocked -> throw AssertionError("A read on a usable network was blocked")
         }
     }

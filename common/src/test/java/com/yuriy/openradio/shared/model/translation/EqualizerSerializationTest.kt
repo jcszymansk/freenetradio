@@ -48,6 +48,29 @@ class EqualizerSerializationTest {
         assertArrayEquals(expected.bandLevels, actual.bandLevels)
     }
 
+    /**
+     * One band means one level and one centre frequency, the lone-entry arrays TASK-077 found
+     * being dropped on every reload while the preset name and band count survived.
+     */
+    @Test
+    fun oneBandStateRoundTripKeepsItsLevelAndFrequency() {
+        val expected = EqualizerState().apply {
+            numOfBands = 1
+            presets = listOf("Flat")
+            centerFrequencies = intArrayOf(1_000_000)
+            bandLevels = shortArrayOf(-300)
+        }
+
+        val actual = EqualizerStateJsonDeserializer().deserialize(
+            EqualizerJsonStateSerializer().serialize(expected)
+        )
+
+        assertEquals(expected.numOfBands, actual.numOfBands)
+        assertEquals(expected.presets, actual.presets)
+        assertArrayEquals(expected.centerFrequencies, actual.centerFrequencies)
+        assertArrayEquals(expected.bandLevels, actual.bandLevels)
+    }
+
     @Test
     fun emptyStateRoundTripKeepsEmptyCollections() {
         val actual = EqualizerStateJsonDeserializer().deserialize(

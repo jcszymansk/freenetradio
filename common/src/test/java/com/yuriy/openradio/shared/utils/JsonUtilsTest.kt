@@ -31,7 +31,7 @@ import org.junit.Test
  * Each one is exercised for a value that is there, a key that is not, and a value of the wrong
  * shape, plus the edge cases where the accessors disagree with what their names promise.
  *
- * Two conventions here need saying out loud.
+ * Two things here need saying out loud.
  *
  * The wrong-type value is always a nested [JSONArray], never a number or a boolean. Two different
  * `org.json` implementations run this code: the reference one on the JVM test classpath, which
@@ -40,10 +40,9 @@ import org.junit.Test
  * [JsonUtils] rather than the classpath the test happens to run on. It is also the realistic
  * hazard: a provider that answers with an object or a list where a station field is expected.
  *
- * Some of the behaviour pinned below is wrong, and is pinned because it is what ships.
- * [JsonUtils.getShortArray] and [JsonUtils.getIntArray] drop a single-entry array on the floor
- * and return nothing, which loses the band levels of a one-band equalizer; TASK-077 carries the
- * fix. The assertions that record it say so where they stand.
+ * The array accessors must tell an empty value from a lone entry. Splitting `""` yields one empty
+ * element, just as splitting `"1500"` yields one real one; until TASK-077 the accessors dropped
+ * both, which lost the band levels and centre frequencies of a one-band equalizer.
  */
 class JsonUtilsTest {
 
@@ -129,18 +128,14 @@ class JsonUtilsTest {
         assertArrayEquals(shortArrayOf(-1500, 0, 1500), JsonUtils.getShortArray(jsonObject, KEY))
     }
 
-    /**
-     * The single-entry case is the defect TASK-077 carries: the guard that turns the one element
-     * an empty value splits into into an empty array cannot tell it from a real lone entry, so a
-     * one-band equalizer comes back with no band levels at all.
-     */
+    /** A lone entry is the band level of a one-band equalizer, which TASK-077 found being lost. */
     @Test
-    fun shortArrayLosesASingleEntryAndIsEmptyForAnEmptyValueOrAMissingKey() {
+    fun shortArrayKeepsASingleEntryAndIsEmptyForAnEmptyValueOrAMissingKey() {
         val jsonObject = JSONObject()
             .put(KEY, "1500")
             .put(EMPTY_KEY, AppUtils.EMPTY_STRING)
 
-        assertArrayEquals(shortArrayOf(), JsonUtils.getShortArray(jsonObject, KEY))
+        assertArrayEquals(shortArrayOf(1500), JsonUtils.getShortArray(jsonObject, KEY))
         assertArrayEquals(shortArrayOf(), JsonUtils.getShortArray(jsonObject, EMPTY_KEY))
         assertArrayEquals(shortArrayOf(), JsonUtils.getShortArray(jsonObject, ABSENT_KEY))
     }
@@ -167,17 +162,14 @@ class JsonUtilsTest {
         )
     }
 
-    /**
-     * The same defect as [shortArrayLosesASingleEntryAndIsEmptyForAnEmptyValueOrAMissingKey],
-     * in the accessor that reads the equalizer's centre frequencies. TASK-077 carries the fix.
-     */
+    /** A lone entry is the centre frequency of a one-band equalizer, which TASK-077 found lost. */
     @Test
-    fun intArrayLosesASingleEntryAndIsEmptyForAnEmptyValueOrAMissingKey() {
+    fun intArrayKeepsASingleEntryAndIsEmptyForAnEmptyValueOrAMissingKey() {
         val jsonObject = JSONObject()
             .put(KEY, "60000")
             .put(EMPTY_KEY, AppUtils.EMPTY_STRING)
 
-        assertArrayEquals(intArrayOf(), JsonUtils.getIntArray(jsonObject, KEY))
+        assertArrayEquals(intArrayOf(60_000), JsonUtils.getIntArray(jsonObject, KEY))
         assertArrayEquals(intArrayOf(), JsonUtils.getIntArray(jsonObject, EMPTY_KEY))
         assertArrayEquals(intArrayOf(), JsonUtils.getIntArray(jsonObject, ABSENT_KEY))
     }

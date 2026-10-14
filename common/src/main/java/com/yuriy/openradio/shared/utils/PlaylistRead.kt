@@ -27,6 +27,16 @@ sealed class PlaylistRead {
     data class Urls(val urls: List<String>) : PlaylistRead()
 
     /**
+     * The read ran, and the station url could not be opened, or what it answered could not be
+     * read as a playlist. That is not a playlist that names no streams: nothing is known about
+     * what it names.
+     */
+    object Failed : PlaylistRead() {
+
+        override fun toString() = "Failed"
+    }
+
+    /**
      * The read stopped before a request it needed, because the network may not be used for
      * playback. Whatever it had read by then is not the playlist, so it is not answered.
      */

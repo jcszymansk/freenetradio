@@ -27,7 +27,6 @@ import java.io.InputStream
 
 class PLSPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
-    private var mNumberOfFiles = 0
     private var mProcessingEntry = false
 
     override val supportedTypes: Set<MediaType?>
@@ -95,8 +94,6 @@ class PLSPlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
     }
 
     private fun savePlaylistFile(playlistEntry: PlaylistEntry, playlist: Playlist) {
-        mNumberOfFiles += 1
-        playlistEntry[PlaylistEntry.TRACK] = mNumberOfFiles.toString()
         parseEntry(playlistEntry, playlist)
         mProcessingEntry = false
     }

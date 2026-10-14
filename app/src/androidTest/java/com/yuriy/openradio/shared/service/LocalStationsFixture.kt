@@ -82,9 +82,8 @@ internal class LocalStationsFixture(
      * active station it did not have before. From then on every page-0 browse with an empty queue
      * calls `maybeCreateInitialPlaylist`, which asks the provider for new stations, replaces the
      * queue with the answer and starts playing it. Offline the answer is nothing, so the queue
-     * becomes the active station alone, under a browse-tree key that no later browse invalidates,
-     * which is TASK-041. A queue that is not empty shuts that path, which is the state the rest of
-     * the suite was written in and has to be handed back in.
+     * becomes the active station alone. A queue that is not empty shuts that path, which is the
+     * state the rest of the suite was written in and has to be handed back in.
      *
      * The item is one already in hand rather than one browsed for here, because the browse is
      * itself what would trigger the path this is avoiding.
@@ -136,8 +135,9 @@ internal class LocalStationsFixture(
      *
      * [com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage.getId] counts up from a fixed
      * value held in the same preference file the tests wipe, so it hands out the same ids to every
-     * test. The browse tree keeps entries keyed by a station id that no browse invalidates, and one
-     * left behind by an earlier test would then answer for a station of the same id in a later one.
+     * test. The browse tree keeps the last playlist the service built for itself, which no browse
+     * invalidates, and that playlist answers for any station no browse list holds, so a station of
+     * a repeated id could be answered out of the playlist an earlier test left behind.
      * The name matters for the same reason once a test reads one off the screen: what the phone's
      * now-playing bar shows outlives the test that put it there, so a repeated name would let a
      * stale bar pass for the one this test was waiting for.

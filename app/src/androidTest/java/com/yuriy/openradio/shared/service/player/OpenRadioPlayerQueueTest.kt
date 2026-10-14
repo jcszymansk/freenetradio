@@ -1,0 +1,119 @@
+/*
+ * Copyright 2026 The "FreeNetRadio" Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.yuriy.openradio.shared.service.player
+
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * How [OpenRadioPlayer] keeps the queue it reports in step with the queue of the ExoPlayer it
+ * wraps when a controller reorders it.
+ *
+ * The wrapper keeps its own copy of the queue, from which it reads the metadata it publishes, while
+ * the wrapped player decides what plays. Each case reads both: the wrapped player's through
+ * [OpenRadioPlayer.getMediaItemAt], which forwards, and the wrapper's through
+ * [OpenRadioPlayer.getPlaylist]. Nothing is prepared, so no url is ever opened.
+ */
+@UnstableApi
+@RunWith(AndroidJUnit4::class)
+class OpenRadioPlayerQueueTest {
+
+    private lateinit var mPlayer: OpenRadioPlayer
+
+    @Before
+    fun setUp() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        mPlayer = onMain { newOpenRadioPlayer(context) }
+        onMain { mPlayer.setMediaItems(STATIONS.map(::station).toMutableList()) }
+    }
+
+    @After
+    fun tearDown() {
+        onMain { mPlayer.release() }
+    }
+
+    @Test
+    fun aRangeMovedTowardsTheEndIsMovedInBothQueues() {
+        onMain { mPlayer.moveMediaItems(1, 3, 3) }
+
+        assertQueues(listOf("a", "d", "e", "b", "c"))
+    }
+
+    @Test
+    fun aRangeMovedTowardsTheStartIsMovedInBothQueues() {
+        onMain { mPlayer.moveMediaItems(3, 5, 0) }
+
+        assertQueues(listOf("d", "e", "a", "b", "c"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.moveMediaItems] moves a range whose new index is past the
+     * end of the queue to the end.
+     */
+    @Test
+    fun aRangeMovedPastTheEndEndsBothQueues() {
+        onMain { mPlayer.moveMediaItems(0, 2, 10) }
+
+        assertQueues(listOf("c", "d", "e", "a", "b"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.moveMediaItems] moves a range that runs past the end of the
+     * queue as far as the end.
+     */
+    @Test
+    fun aRangeRunningPastTheEndIsMovedAsFarAsTheEndInBothQueues() {
+        onMain { mPlayer.moveMediaItems(3, 10, 0) }
+
+        assertQueues(listOf("d", "e", "a", "b", "c"))
+    }
+
+    @Test
+    fun anItemMovedAloneIsMovedInBothQueues() {
+        onMain { mPlayer.moveMediaItem(0, 3) }
+
+        assertQueues(listOf("b", "c", "d", "a", "e"))
+    }
+
+    private fun assertQueues(expected: List<String>) {
+        onMain {
+            val played = (0 until mPlayer.mediaItemCount).map { mPlayer.getMediaItemAt(it).mediaId }
+            assertEquals("The wrapped player's queue", expected, played)
+            assertEquals("The wrapper's queue", expected, mPlayer.getPlaylist().map { it.mediaId })
+        }
+    }
+
+    private companion object {
+
+        val STATIONS = listOf("a", "b", "c", "d", "e")
+
+        fun station(id: String): MediaItem {
+            return MediaItem.Builder()
+                .setMediaId(id)
+                .setUri("$UNREACHABLE_ORIGIN/$id")
+                .build()
+        }
+    }
+}

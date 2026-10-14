@@ -31,7 +31,6 @@ import java.net.URISyntaxException
 
 class M3U8PlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
 
-    private var mNumberOfFiles = 0
     private var processingEntry = false
 
     override val supportedTypes: Set<MediaType?>
@@ -73,8 +72,6 @@ class M3U8PlaylistParser(session: AutoDetectParser) : AbstractParser(session) {
     }
 
     private fun savePlaylistFile(playlistEntry: PlaylistEntry, playlist: Playlist) {
-        mNumberOfFiles += 1
-        playlistEntry[PlaylistEntry.TRACK] = mNumberOfFiles.toString()
         parseEntry(playlistEntry, playlist)
         processingEntry = false
     }
