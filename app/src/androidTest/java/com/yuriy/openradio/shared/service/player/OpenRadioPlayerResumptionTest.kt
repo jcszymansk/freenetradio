@@ -108,6 +108,16 @@ class OpenRadioPlayerResumptionTest {
     }
 
     @Test
+    fun aQueueReplacedByNothingAsARangeResumesAtTheItemThatWasCurrent() {
+        load(STATIONS, current = 3)
+
+        onMain { mPlayer.replaceMediaItems(0, STATIONS.size, mutableListOf()) }
+
+        assertEmptyQueue()
+        assertResumption(STATIONS, 3)
+    }
+
+    @Test
     fun aQueueWhoseLastItemIsRemovedResumesThatItem() {
         load(listOf("a"), current = 0)
 

@@ -29,7 +29,7 @@ import org.junit.runner.RunWith
 
 /**
  * How [OpenRadioPlayer] keeps the queue it reports in step with the queue of the ExoPlayer it
- * wraps when a controller reorders it.
+ * wraps when a controller reorders it or replaces part of it.
  *
  * The wrapper keeps its own copy of the queue, from which it reads the metadata it publishes, while
  * the wrapped player decides what plays. Each case reads both: the wrapped player's through
@@ -95,6 +95,42 @@ class OpenRadioPlayerQueueTest {
         onMain { mPlayer.moveMediaItem(0, 3) }
 
         assertQueues(listOf("b", "c", "d", "a", "e"))
+    }
+
+    @Test
+    fun anItemReplacedIsReplacedInBothQueues() {
+        onMain { mPlayer.replaceMediaItem(2, station("x")) }
+
+        assertQueues(listOf("a", "b", "x", "d", "e"))
+    }
+
+    @Test
+    fun aRangeReplacedIsReplacedInBothQueues() {
+        onMain { mPlayer.replaceMediaItems(1, 3, mutableListOf(station("x"))) }
+
+        assertQueues(listOf("a", "x", "d", "e"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.replaceMediaItems] replaces a range that runs past the end of
+     * the queue as far as the end.
+     */
+    @Test
+    fun aRangeRunningPastTheEndIsReplacedAsFarAsTheEndInBothQueues() {
+        onMain { mPlayer.replaceMediaItems(3, 10, mutableListOf(station("x"), station("y"))) }
+
+        assertQueues(listOf("a", "b", "c", "x", "y"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.replaceMediaItems] ignores a range that starts past the end of
+     * the queue.
+     */
+    @Test
+    fun aRangeStartingPastTheEndIsIgnoredByBothQueues() {
+        onMain { mPlayer.replaceMediaItems(7, 9, mutableListOf(station("x"))) }
+
+        assertQueues(STATIONS)
     }
 
     private fun assertQueues(expected: List<String>) {

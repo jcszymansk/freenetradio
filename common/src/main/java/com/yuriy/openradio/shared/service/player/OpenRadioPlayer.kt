@@ -210,11 +210,20 @@ class OpenRadioPlayer(
     }
 
     override fun replaceMediaItem(index: Int, mediaItem: MediaItem) {
-        mPlayer.replaceMediaItem(index, mediaItem)
+        replaceMediaItems(index, index + 1, mutableListOf(mediaItem))
     }
 
     override fun replaceMediaItems(fromIndex: Int, toIndex: Int, mediaItems: MutableList<MediaItem>) {
+        rememberQueue()
         mPlayer.replaceMediaItems(fromIndex, toIndex, mediaItems)
+        // The player ignores a range that starts past the end of the queue and clamps one that runs
+        // past it, so the copy does too.
+        if (fromIndex > mPlaylist.size) {
+            return
+        }
+        val range = mPlaylist.subList(fromIndex, min(toIndex, mPlaylist.size))
+        range.clear()
+        range.addAll(mediaItems)
     }
 
     override fun release() {
