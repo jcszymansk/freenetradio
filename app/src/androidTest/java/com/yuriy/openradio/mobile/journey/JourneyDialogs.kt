@@ -19,6 +19,7 @@ package com.yuriy.openradio.mobile.journey
 import android.view.View
 import android.widget.CompoundButton
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
@@ -26,8 +27,10 @@ import androidx.test.core.app.ActivityScenario
 import com.google.android.material.navigation.NavigationView
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
+import com.yuriy.openradio.shared.R as DialogR
 
 /**
  * The dialogs a journey drives, read the way a user meets them: asked for by a tap, waited for
@@ -116,6 +119,23 @@ internal class JourneyDialogs(private val mScenario: ActivityScenario<MainActivi
      */
     fun click(fragment: DialogFragment, id: Int) {
         read<View, Boolean>(fragment, id) { it.performClick() }
+    }
+
+    /**
+     * Selects the country [code] in the spinner of the general dialog [general]. The spinner is
+     * sorted by name and carries a "use location" entry ahead of every real country, so the
+     * position has to be looked up rather than assumed.
+     */
+    fun chooseCountry(general: DialogFragment, code: String) {
+        val spinnerId = DialogR.id.default_country_spinner
+        val codes = read<Spinner, List<String>>(general, spinnerId) { spinner ->
+            (0 until spinner.adapter.count).map { (spinner.adapter.getItem(it) as Country).code }
+        }
+        val position = codes.indexOf(code)
+        if (position < 0) {
+            throw AssertionError("The country spinner offers no entry for '$code'")
+        }
+        read<Spinner, Unit>(general, spinnerId) { it.setSelection(position) }
     }
 
     /**

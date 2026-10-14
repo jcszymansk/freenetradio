@@ -96,6 +96,4 @@ interface MediaPresenter {
     fun updateDescription(descriptionView: TextView?, mediaMetadata: MediaMetadata)
 
     fun updateListPositions(clickPosition: Int)
-
-    fun updateRootView()
 }
