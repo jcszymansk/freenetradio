@@ -71,18 +71,16 @@ class PlayerUtilsTest {
     }
 
     /**
-     * Current behaviour, and it looks unintended: the marker is recognised by reference identity
-     * of its id string, so a marker whose id equals [MediaId.MEDIA_ID_LIST_ENDED] but is another
-     * String instance, as it would be after crossing a Binder in a Bundle, is not the end of the
-     * list.
+     * The marker is recognised by the value of its id, so one whose id is another String instance,
+     * as it is after crossing a Binder in a Bundle, still ends the list.
      */
     @Test
-    fun aMarkerWhoseIdIsAnEqualButDistinctStringIsNotRecognised() {
+    fun aMarkerWhoseIdIsAnEqualButDistinctStringIsRecognised() {
         val copiedId = String(MediaId.MEDIA_ID_LIST_ENDED.toCharArray())
         assertEquals(MediaId.MEDIA_ID_LIST_ENDED, copiedId)
         assertNotSame(MediaId.MEDIA_ID_LIST_ENDED, copiedId)
 
-        assertFalse(PlayerUtils.isEndOfList(listOf(item(copiedId))))
+        assertTrue(PlayerUtils.isEndOfList(listOf(item(copiedId))))
     }
 
     @Test
