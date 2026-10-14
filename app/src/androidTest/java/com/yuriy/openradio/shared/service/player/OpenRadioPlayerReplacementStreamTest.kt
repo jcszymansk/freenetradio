@@ -98,6 +98,7 @@ class OpenRadioPlayerReplacementStreamTest {
         failOnAnUnreadableStream()
         onMain { mPlayer.stopForReplacementStream() }
         onMain { mPlayer.pause() }
+        onMain { mPlayer.stopForReplacementStream() }
 
         val start = onMain { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
 

@@ -890,6 +890,7 @@ class OpenRadioPlayer(
         replaceMediaItem(mPlayer.currentMediaItemIndex, mediaItem)
         if (mPlayer.playWhenReady.not()) {
             AppLogger.i("$TAG hold the replacement stream of a paused station")
+            forgetAwaitedStream("held replacement")
             return false
         }
         return true
