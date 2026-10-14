@@ -41,7 +41,7 @@ import java.io.FileNotFoundException
 import java.io.IOException
 
 /**
- * Implementation fo the [ImagesPersistenceLayer] interface to work with room database.
+ * Implementation of the [ImagesPersistenceLayer] interface to work with room database.
  *
  * @param mNetworkLayer Answers whether a network is connected at all.
  * @param ioDispatcher  Dispatcher the database writes and the downloads run on.
