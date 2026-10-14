@@ -160,11 +160,11 @@ class FavoriteLifecycleJourneyTest {
      * The second half of the lifecycle, driven where a user would drive it: inside the favorites
      * node, on the row that put it there.
      *
-     * Removing the only favorite takes the whole node away, which is the part of this an offline
-     * user can see. What they cannot see is the list they are standing in changing: the service
-     * decides which node to notify from the one it last answered for, and with the store now empty
-     * that decision lands on the root rather than on the list still on screen. TASK-050 holds that;
-     * the two assertions on the stale row below are what will change when it is fixed.
+     * Removing the only favorite empties the list the user is standing in, and then takes the
+     * whole node off the root. The emptied list is the half that went wrong: the service used to
+     * pick the node to notify from the one it last answered a browse for, and named the favorites
+     * list only while the store still held something, so the removed station stayed on screen
+     * (TASK-050).
      */
     @Test
     fun unmarkingAStationFromTheFavoritesNodeTakesItOffTheRoot() {
@@ -182,16 +182,12 @@ class FavoriteLifecycleJourneyTest {
                 list.tapRowFavorite(mStation.id)
 
                 awaitFavorites(emptyList())
-                list.assertRowsStay(
-                    listOf(BrowseRow(mStation.id, STATION_NAME)),
-                    "Unmarking the last favorite refreshed the list it was removed from. " +
-                        "TASK-050 asks for exactly that, so this assertion is what has to " +
-                        "change, not the fix"
+                list.awaitEmptied("the favorites list without the unmarked station")
+                assertEquals(
+                    "The list that emptied is not the favorites list the station was unmarked in",
+                    MediaId.MEDIA_ID_FAVORITES_LIST,
+                    list.renderedNode()
                 )
-                // A BrowseRow carries the media id and the title, so a rebind that put the row
-                // back with its old favorite state would leave the comparison above equal. The
-                // box is not part of that comparison and is read on its own.
-                list.awaitRowFavorite(mStation.id, false)
             } finally {
                 navigation.returnToRoot()
             }

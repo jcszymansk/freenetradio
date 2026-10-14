@@ -269,14 +269,18 @@ class OpenRadioService : MediaLibraryService() {
         }
     }
 
-    private fun maybeNotifyRootChanged() {
-        // To force update Favorite menu tab.
-        var mediaId = MediaId.MEDIA_ID_ROOT
-        if (mCurrentParentId == MediaId.MEDIA_ID_FAVORITES_LIST && mPresenter.getAllFavorites().isNotEmpty()) {
-            // To force update Favorites list.
-            mediaId = MediaId.MEDIA_ID_FAVORITES_LIST
-        }
-        notifyChildrenChanged(mediaId)
+    /**
+     * Tells subscribers that the favorites store changed: the root gains or loses the favorites
+     * node, and the favorites list gains or loses the station.
+     *
+     * Both are always named. Which list a controller shows is not something the service knows:
+     * the last parent it answered a browse for is shared by every connected controller, so the
+     * phone UI, Android Auto and any other browser each move it. A notification reaches only the
+     * controllers subscribed to the node it names, so naming one nobody shows sends nothing.
+     */
+    private fun notifyFavoritesChanged() {
+        notifyChildrenChanged(MediaId.MEDIA_ID_ROOT)
+        notifyChildrenChanged(MediaId.MEDIA_ID_FAVORITES_LIST)
     }
 
     private fun registerReceivers() {
@@ -1217,7 +1221,7 @@ class OpenRadioService : MediaLibraryService() {
                 MediaItemHelper.updateFavoriteField(currentMediaItem.mediaMetadata, isFavorite)
             }
             mPlayer.invalidateMetaData()
-            maybeNotifyRootChanged()
+            notifyFavoritesChanged()
             return mSessionCmdSuccess
         }
     }

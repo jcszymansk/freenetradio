@@ -215,6 +215,129 @@ class OpenRadioServiceCommandTest {
     }
 
     /**
+     * Unmarking the only favorite from inside the favorites list empties the store, and the list
+     * a controller is standing in has to be told so. The service used to name the favorites list
+     * only while the store still held something afterwards, so this case notified the root alone
+     * and left the removed station on screen.
+     */
+    @Test
+    fun unmarkingTheLastFavoriteInsideTheFavoritesListRefreshesIt() {
+        val station = makeStation("fav-only", name = "Only favorite")
+        mStorages.favorites.add(station)
+        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        assertEquals(listOf(station.id), mBrowser.mediaIds(MediaId.MEDIA_ID_FAVORITES_LIST))
+        subscribeToTheFavoriteNodes(mBrowser)
+
+        val (resultCode, notified) = sendAFavoriteCommandAndCollectItsNotifications(
+            mBrowser, mBrowser, OpenRadioService.CMD_UNMARK_FAVORITE, station.id
+        )
+
+        assertEquals(SessionResult.RESULT_SUCCESS, resultCode)
+        assertEquals(
+            "Unmarking the last favorite did not notify both the root and the favorites list",
+            FAVORITE_NODES,
+            notified.toSet()
+        )
+        assertTrue(mStorages.freshFavorites().getAll().isEmpty())
+        assertTrue(mBrowser.children(MediaId.MEDIA_ID_FAVORITES_LIST).isEmpty())
+        assertFalse(
+            "The root kept the favorites node with no favorites left",
+            mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT).contains(MediaId.MEDIA_ID_FAVORITES_LIST)
+        )
+    }
+
+    /**
+     * Unmarking one of several favorites from inside the favorites list refreshes it, and the root
+     * keeps the node because the store still holds the other one.
+     */
+    @Test
+    fun unmarkingOneOfSeveralFavoritesRefreshesTheListAndKeepsTheNode() {
+        val removed = makeStation("fav-removed", name = "Removed favorite")
+        val kept = makeStation("fav-kept", name = "Kept favorite")
+        mStorages.favorites.add(removed)
+        mStorages.favorites.add(kept)
+        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        assertEquals(
+            listOf(removed.id, kept.id),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_FAVORITES_LIST)
+        )
+        subscribeToTheFavoriteNodes(mBrowser)
+
+        val (resultCode, notified) = sendAFavoriteCommandAndCollectItsNotifications(
+            mBrowser, mBrowser, OpenRadioService.CMD_UNMARK_FAVORITE, removed.id
+        )
+
+        assertEquals(SessionResult.RESULT_SUCCESS, resultCode)
+        assertEquals(FAVORITE_NODES, notified.toSet())
+        assertEquals(listOf(kept.id), mStorages.freshFavorites().getAll().map { it.id })
+        assertEquals(listOf(kept.id), mBrowser.mediaIds(MediaId.MEDIA_ID_FAVORITES_LIST))
+        assertTrue(
+            "The root lost the favorites node while a favorite is left",
+            mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT).contains(MediaId.MEDIA_ID_FAVORITES_LIST)
+        )
+    }
+
+    /**
+     * The phone UI, Android Auto and any other controller share one service, and which of them
+     * browsed last is an accident of timing. One controller here shows the favorites list while
+     * another browses the locals last and marks and then unmarks a station there; the favorites
+     * list has to be refreshed both times. The service used to pick the node to notify from the
+     * last browse, so it told the first controller nothing.
+     */
+    @Test
+    fun theFavoritesListIsRefreshedWhicheverControllerBrowsedLast() {
+        val kept = makeStation("fav-kept", name = "Kept favorite")
+        mStorages.favorites.add(kept)
+        val station = makeStation(mStorages.locals.getId(), name = "Marked elsewhere", isLocal = true)
+        mStorages.locals.add(station)
+        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+        assertEquals(listOf(kept.id), mBrowser.mediaIds(MediaId.MEDIA_ID_FAVORITES_LIST))
+        subscribeToTheFavoriteNodes(mBrowser)
+
+        val other = ServiceBrowser()
+        try {
+            other.connect()
+            // The service resolves a favorite through the browse tree, so the node has to be browsed.
+            assertEquals(
+                listOf(station.id),
+                other.mediaIds(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+            )
+
+            val (marked, markNotified) = sendAFavoriteCommandAndCollectItsNotifications(
+                other, mBrowser, OpenRadioService.CMD_MARK_FAVORITE, station.id
+            )
+
+            assertEquals(SessionResult.RESULT_SUCCESS, marked)
+            assertEquals(
+                "Marking a station from the locals list did not notify the favorites list " +
+                    "another controller shows",
+                FAVORITE_NODES,
+                markNotified.toSet()
+            )
+            assertEquals(
+                setOf(kept.id, station.id),
+                mBrowser.mediaIds(MediaId.MEDIA_ID_FAVORITES_LIST).toSet()
+            )
+
+            other.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+            val (unmarked, unmarkNotified) = sendAFavoriteCommandAndCollectItsNotifications(
+                other, mBrowser, OpenRadioService.CMD_UNMARK_FAVORITE, station.id
+            )
+
+            assertEquals(SessionResult.RESULT_SUCCESS, unmarked)
+            assertEquals(
+                "Unmarking a station from the locals list did not notify the favorites list " +
+                    "another controller shows",
+                FAVORITE_NODES,
+                unmarkNotified.toSet()
+            )
+            assertEquals(listOf(kept.id), mBrowser.mediaIds(MediaId.MEDIA_ID_FAVORITES_LIST))
+        } finally {
+            other.release()
+        }
+    }
+
+    /**
      * Marking a station that already is a favorite is answered as skipped, so a caller can tell
      * it changed nothing. The favorite is stored under a name of its own: a command that wrote
      * the store anyway would replace it with the name the browse tree holds.
@@ -651,34 +774,70 @@ class OpenRadioServiceCommandTest {
      * Sends the favorite command [action] about the local [station] while the root, the favorites
      * and the locals are subscribed, asserts that it notified none of them, and returns the
      * result code the service answered.
-     *
-     * `CMD_UPDATE_TREE` notifies the root and then the locals, and anything the favorite command
-     * notified would have reached the browser before those two.
      */
     private fun sendAFavoriteCommandThatNotifiesNothing(action: String, station: RadioStation): Int {
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
-        mBrowser.subscribe(MediaId.MEDIA_ID_ROOT)
-        mBrowser.subscribe(MediaId.MEDIA_ID_FAVORITES_LIST)
-        mBrowser.subscribe(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        subscribeToTheFavoriteNodes(mBrowser)
         // The service resolves a favorite through the browse tree, so the node has to be browsed.
         assertTrue(
             "The station is not in the browse tree",
             mBrowser.mediaIds(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST).contains(station.id)
         )
-        mBrowser.forgetNotifications()
 
-        val resultCode = mBrowser.command(
-            action, OpenRadioStore.makeUpdateIsFavoriteBundle(station.id)
-        ).resultCode
+        val (resultCode, notified) = sendAFavoriteCommandAndCollectItsNotifications(
+            mBrowser, mBrowser, action, station.id
+        )
 
-        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         assertEquals(
             "A favorite command that changed nothing notified subscribers",
-            listOf(MediaId.MEDIA_ID_ROOT, MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST),
-            mBrowser.childrenChangesUntil(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-                .map { it.parentId }
+            emptyList<String>(),
+            notified
         )
         return resultCode
+    }
+
+    /**
+     * Subscribes [browser] to every node a favorite command can notify, and to the locals, whose
+     * push [sendAFavoriteCommandAndCollectItsNotifications] waits for.
+     */
+    private fun subscribeToTheFavoriteNodes(browser: ServiceBrowser) {
+        browser.subscribe(MediaId.MEDIA_ID_ROOT)
+        browser.subscribe(MediaId.MEDIA_ID_FAVORITES_LIST)
+        browser.subscribe(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+    }
+
+    /**
+     * Has [sender] send the favorite command [action] about [stationId], and returns the result
+     * code the service answered together with the nodes [observer] was notified of because of it,
+     * in the order they arrived. [observer] has to be subscribed through
+     * [subscribeToTheFavoriteNodes].
+     *
+     * `CMD_UPDATE_TREE` notifies the root and then the locals, and the session delivers its pushes
+     * to a controller in the order it sent them, so it is sent behind the command as a barrier:
+     * everything that reached [observer] before those two was the command's.
+     */
+    private fun sendAFavoriteCommandAndCollectItsNotifications(
+        sender: ServiceBrowser,
+        observer: ServiceBrowser,
+        action: String,
+        stationId: String
+    ): Pair<Int, List<String>> {
+        observer.forgetNotifications()
+
+        val resultCode = sender.command(
+            action, OpenRadioStore.makeUpdateIsFavoriteBundle(stationId)
+        ).resultCode
+
+        observer.command(OpenRadioService.CMD_UPDATE_TREE)
+        val changes = observer.childrenChangesUntil(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+            .map { it.parentId }
+        assertEquals(
+            "The barrier did not arrive as the root and then the locals, so the command notified " +
+                "the locals or something was left over: $changes",
+            listOf(MediaId.MEDIA_ID_ROOT, MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST),
+            changes.takeLast(2)
+        )
+        return resultCode to changes.dropLast(2)
     }
 
     /**
@@ -743,6 +902,12 @@ class OpenRadioServiceCommandTest {
             OpenRadioService.CMD_UPDATE_SORT_IDS,
             OpenRadioService.CMD_UPDATE_TREE
         )
+
+        /**
+         * The nodes a favorite command that changed the store notifies: the root gains or loses
+         * the favorites node, and the favorites list gains or loses the station.
+         */
+        val FAVORITE_NODES = setOf(MediaId.MEDIA_ID_ROOT, MediaId.MEDIA_ID_FAVORITES_LIST)
 
         const val UNKNOWN_COMMAND = "com.github.jcszymansk.freenetradio.COMMAND.NO_SUCH_COMMAND"
 
