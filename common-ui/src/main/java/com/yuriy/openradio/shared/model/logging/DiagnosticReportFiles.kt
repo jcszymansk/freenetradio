@@ -38,7 +38,8 @@ class DiagnosticReportFiles(
 
     /**
      * Writes a new report file with [content] and returns it. On failure no part of the report is
-     * left behind.
+     * left behind: an [IOException] becomes the failed [Result], and anything else [content]
+     * throws is rethrown once the partial file is gone.
      */
     fun write(content: (OutputStream) -> Unit): Result<File> {
         val report = try {
@@ -52,6 +53,9 @@ class DiagnosticReportFiles(
         } catch (e: IOException) {
             report.delete()
             Result.failure(e)
+        } catch (e: Throwable) {
+            report.delete()
+            throw e
         }
     }
 

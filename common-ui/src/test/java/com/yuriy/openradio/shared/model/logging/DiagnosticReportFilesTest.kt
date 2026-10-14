@@ -19,6 +19,8 @@ package com.yuriy.openradio.shared.model.logging
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -76,6 +78,22 @@ class DiagnosticReportFilesTest {
     }
 
     @Test
+    fun anUnexpectedFailureIsRethrownWithoutAPartialReport() {
+        val files = DiagnosticReportFiles(mFolder.root) { mNow }
+        val failure = SecurityException("logcat not allowed")
+
+        val thrown = assertThrows(SecurityException::class.java) {
+            files.write {
+                it.write(1)
+                throw failure
+            }
+        }
+
+        assertSame(failure, thrown)
+        assertEquals(emptyList<String>(), mFolder.root.list()!!.toList())
+    }
+
+    @Test
     fun aDirectoryThatCannotBeCreatedIsAFailedWrite() {
         val blocker = mFolder.newFile("blocker")
         val files = DiagnosticReportFiles(File(blocker, "reports")) { mNow }
@@ -113,7 +131,7 @@ class DiagnosticReportFilesTest {
     fun deleteExpiredLeavesSubdirectoriesAlone() {
         val files = DiagnosticReportFiles(mFolder.root) { mNow }
         val directory = mFolder.newFolder("nested")
-        directory.setLastModified(0)
+        assertTrue(directory.setLastModified(0))
 
         files.deleteExpired()
 
