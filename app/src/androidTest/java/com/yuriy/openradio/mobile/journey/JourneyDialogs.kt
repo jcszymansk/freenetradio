@@ -17,14 +17,17 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.view.View
+import android.widget.CompoundButton
+import android.widget.EditText
+import android.widget.TextView
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import com.google.android.material.navigation.NavigationView
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The dialogs a journey drives, read the way a user meets them: asked for by a tap, waited for
@@ -47,12 +50,12 @@ internal class JourneyDialogs(private val mScenario: ActivityScenario<MainActivi
      * menu, and opening it first would only add a wait.
      */
     fun openFromDrawer(menuItemId: Int, tag: String): DialogFragment {
-        mScenario.onActivity { activity ->
-            val performed = activity.findViewById<NavigationView>(R.id.nav_view)
+        val performed = mScenario.withActivity { activity ->
+            activity.findViewById<NavigationView>(R.id.nav_view)
                 .menu.performIdentifierAction(menuItemId, 0)
-            if (!performed) {
-                throw AssertionError("The navigation drawer holds no entry to open the $tag dialog")
-            }
+        }
+        if (!performed) {
+            throw AssertionError("The navigation drawer holds no entry to open the $tag dialog")
         }
         return awaitDialog(tag)
     }
@@ -62,30 +65,57 @@ internal class JourneyDialogs(private val mScenario: ActivityScenario<MainActivi
      */
     fun awaitDialog(tag: String): DialogFragment {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(DIALOG_TIMEOUT_SECONDS)
-        val shown = AtomicReference<DialogFragment?>(null)
         while (System.nanoTime() < deadline) {
-            mScenario.onActivity { activity ->
+            val shown = mScenario.withActivity { activity ->
                 val manager = activity.supportFragmentManager
                 manager.executePendingTransactions()
-                val fragment = manager.findFragmentByTag(tag) as? DialogFragment ?: return@onActivity
-                if (fragment.view != null || fragment.dialog?.isShowing == true) {
-                    shown.set(fragment)
-                }
+                val fragment = manager.findFragmentByTag(tag) as? DialogFragment
+                fragment?.takeIf { it.view != null || it.dialog?.isShowing == true }
             }
-            shown.get()?.let { return it }
+            shown?.let { return it }
             Thread.sleep(POLL_MILLIS)
         }
         throw AssertionError("The $tag dialog did not come up within $DIALOG_TIMEOUT_SECONDS seconds")
     }
 
     /**
-     * @return the view [id] inside [fragment], from whichever of its two halves holds it.
+     * Looks the view [id] up inside [fragment] on the main thread and returns what [reader] makes
+     * of it there, failing on the calling thread when the dialog holds no such view.
      */
-    fun <T : View> field(fragment: DialogFragment, id: Int): T {
-        val view = fragment.view?.findViewById<T>(id) ?: fragment.dialog?.findViewById<T>(id)
-        return view ?: throw AssertionError(
-            "The ${fragment.javaClass.simpleName} dialog holds no view for the requested id"
-        )
+    fun <T : View, R> read(fragment: DialogFragment, id: Int, reader: (T) -> R): R {
+        val found = mScenario.withActivity { _ -> find<T>(fragment, id)?.let { Found(reader(it)) } }
+            ?: throw AssertionError(
+                "The ${fragment.javaClass.simpleName} dialog holds no view for the requested id"
+            )
+        return found.value
+    }
+
+    /**
+     * @return the text the [TextView] [id] inside [fragment] shows.
+     */
+    fun text(fragment: DialogFragment, id: Int): String {
+        return read<TextView, String>(fragment, id) { it.text.toString() }
+    }
+
+    /**
+     * @return whether the [CompoundButton] [id] inside [fragment] is checked.
+     */
+    fun isChecked(fragment: DialogFragment, id: Int): Boolean {
+        return read<CompoundButton, Boolean>(fragment, id) { it.isChecked }
+    }
+
+    /**
+     * Replaces what the [EditText] [id] inside [fragment] holds with [text], as typing it would.
+     */
+    fun type(fragment: DialogFragment, id: Int, text: String) {
+        read<EditText, Unit>(fragment, id) { it.setText(text) }
+    }
+
+    /**
+     * Clicks the view [id] inside [fragment], which flips a check box the way a finger does.
+     */
+    fun click(fragment: DialogFragment, id: Int) {
+        read<View, Boolean>(fragment, id) { it.performClick() }
     }
 
     /**
@@ -98,19 +128,17 @@ internal class JourneyDialogs(private val mScenario: ActivityScenario<MainActivi
     fun dismiss(tag: String) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(DIALOG_TIMEOUT_SECONDS)
         while (System.nanoTime() < deadline) {
-            val gone = AtomicReference(false)
-            mScenario.onActivity { activity ->
+            val gone = mScenario.withActivity { activity ->
                 val manager = activity.supportFragmentManager
                 manager.executePendingTransactions()
                 val fragment = manager.findFragmentByTag(tag) as? DialogFragment
-                if (fragment == null) {
-                    gone.set(true)
-                } else {
+                if (fragment != null) {
                     fragment.dismiss()
                     manager.executePendingTransactions()
                 }
+                fragment == null
             }
-            if (gone.get()) {
+            if (gone) {
                 return
             }
             Thread.sleep(POLL_MILLIS)
@@ -122,14 +150,26 @@ internal class JourneyDialogs(private val mScenario: ActivityScenario<MainActivi
      * @return true when no dialog is added to the Activity at all.
      */
     fun noneIsUp(): Boolean {
-        val none = AtomicReference(false)
-        mScenario.onActivity { activity ->
+        return mScenario.withActivity { activity ->
             val manager = activity.supportFragmentManager
             manager.executePendingTransactions()
-            none.set(manager.fragments.none { it is DialogFragment })
+            manager.fragments.none { it is DialogFragment }
         }
-        return none.get()
     }
+
+    /**
+     * @return the view [id] inside [fragment], from whichever of its two halves holds it, or null
+     *   when neither does. Main thread only.
+     */
+    private fun <T : View> find(fragment: DialogFragment, id: Int): T? {
+        return fragment.view?.findViewById<T>(id) ?: fragment.dialog?.findViewById<T>(id)
+    }
+
+    /**
+     * What a reader answered, kept apart from the null that stands for a missing view, so that a
+     * reader answering null is not mistaken for one.
+     */
+    private class Found<R>(val value: R)
 
     private companion object {
 

@@ -35,6 +35,7 @@ import com.yuriy.openradio.shared.service.ServiceBrowser
 import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import com.yuriy.openradio.testing.withActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -109,31 +110,31 @@ class EditStationDialogTest {
             assertEquals(
                 "The edit dialog did not show the stored home page",
                 HOME_PAGE,
-                text(dialog, R.id.add_edit_station_home_page_edit)
+                dialog.text(R.id.add_edit_station_home_page_edit)
             )
             assertEquals(
                 "The edit dialog did not show the stored name",
                 STATION_NAME,
-                text(dialog, R.id.add_edit_station_name_edit)
+                dialog.text(R.id.add_edit_station_name_edit)
             )
             assertEquals(
                 "The edit dialog did not show the stored stream url",
                 STREAM_URL,
-                text(dialog, R.id.add_edit_station_stream_url_edit)
+                dialog.text(R.id.add_edit_station_stream_url_edit)
             )
             assertEquals(
                 "The edit dialog did not select the stored genre",
                 genre(),
-                selection(dialog, R.id.add_station_genre_spin)
+                dialog.selection(R.id.add_station_genre_spin)
             )
             assertEquals(
                 "The edit dialog did not select the stored country",
                 country(),
-                selection(dialog, R.id.add_edit_station_country_spin)
+                dialog.selection(R.id.add_edit_station_country_spin)
             )
             assertTrue(
                 "The edit dialog cannot submit the station it loaded",
-                field<View>(dialog, R.id.add_edit_station_dialog_add_btn_view).isEnabled
+                dialog.isEnabled(R.id.add_edit_station_dialog_add_btn_view)
             )
         }
     }
@@ -149,11 +150,11 @@ class EditStationDialogTest {
             assertEquals(
                 "The edit dialog showed a home page for a station that is not stored",
                 "",
-                text(dialog, R.id.add_edit_station_home_page_edit)
+                dialog.text(R.id.add_edit_station_home_page_edit)
             )
             assertFalse(
                 "The edit dialog offers to submit a station it never loaded",
-                field<View>(dialog, R.id.add_edit_station_dialog_add_btn_view).isEnabled
+                dialog.isEnabled(R.id.add_edit_station_dialog_add_btn_view)
             )
         }
     }
@@ -161,16 +162,22 @@ class EditStationDialogTest {
     /**
      * Shows the dialog for [mediaId] over a real Activity and hands it to [assertions], then takes
      * it down again so the next test class does not inherit it.
+     *
+     * The assertions run on the test thread and read the dialog through [ShownDialog], so a failing
+     * one fails its own case instead of the process.
      */
-    private fun openDialogFor(mediaId: String, assertions: (EditStationDialog) -> Unit) {
+    private fun openDialogFor(mediaId: String, assertions: (ShownDialog) -> Unit) {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
-                val dialog = EditStationDialog()
-                dialog.arguments = EditStationDialog.makeBundle(mediaId)
-                dialog.showNow(activity.supportFragmentManager, EditStationDialog.DIALOG_TAG)
-                try {
-                    assertions(dialog)
-                } finally {
+            val dialog = scenario.withActivity { activity ->
+                EditStationDialog().also {
+                    it.arguments = EditStationDialog.makeBundle(mediaId)
+                    it.showNow(activity.supportFragmentManager, EditStationDialog.DIALOG_TAG)
+                }
+            }
+            try {
+                assertions(ShownDialog(scenario, dialog))
+            } finally {
+                scenario.withActivity { activity ->
                     dialog.dismiss()
                     activity.supportFragmentManager.executePendingTransactions()
                 }
@@ -178,16 +185,29 @@ class EditStationDialogTest {
         }
     }
 
-    private fun <T : View> field(dialog: EditStationDialog, id: Int): T {
-        return dialog.requireView().findViewById(id)
-    }
+    /**
+     * The edit dialog on screen, read on the main thread and answered to the test thread.
+     */
+    private class ShownDialog(
+        private val mScenario: ActivityScenario<MainActivity>,
+        private val mDialog: EditStationDialog
+    ) {
 
-    private fun text(dialog: EditStationDialog, id: Int): String {
-        return field<EditText>(dialog, id).text.toString()
-    }
+        fun text(id: Int): String {
+            return read<EditText, String>(id) { it.text.toString() }
+        }
 
-    private fun selection(dialog: EditStationDialog, id: Int): String {
-        return field<Spinner>(dialog, id).selectedItem.toString()
+        fun selection(id: Int): String {
+            return read<Spinner, String>(id) { it.selectedItem.toString() }
+        }
+
+        fun isEnabled(id: Int): Boolean {
+            return read<View, Boolean>(id) { it.isEnabled }
+        }
+
+        private fun <T : View, R> read(id: Int, reader: (T) -> R): R {
+            return mScenario.withActivity { reader(mDialog.requireView().findViewById(id)) }
+        }
     }
 
     /**

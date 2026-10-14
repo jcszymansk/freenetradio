@@ -23,6 +23,7 @@ import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.presenter.MediaPresenter
+import com.yuriy.openradio.testing.withActivity
 
 /**
  * Moving between browse nodes from a journey, and getting back out afterwards.
@@ -47,7 +48,7 @@ internal class JourneyNavigation(private val mScenario: ActivityScenario<MainAct
      */
     fun open(mediaId: String) {
         val presenter = presenter()
-        mScenario.onActivity { presenter.addMediaItemToStack(mediaId) }
+        mScenario.withActivity { presenter.addMediaItemToStack(mediaId) }
     }
 
     /**
@@ -72,7 +73,7 @@ internal class JourneyNavigation(private val mScenario: ActivityScenario<MainAct
      */
     fun returnToRoot() {
         val presenter = presenter()
-        mScenario.onActivity {
+        mScenario.withActivity {
             var remaining = MAX_BROWSE_DEPTH
             while (presenter.getCurrentCategory() != MediaId.MEDIA_ID_ROOT && remaining-- > 0) {
                 presenter.handleBackPressed()
