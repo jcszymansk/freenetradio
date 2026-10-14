@@ -252,6 +252,25 @@ class ParserLayerMappingTest {
         assertEquals(listOf(3, 2), categories.map { it.stationsCount })
     }
 
+    /**
+     * The count is the browse child's subtitle and its sort key, so reading an unreadable count as
+     * zero would label a real category "0 stations" and sink it. The row is skipped instead, like
+     * any other row that cannot be read, and a skipped row does not claim its name.
+     */
+    @Test
+    fun aRadioBrowserCategoryWithAMalformedCountIsSkipped() {
+        val categories = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCategories(
+            """
+            [{"name":"rock","stationcount":"many"},{"name":"jazz","stationcount":3},
+             {"name":"pop","stationcount":null},{"name":"blues","stationcount":{}},
+             {"name":"rock","stationcount":2},{"name":"folk"}]
+            """.trimIndent()
+        )
+
+        assertEquals(listOf("jazz", "rock", "folk"), categories.map { it.id })
+        assertEquals(listOf(3, 2, 0), categories.map { it.stationsCount })
+    }
+
     @Test
     fun countryCodesAreMappedByBothParsers() {
         val radioBrowserCountries = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCountries(

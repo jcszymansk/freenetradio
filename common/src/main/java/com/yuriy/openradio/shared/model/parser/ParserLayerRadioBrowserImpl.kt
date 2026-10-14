@@ -28,6 +28,7 @@ import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.JsonUtils
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.util.Locale
 import java.util.TreeSet
@@ -120,9 +121,13 @@ class ParserLayerRadioBrowserImpl(private val mFilter: Filter) : ParserLayer {
             }
             if (jsonObject.has(KEY_NAME)) {
                 val id = jsonObject.getString(KEY_NAME)
-                var stationsCount = 0
-                if (jsonObject.has(KEY_STATIONS_COUNT)) {
-                    stationsCount = jsonObject.getInt(KEY_STATIONS_COUNT)
+                // Zero would label a real category "0 stations" and sort it last, so an unreadable
+                // count drops the row, as an unreadable element does.
+                val stationsCount = try {
+                    if (jsonObject.has(KEY_STATIONS_COUNT)) jsonObject.getInt(KEY_STATIONS_COUNT) else 0
+                } catch (e: JSONException) {
+                    AppLogger.w("$TAG get AC, category $id with unreadable station count dropped: ${e.message}")
+                    continue
                 }
                 if (!ids.add(id)) {
                     AppLogger.w("$TAG get AC, repeated category $id with $stationsCount stations dropped")
