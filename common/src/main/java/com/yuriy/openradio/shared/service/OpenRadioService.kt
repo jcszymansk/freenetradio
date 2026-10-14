@@ -1175,32 +1175,24 @@ class OpenRadioService : MediaLibraryService() {
             return future
         }
 
+        /**
+         * Marks or unmarks the station [args] name as a favorite, and answers whether it could.
+         *
+         * A station is only changed once both the station and its media item are known, so a
+         * refused command leaves the favorites store as it found it.
+         */
         private fun handleFavorite(args: Bundle, isFavorite: Boolean): Boolean {
-            var mediaId = OpenRadioStore.extractMediaId(args)
-            var rs = getRadioStationByMediaId(mediaId)
-            // This can happen when Favorite changed from automotive UI.
-            // The assumption is this event can be delivered from the now playing item only.
-            if (rs.isInvalid()) {
-                if (mActiveRS.id == mediaId) {
-                    rs = RadioStation.makeCopyInstance(mActiveRS)
-                }
-                // Lastly, get the current playing station.
-                if (rs.isInvalid()) {
-                    rs = RadioStation.makeCopyInstance(mActiveRS)
-                    mediaId = rs.id
-                }
-                // We failed both cases, something went wrong ...
-                if (rs.isInvalid()) {
-                    return false
-                }
-            }
-            // Update Favorites Radio station: whether add it or remove it from the storage
-            mPresenter.updateRadioStationFavorite(rs, isFavorite)
+            // The favorite button the session publishes, which is what the automotive UI shows,
+            // names no station: it only ever concerns the now playing one. A command that does
+            // name a station is about that station and no other.
+            val mediaId = OpenRadioStore.extractMediaId(args).ifEmpty { mActiveRS.id }
+            val rs = getRadioStationByMediaId(mediaId)
             val mediaItem = mBrowseTree.getMediaItemByMediaId(mediaId)
-            if (mediaItem == null) {
-                AppLogger.e("Can't handle fav. for $mediaId $rs")
+            if (rs.isInvalid() || mediaItem == null) {
+                AppLogger.e("$TAG can't handle fav. for '$mediaId'")
                 return false
             }
+            mPresenter.updateRadioStationFavorite(rs, isFavorite)
             MediaItemHelper.updateFavoriteField(mediaItem.mediaMetadata, isFavorite)
             val currentMediaItem = mPlayer.currentMediaItem
             if (currentMediaItem?.mediaId == mediaId) {
