@@ -94,6 +94,7 @@ com/yuriy/openradio/shared/model/storage/cache/api/InMemoryApiCache	com.yuriy.op
 com/yuriy/openradio/shared/model/storage/StorageManagerLayerImpl	com.yuriy.openradio.shared.model.storage.StorageManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/net/BoundedRead	com.yuriy.openradio.shared.model.net.BoundedReadTest	:common
 com/yuriy/openradio/shared/model/net/DirectUrlResolver	com.yuriy.openradio.shared.model.net.ConnectionUrlResolverTest	:common
+com/yuriy/openradio/shared/model/net/DnsMirrorUrlResolver	com.yuriy.openradio.shared.model.net.ConnectionUrlResolverTest	:common
 com/yuriy/openradio/shared/model/net/UrlLayerRadioBrowserImpl	com.yuriy.openradio.shared.model.net.UrlLayerTest	:common
 com/yuriy/openradio/shared/model/net/UrlLayerWebRadioImpl	com.yuriy.openradio.shared.model.net.UrlLayerTest	:common
 com/yuriy/openradio/shared/model/filter/FilterImpl	com.yuriy.openradio.shared.model.filter.FilterImplTest	:common
@@ -128,7 +129,7 @@ com/yuriy/openradio/shared/model/logging/LoggingLayerImpl	EXCLUDED	rule 3: its r
 com/yuriy/openradio/shared/model/media/MediaResourcesManager	EXCLUDED	rule 3: its behaviour is a Media3 MediaBrowser session connected to the service.
 com/yuriy/openradio/shared/model/media/MediaResourcesManager$BrowserListener	EXCLUDED	rule 3: it answers Media3 MediaBrowser callbacks by re-reading the browser's children.
 com/yuriy/openradio/shared/model/media/MediaResourcesManager$PlayerListener	EXCLUDED	rule 3: it relays Media3 Player events and reads the player's state.
-com/yuriy/openradio/shared/model/net/DnsMirrorUrlResolver	EXCLUDED	rule 3: it asks a name server for the Radio Browser mirrors.
+com/yuriy/openradio/shared/model/net/DnsHostLookup	EXCLUDED	rule 3: it asks a name server for the hosts behind a name.
 com/yuriy/openradio/shared/model/net/HTTPDownloaderImpl	EXCLUDED	rule 3: its observable behaviour is the HTTP stack opening connections and reading responses.
 com/yuriy/openradio/shared/model/net/HTTPDownloaderImpl$BytesDownloader	EXCLUDED	rule 3: its retries and content type filter act on HttpURLConnection responses.
 com/yuriy/openradio/shared/model/net/NetworkLayerImpl	EXCLUDED	rule 3: every answer comes from ConnectivityManager.
