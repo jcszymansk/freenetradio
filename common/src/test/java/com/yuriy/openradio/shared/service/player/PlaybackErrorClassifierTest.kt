@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.service.player
 
 import android.net.Uri
+import androidx.media3.common.ParserException
 import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
@@ -101,6 +102,19 @@ class PlaybackErrorClassifierTest {
         assertEquals(PlaybackErrorDecision.WithinErrorBudget, decision)
     }
 
+    /**
+     * A stream the player recognizes and then fails to read is no reason to resolve it as a
+     * playlist, so it is tolerated like any other error with no specific cause.
+     */
+    @Test
+    fun aRecognizedStreamThatFailsToParseIsToleratedWhileTheBudgetHolds() {
+        val classifier = PlaybackErrorClassifier()
+
+        val decision = classifier.classify(unsupportedContainerFeature())
+
+        assertEquals(PlaybackErrorDecision.WithinErrorBudget, decision)
+    }
+
     @Test
     fun theErrorBudgetEndsInAnUnrecoverableStream() {
         val classifier = PlaybackErrorClassifier()
@@ -180,6 +194,13 @@ class PlaybackErrorClassifierTest {
         val cause = UnrecognizedInputFormatException(
             "None of the available extractors could read the stream.", Uri.parse(STREAM_URL)
         )
+        return PlaybackException(
+            cause.message, cause, PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
+        )
+    }
+
+    private fun unsupportedContainerFeature(): PlaybackException {
+        val cause = ParserException.createForUnsupportedContainerFeature("Unsupported WAV format type")
         return PlaybackException(
             cause.message, cause, PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
         )
