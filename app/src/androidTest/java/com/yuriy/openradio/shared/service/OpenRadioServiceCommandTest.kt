@@ -181,11 +181,10 @@ class OpenRadioServiceCommandTest {
         mBrowser.subscribe(MediaId.MEDIA_ID_ROOT)
         mBrowser.forgetNotifications()
 
-        // CMD_FAVORITE_OFF names the state the button is leaving, so it turns the favorite on.
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(
-                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioService.CMD_MARK_FAVORITE,
                 OpenRadioStore.makeUpdateIsFavoriteBundle(station.id)
             ).resultCode
         )
@@ -203,7 +202,7 @@ class OpenRadioServiceCommandTest {
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(
-                OpenRadioService.CMD_FAVORITE_ON,
+                OpenRadioService.CMD_UNMARK_FAVORITE,
                 OpenRadioStore.makeUpdateIsFavoriteBundle(station.id)
             ).resultCode
         )
@@ -233,7 +232,7 @@ class OpenRadioServiceCommandTest {
         assertEquals(
             SessionResult.RESULT_ERROR_NOT_SUPPORTED,
             mBrowser.command(
-                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioService.CMD_MARK_FAVORITE,
                 OpenRadioStore.makeUpdateIsFavoriteBundle("never-browsed")
             ).resultCode
         )
@@ -257,20 +256,20 @@ class OpenRadioServiceCommandTest {
 
         assertEquals(
             SessionResult.RESULT_SUCCESS,
-            mBrowser.command(OpenRadioService.CMD_FAVORITE_OFF).resultCode
+            mBrowser.command(OpenRadioService.CMD_MARK_FAVORITE).resultCode
         )
         assertEquals(listOf(station.id), mStorages.freshFavorites().getAll().map { it.id })
 
         assertEquals(
             SessionResult.RESULT_SUCCESS,
-            mBrowser.command(OpenRadioService.CMD_FAVORITE_ON).resultCode
+            mBrowser.command(OpenRadioService.CMD_UNMARK_FAVORITE).resultCode
         )
         assertTrue(mStorages.freshFavorites().getAll().isEmpty())
 
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(
-                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioService.CMD_MARK_FAVORITE,
                 OpenRadioStore.makeUpdateIsFavoriteBundle(station.id)
             ).resultCode
         )
@@ -293,7 +292,7 @@ class OpenRadioServiceCommandTest {
         assertEquals(
             SessionResult.RESULT_ERROR_NOT_SUPPORTED,
             mBrowser.command(
-                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioService.CMD_MARK_FAVORITE,
                 OpenRadioStore.makeUpdateIsFavoriteBundle("never-browsed")
             ).resultCode
         )
@@ -318,7 +317,7 @@ class OpenRadioServiceCommandTest {
 
         assertEquals(
             SessionResult.RESULT_SUCCESS,
-            mBrowser.command(OpenRadioService.CMD_FAVORITE_OFF).resultCode
+            mBrowser.command(OpenRadioService.CMD_MARK_FAVORITE).resultCode
         )
         assertEquals(
             setOf(kept.id, station.id),
@@ -328,7 +327,7 @@ class OpenRadioServiceCommandTest {
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(
-                OpenRadioService.CMD_FAVORITE_ON,
+                OpenRadioService.CMD_UNMARK_FAVORITE,
                 OpenRadioStore.makeUpdateIsFavoriteBundle(station.id)
             ).resultCode
         )
@@ -337,7 +336,7 @@ class OpenRadioServiceCommandTest {
         assertEquals(
             SessionResult.RESULT_SUCCESS,
             mBrowser.command(
-                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioService.CMD_MARK_FAVORITE,
                 OpenRadioStore.makeUpdateIsFavoriteBundle(station.id)
             ).resultCode
         )
@@ -616,8 +615,8 @@ class OpenRadioServiceCommandTest {
     private companion object {
 
         val HANDLED_COMMANDS = listOf(
-            OpenRadioService.CMD_FAVORITE_ON,
-            OpenRadioService.CMD_FAVORITE_OFF,
+            OpenRadioService.CMD_MARK_FAVORITE,
+            OpenRadioService.CMD_UNMARK_FAVORITE,
             OpenRadioService.CMD_NET_CHANGED,
             OpenRadioService.CMD_CLEAR_CACHE,
             OpenRadioService.CMD_MASTER_VOLUME_CHANGED,

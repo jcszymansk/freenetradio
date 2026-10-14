@@ -158,7 +158,17 @@ class OpenRadioService : MediaLibraryService() {
 
     private val mExecutorService = Executors.newSingleThreadExecutor()
 
-    private lateinit var mFavoriteCommands: List<CommandButton>
+    /**
+     * The button a controller shows beside the transport controls while the active station is
+     * not a favorite.
+     */
+    private lateinit var mMarkFavoriteButton: CommandButton
+
+    /**
+     * The button a controller shows beside the transport controls while the active station is a
+     * favorite.
+     */
+    private lateinit var mUnmarkFavoriteButton: CommandButton
 
     /**
      * Default constructor.
@@ -221,20 +231,18 @@ class OpenRadioService : MediaLibraryService() {
             build()
         }
 
-        mFavoriteCommands = listOf(
-            CommandButton.Builder()
-                .setDisplayName(getString(R.string.favorite))
-                .setEnabled(true)
-                .setIconResId(R.drawable.ic_favorite_off)
-                .setSessionCommand(SessionCommand(CMD_FAVORITE_OFF, Bundle()))
-                .build(),
-            CommandButton.Builder()
-                .setDisplayName(getString(R.string.favorite))
-                .setEnabled(true)
-                .setIconResId(R.drawable.ic_favorite_on)
-                .setSessionCommand(SessionCommand(CMD_FAVORITE_ON, Bundle()))
-                .build()
-        )
+        mMarkFavoriteButton = CommandButton.Builder()
+            .setDisplayName(getString(R.string.favorite))
+            .setEnabled(true)
+            .setIconResId(R.drawable.ic_favorite_off)
+            .setSessionCommand(SessionCommand(CMD_MARK_FAVORITE, Bundle()))
+            .build()
+        mUnmarkFavoriteButton = CommandButton.Builder()
+            .setDisplayName(getString(R.string.favorite))
+            .setEnabled(true)
+            .setIconResId(R.drawable.ic_favorite_on)
+            .setSessionCommand(SessionCommand(CMD_UNMARK_FAVORITE, Bundle()))
+            .build()
 
         publishActiveStation()
         updateFavoriteState()
@@ -306,9 +314,9 @@ class OpenRadioService : MediaLibraryService() {
 
     private fun updateFavoriteState() {
         if (mActiveRS != RadioStation.INVALID_INSTANCE) {
-            val command =
-                if (mPresenter.isRadioStationFavorite(mActiveRS)) mFavoriteCommands[1] else mFavoriteCommands[0]
-            mSession.setCustomLayout(listOf(command))
+            val button =
+                if (mPresenter.isRadioStationFavorite(mActiveRS)) mUnmarkFavoriteButton else mMarkFavoriteButton
+            mSession.setCustomLayout(listOf(button))
         }
     }
 
@@ -898,8 +906,8 @@ class OpenRadioService : MediaLibraryService() {
                 MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                     .buildUpon()
                     // Add custom commands
-                    .add(SessionCommand(CMD_FAVORITE_ON, Bundle()))
-                    .add(SessionCommand(CMD_FAVORITE_OFF, Bundle()))
+                    .add(SessionCommand(CMD_MARK_FAVORITE, Bundle()))
+                    .add(SessionCommand(CMD_UNMARK_FAVORITE, Bundle()))
                     .add(SessionCommand(CMD_NET_CHANGED, Bundle()))
                     .add(SessionCommand(CMD_CLEAR_CACHE, Bundle()))
                     .add(SessionCommand(CMD_MASTER_VOLUME_CHANGED, Bundle()))
@@ -990,18 +998,16 @@ class OpenRadioService : MediaLibraryService() {
                     return mSessionCmdSuccess
                 }
 
-                CMD_FAVORITE_OFF -> {
-                    // Transition station to Favorite ON
-                    session.setCustomLayout(listOf(mFavoriteCommands[1]))
+                CMD_MARK_FAVORITE -> {
+                    session.setCustomLayout(listOf(mUnmarkFavoriteButton))
                     if (handleFavorite(args, true).not()) {
                         return mSessionCmdNotSupported
                     }
                     return mSessionCmdSuccess
                 }
 
-                CMD_FAVORITE_ON -> {
-                    // Transition station to Favorite OFF
-                    session.setCustomLayout(listOf(mFavoriteCommands[0]))
+                CMD_UNMARK_FAVORITE -> {
+                    session.setCustomLayout(listOf(mMarkFavoriteButton))
                     if (handleFavorite(args, false).not()) {
                         return mSessionCmdNotSupported
                     }
@@ -1213,8 +1219,8 @@ class OpenRadioService : MediaLibraryService() {
 
     companion object {
 
-        const val CMD_FAVORITE_ON = "com.github.jcszymansk.freenetradio.COMMAND.FAVORITE_ON"
-        const val CMD_FAVORITE_OFF = "com.github.jcszymansk.freenetradio.COMMAND.FAVORITE_OFF"
+        const val CMD_MARK_FAVORITE = "com.github.jcszymansk.freenetradio.COMMAND.MARK_FAVORITE"
+        const val CMD_UNMARK_FAVORITE = "com.github.jcszymansk.freenetradio.COMMAND.UNMARK_FAVORITE"
         const val CMD_NET_CHANGED = "com.github.jcszymansk.freenetradio.COMMAND.NET_CHANGED"
         const val CMD_STOP_SERVICE = "com.github.jcszymansk.freenetradio.COMMAND.STOP_SERVICE"
         const val CMD_TOGGLE_LAST_PLAYED_ITEM =

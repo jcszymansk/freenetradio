@@ -56,7 +56,7 @@ import org.junit.runner.RunWith
  * [theFavoritesRowDoesNotOpenWithoutANetwork] pins down and TASK-049 lifts; [JourneyNavigation]
  * calls the step that tap performs once past the gate.
  *
- * What the service does with `CMD_FAVORITE_ON` and `CMD_FAVORITE_OFF` is
+ * What the service does with `CMD_MARK_FAVORITE` and `CMD_UNMARK_FAVORITE` is
  * `OpenRadioServiceCommandTest`'s subject, and what it answers for the favorites node is
  * `OpenRadioServiceBrowseTest`'s. Neither of them renders anything.
  */
@@ -97,9 +97,9 @@ class FavoriteLifecycleJourneyTest {
      * gains because of it.
      *
      * Nothing between the click and the row appearing is done by the test. The box sends
-     * `CMD_FAVORITE_OFF`, naming the state it is leaving; the service writes the store, drops its
-     * cached root and notifies; and the list the Activity shows on the way back out is built from
-     * the store. Asserting the row is absent first is what makes waiting for it mean something.
+     * `CMD_MARK_FAVORITE`; the service writes the store, drops its cached root and notifies; and
+     * the list the Activity shows on the way back out is built from the store. Asserting the row
+     * is absent first is what makes waiting for it mean something.
      */
     @Test
     fun markingAStationFromItsRowPutsTheFavoritesNodeOnTheRoot() {
