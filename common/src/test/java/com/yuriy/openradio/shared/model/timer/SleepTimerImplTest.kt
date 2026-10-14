@@ -117,6 +117,59 @@ class SleepTimerImplTest {
         assertFalse("A past timestamp fired", listener.awaitCompletionDuring(SILENCE_MS))
     }
 
+    /**
+     * The model's validity check refuses this instant, so the timer must refuse it too: a
+     * timestamp equal to the clock is not a delay of zero, it is a moment that has arrived.
+     */
+    @Test
+    fun aTimestampEqualToNowIsRefused() {
+        val listener = RecordingListener()
+        val timer = SleepTimerImpl(listener) { NOW }
+
+        timer.handle(NOW, true)
+
+        assertFalse("A timestamp equal to now fired", listener.awaitCompletionDuring(SILENCE_MS))
+    }
+
+    @Test
+    fun onlyATimestampAfterNowIsAccepted() {
+        val timer = SleepTimerImpl(RecordingListener()) { NOW }
+
+        assertFalse(timer.accepts(NOW - 1))
+        assertFalse(timer.accepts(NOW))
+        assertTrue(timer.accepts(NOW + 1))
+    }
+
+    /**
+     * The delay is measured from the injected clock, not from the system one, so a timestamp one
+     * delay past the injected instant fires after that delay.
+     */
+    @Test
+    fun theDelayIsMeasuredFromTheClock() {
+        val listener = RecordingListener()
+        val timer = SleepTimerImpl(listener) { NOW }
+
+        val startedAt = System.currentTimeMillis()
+        timer.handle(NOW + DELAY_MS, true)
+
+        assertTrue("The timer never completed", listener.awaitCompletion())
+        assertTrue(
+            "The timer completed before its delay had passed",
+            System.currentTimeMillis() - startedAt >= DELAY_MS
+        )
+    }
+
+    @Test
+    fun cancelStopsATimerThatIsAlreadyRunning() {
+        val listener = RecordingListener()
+        val timer = SleepTimerImpl(listener)
+
+        timer.handle(System.currentTimeMillis() + DELAY_MS, true)
+        timer.cancel()
+
+        assertFalse("A cancelled timer completed", listener.awaitCompletionDuring(SILENCE_MS))
+    }
+
     @Test
     fun aCompletedTimerDoesNotFireAgain() {
         val listener = RecordingListener()
@@ -157,6 +210,12 @@ class SleepTimerImplTest {
     }
 
     private companion object {
+
+        /**
+         * A fixed instant for the tests that inject a clock, far from the real one so that a
+         * timer computing its delay from the system clock instead would be off by decades.
+         */
+        const val NOW = 1_700_000_000_000L
 
         const val DELAY_MS = 200L
 

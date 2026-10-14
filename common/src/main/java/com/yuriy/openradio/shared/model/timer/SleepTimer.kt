@@ -18,5 +18,19 @@ package com.yuriy.openradio.shared.model.timer
 
 interface SleepTimer {
 
+    /**
+     * Replaces whatever timer is running with one that completes at [time], or with none when
+     * [enabled] is false or [time] is not accepted.
+     */
     fun handle(time: Long, enabled:Boolean)
+
+    /**
+     * Stops the running timer, if any, so that it never completes.
+     */
+    fun cancel()
+
+    /**
+     * Whether [time] is late enough to be armed: strictly after the timer's current time.
+     */
+    fun accepts(time: Long): Boolean
 }
