@@ -1206,7 +1206,7 @@ class OpenRadioService : MediaLibraryService() {
                 return mSessionCmdNotSupported
             }
             if (mPresenter.updateRadioStationFavorite(rs, isFavorite).not()) {
-                AppLogger.w("$TAG fav. for '$mediaId' already $isFavorite, nothing changed")
+                AppLogger.i("$TAG fav. for '$mediaId' already $isFavorite, nothing changed")
                 return mSessionCmdSkipped
             }
             mBrowseTree.getMediaItemByMediaId(mediaId)?.let {
