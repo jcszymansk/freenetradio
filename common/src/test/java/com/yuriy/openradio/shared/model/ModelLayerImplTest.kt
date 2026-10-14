@@ -285,6 +285,8 @@ class ModelLayerImplTest {
             return connected
         }
 
+        override fun isConnected() = connected
+
         override fun isMobileNetwork() = false
     }
 

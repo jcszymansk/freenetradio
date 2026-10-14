@@ -157,7 +157,8 @@ object DependencyRegistryCommon {
 
         sRadioStationManagerLayer = RadioStationManagerLayerImpl(
             RadioStationValidatorImpl(
-                CoroutineScope(Dispatchers.Main), CoroutineScope(Dispatchers.IO), NetUtils::checkResource
+                CoroutineScope(Dispatchers.Main), CoroutineScope(Dispatchers.IO), NetUtils::checkResource,
+                sNetworkLayer
             ),
             sDeviceLocalsStorage, sFavoritesStorage, sImagesPersistenceLayer
         )

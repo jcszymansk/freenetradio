@@ -581,6 +581,8 @@ class OpenRadioServicePresenterImplTest {
 
         override fun checkConnectivityAndNotify(context: Context) = true
 
+        override fun isConnected() = true
+
         override fun isMobileNetwork() = mobile
     }
 

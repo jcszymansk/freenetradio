@@ -19,6 +19,8 @@ package com.yuriy.openradio.shared.utils
 import android.content.Context
 import android.content.ContextWrapper
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
+import com.yuriy.openradio.shared.model.net.NetworkLayer
+import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,8 +31,8 @@ import org.junit.Test
 import kotlin.coroutines.CoroutineContext
 
 /**
- * Covers the rules of [RadioStationValidatorImpl] against a [RecordingProbe], so no case reaches
- * the network.
+ * Covers the rules of [RadioStationValidatorImpl] against a [RecordingProbe] and a
+ * [FixedNetworkLayer], so no case reaches the network.
  *
  * Every probe and every answer lands in one [mEvents] list, which is what lets a case assert the
  * order as well as the membership: a stream that is never probed, or a home page probed after
@@ -125,6 +127,80 @@ class RadioStationValidatorImplTest {
                 mEvents
             )
         }
+    }
+
+    /**
+     * Offline, the stream fails because nothing could be reached, and answering that the stream is
+     * invalid would send the user to correct a url that was never checked.
+     */
+    @Test
+    fun anUnreachableStreamWhileOfflineFailsOnTheNetwork() {
+        validate(
+            candidate(),
+            RecordingProbe(unreachable = setOf(STREAM_URL, HOME_PAGE)),
+            connected = false
+        )
+
+        assertEquals(listOf("probe: $STREAM_URL", "failure: $NO_NETWORK"), mEvents)
+    }
+
+    @Test
+    fun anUnreachableStreamWhileOfflineIsAnsweredOnTheUiScope() {
+        val probeDispatcher = QueuedDispatcher()
+        val uiDispatcher = QueuedDispatcher()
+
+        validate(
+            candidate(),
+            RecordingProbe(unreachable = setOf(STREAM_URL)),
+            uiScope = CoroutineScope(uiDispatcher),
+            probeScope = CoroutineScope(probeDispatcher),
+            connected = false
+        )
+        probeDispatcher.runPending()
+        assertEquals(listOf("probe: $STREAM_URL"), mEvents)
+
+        uiDispatcher.runPending()
+        assertEquals(listOf("probe: $STREAM_URL", "failure: $NO_NETWORK"), mEvents)
+    }
+
+    /**
+     * A stream served from the device itself answers with no network at all, and the probe has
+     * checked it, so going offline must not turn such a station away.
+     */
+    @Test
+    fun aStreamThatAnswersWhileOfflineIsAccepted() {
+        validate(candidate(homePage = ""), connected = false)
+
+        assertEquals(
+            listOf("probe: $STREAM_URL", "success: Radio Station validated successfully"),
+            mEvents
+        )
+    }
+
+    @Test
+    fun anUnreachableHomePageWhileOfflineWarnsThatItWasNotChecked() {
+        validate(candidate(), RecordingProbe(unreachable = setOf(HOME_PAGE)), connected = false)
+
+        assertEquals(
+            listOf(
+                "probe: $STREAM_URL",
+                "probe: $HOME_PAGE",
+                "warning: $HOME_PAGE_UNCHECKED",
+                "success: Radio Station validated successfully"
+            ),
+            mEvents
+        )
+    }
+
+    /** A missing name or an unusable url is a defect the user can fix with or without a network. */
+    @Test
+    fun anOfflineCandidateIsStillCheckedForItsNameAndUrlFirst() {
+        validate(candidate(name = ""), connected = false)
+        assertEquals(listOf("failure: Radio Station's name is invalid"), mEvents)
+
+        mEvents.clear()
+        validate(candidate(url = "not a url"), connected = false)
+        assertEquals(listOf("failure: Radio Station's url is invalid"), mEvents)
     }
 
     @Test
@@ -260,9 +336,10 @@ class RadioStationValidatorImplTest {
         candidate: RadioStationToAdd,
         probe: RecordingProbe = RecordingProbe(),
         uiScope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined),
-        probeScope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined)
+        probeScope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined),
+        connected: Boolean = true
     ) {
-        RadioStationValidatorImpl(uiScope, probeScope, probe).validate(
+        RadioStationValidatorImpl(uiScope, probeScope, probe, FixedNetworkLayer(connected)).validate(
             mContext,
             candidate,
             { mEvents.add("success: $it") },
@@ -297,6 +374,28 @@ class RadioStationValidatorImplTest {
     }
 
     /**
+     * Answers [connected] to the silent connectivity question and fails a case that reaches for
+     * anything else: the validator reports a missing network through its own failure, so the
+     * toast of [NetworkLayer.checkConnectivityAndNotify] would tell the user twice.
+     */
+    private class FixedNetworkLayer(private val connected: Boolean) : NetworkLayer {
+
+        override fun isConnected() = connected
+
+        override fun checkConnectivityAndNotify(context: Context) = unexpected()
+
+        override fun startMonitor(context: Context, listener: NetworkMonitorListener) = unexpected()
+
+        override fun stopMonitor(context: Context) = unexpected()
+
+        override fun isMobileNetwork() = unexpected()
+
+        private fun unexpected(): Nothing {
+            throw AssertionError("The validator asked the network layer more than whether it is connected")
+        }
+    }
+
+    /**
      * Holds every dispatched block until [runPending], so a case can observe what has run on
      * one scope before the other gets a turn.
      */
@@ -321,5 +420,8 @@ class RadioStationValidatorImplTest {
     companion object {
         private const val STREAM_URL = "http://127.0.0.1:1/stream"
         private const val HOME_PAGE = "http://127.0.0.1:1/home"
+        private const val NO_NETWORK = "No network connection, Radio Station can not be validated"
+        private const val HOME_PAGE_UNCHECKED =
+            "No network connection, Radio Station's home page can not be checked"
     }
 }
