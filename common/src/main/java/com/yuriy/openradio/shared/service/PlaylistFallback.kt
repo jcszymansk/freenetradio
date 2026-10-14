@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.service
 
 import androidx.media3.common.Player
+import com.yuriy.openradio.shared.utils.ResolvedStream
 
 /**
  * How far one play request has got with a station whose url the player could not read.
@@ -74,10 +75,10 @@ sealed class PlaylistFallback {
     abstract fun onUnrecognized(mediaId: String): Step
 
     /**
-     * Reacts to the playlist read [resolution] having returned [urls], in the order the playlist
-     * names them.
+     * Reacts to the playlist read [resolution] having returned [streams], in the order the
+     * playlist names them.
      */
-    open fun onResolved(resolution: Resolution, urls: List<String>): Step {
+    open fun onResolved(resolution: Resolution, streams: List<ResolvedStream>): Step {
         return Step(this, Action.Ignore)
     }
 
@@ -138,11 +139,11 @@ sealed class PlaylistFallback {
             return resolve(mediaId)
         }
 
-        override fun onResolved(resolution: Resolution, urls: List<String>): Step {
+        override fun onResolved(resolution: Resolution, streams: List<ResolvedStream>): Step {
             if (resolution != this.resolution) {
                 return Step(this, Action.Ignore)
             }
-            return tryFirst(resolution.mediaId, urls)
+            return tryFirst(resolution.mediaId, streams)
         }
 
         override fun onReadBlocked(resolution: Resolution): Step {
@@ -165,7 +166,7 @@ sealed class PlaylistFallback {
      */
     data class Trying(
         val mediaId: String,
-        val remaining: List<String>,
+        val remaining: List<ResolvedStream>,
         override val resolutions: Long
     ) : PlaylistFallback() {
 
@@ -221,10 +222,10 @@ sealed class PlaylistFallback {
         data class Resolve(val resolution: Resolution) : Action()
 
         /**
-         * Play [streamUrl] in place of the stream of [mediaId]. A station paused while the stream
+         * Play [stream] in place of the stream of [mediaId]. A station paused while the stream
          * was being found keeps it in place and stays paused.
          */
-        data class Play(val mediaId: String, val streamUrl: String) : Action()
+        data class Play(val mediaId: String, val stream: ResolvedStream) : Action()
 
         /**
          * Stop, and tell the user that the station of [mediaId] cannot be played.
@@ -271,10 +272,10 @@ sealed class PlaylistFallback {
         return Step(Resolving(resolution), Action.Resolve(resolution))
     }
 
-    protected fun tryFirst(mediaId: String, urls: List<String>): Step {
-        if (urls.isEmpty()) {
+    protected fun tryFirst(mediaId: String, streams: List<ResolvedStream>): Step {
+        if (streams.isEmpty()) {
             return Step(Exhausted(mediaId, resolutions), Action.GiveUp(mediaId))
         }
-        return Step(Trying(mediaId, urls.drop(1), resolutions), Action.Play(mediaId, urls.first()))
+        return Step(Trying(mediaId, streams.drop(1), resolutions), Action.Play(mediaId, streams.first()))
     }
 }

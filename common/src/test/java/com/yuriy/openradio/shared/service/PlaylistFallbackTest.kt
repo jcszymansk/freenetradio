@@ -16,6 +16,7 @@
 
 package com.yuriy.openradio.shared.service
 
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import com.yuriy.openradio.shared.service.PlaylistFallback.Action
 import com.yuriy.openradio.shared.service.PlaylistFallback.Exhausted
@@ -24,6 +25,7 @@ import com.yuriy.openradio.shared.service.PlaylistFallback.Resolution
 import com.yuriy.openradio.shared.service.PlaylistFallback.Resolving
 import com.yuriy.openradio.shared.service.PlaylistFallback.Step
 import com.yuriy.openradio.shared.service.PlaylistFallback.Trying
+import com.yuriy.openradio.shared.utils.ResolvedStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,7 +48,7 @@ class PlaylistFallbackTest {
 
     @Test
     fun idleIgnoresAResolutionNoRequestAskedFor() {
-        val step = Idle().onResolved(FIRST_READ, listOf(URL_A))
+        val step = Idle().onResolved(FIRST_READ, listOf(STREAM_A))
 
         assertEquals(Step(Idle(), Action.Ignore), step)
     }
@@ -60,17 +62,17 @@ class PlaylistFallbackTest {
     }
 
     @Test
-    fun resolvingPlaysTheFirstResolvedUrlAndKeepsTheRestInOrder() {
-        val step = Resolving(FIRST_READ).onResolved(FIRST_READ, listOf(URL_A, URL_B, URL_C))
+    fun resolvingPlaysTheFirstResolvedStreamAndKeepsTheRestInOrder() {
+        val step = Resolving(FIRST_READ).onResolved(FIRST_READ, listOf(STREAM_A, STREAM_B, STREAM_C))
 
-        assertEquals(Step(Trying(STATION, listOf(URL_B, URL_C), 1), Action.Play(STATION, URL_A)), step)
+        assertEquals(Step(Trying(STATION, listOf(STREAM_B, STREAM_C), 1), Action.Play(STATION, STREAM_A)), step)
     }
 
     @Test
-    fun resolvingASingleUrlPlaysItWithNothingLeft() {
-        val step = Resolving(FIRST_READ).onResolved(FIRST_READ, listOf(URL_A))
+    fun resolvingASingleStreamPlaysItWithNothingLeft() {
+        val step = Resolving(FIRST_READ).onResolved(FIRST_READ, listOf(STREAM_A))
 
-        assertEquals(Step(Trying(STATION, emptyList(), 1), Action.Play(STATION, URL_A)), step)
+        assertEquals(Step(Trying(STATION, emptyList(), 1), Action.Play(STATION, STREAM_A)), step)
     }
 
     @Test
@@ -82,7 +84,7 @@ class PlaylistFallbackTest {
 
     @Test
     fun resolvingIgnoresTheReadOfAnotherStation() {
-        val step = Resolving(FIRST_READ).onResolved(Resolution(OTHER_STATION, 1), listOf(URL_A))
+        val step = Resolving(FIRST_READ).onResolved(Resolution(OTHER_STATION, 1), listOf(STREAM_A))
 
         assertEquals(Step(Resolving(FIRST_READ), Action.Ignore), step)
     }
@@ -91,7 +93,7 @@ class PlaylistFallbackTest {
     fun resolvingIgnoresAnotherReadOfTheSameStation() {
         val waiting = Resolving(Resolution(STATION, 2))
 
-        val step = waiting.onResolved(FIRST_READ, listOf(URL_A))
+        val step = waiting.onResolved(FIRST_READ, listOf(STREAM_A))
 
         assertEquals(Step(waiting, Action.Ignore), step)
     }
@@ -130,7 +132,7 @@ class PlaylistFallbackTest {
             Idle(),
             Unrecognized(STATION),
             Unrecognized(OTHER_STATION),
-            Resolved(FIRST_READ, listOf(URL_A)),
+            Resolved(FIRST_READ, listOf(STREAM_A)),
         )
 
         val otherRead = Resolution(OTHER_STATION, 2)
@@ -153,8 +155,8 @@ class PlaylistFallbackTest {
             Unrecognized(STATION),
             Unrecognized(OTHER_STATION),
             Unrecognized(STATION),
-            Resolved(FIRST_READ, listOf(URL_A)),
-            Resolved(latest, listOf(URL_B)),
+            Resolved(FIRST_READ, listOf(STREAM_A)),
+            Resolved(latest, listOf(STREAM_B)),
         )
 
         assertEquals(Trying(STATION, emptyList(), 3), state)
@@ -164,31 +166,31 @@ class PlaylistFallbackTest {
                 Action.Resolve(Resolution(OTHER_STATION, 2)),
                 Action.Resolve(latest),
                 Action.Ignore,
-                Action.Play(STATION, URL_B),
+                Action.Play(STATION, STREAM_B),
             ),
             actions,
         )
     }
 
     @Test
-    fun tryingPlaysTheNextUrlWhenThePlayedOneFails() {
-        val step = Trying(STATION, listOf(URL_B, URL_C), 1).onUnrecognized(STATION)
+    fun tryingPlaysTheNextStreamWhenThePlayedOneFails() {
+        val step = Trying(STATION, listOf(STREAM_B, STREAM_C), 1).onUnrecognized(STATION)
 
-        assertEquals(Step(Trying(STATION, listOf(URL_C), 1), Action.Play(STATION, URL_B)), step)
+        assertEquals(Step(Trying(STATION, listOf(STREAM_C), 1), Action.Play(STATION, STREAM_B)), step)
     }
 
     @Test
-    fun tryingGivesUpWhenNoUrlIsLeft() {
+    fun tryingGivesUpWhenNoStreamIsLeft() {
         val step = Trying(STATION, emptyList(), 1).onUnrecognized(STATION)
 
         assertEquals(Step(Exhausted(STATION, 1), Action.GiveUp(STATION)), step)
     }
 
     @Test
-    fun tryingPlaysEveryResolvedUrlInOrderAndThenGivesUpOnce() {
+    fun tryingPlaysEveryResolvedStreamInOrderAndThenGivesUpOnce() {
         val (state, actions) = fold(
             Resolving(FIRST_READ),
-            Resolved(FIRST_READ, listOf(URL_A, URL_B, URL_C)),
+            Resolved(FIRST_READ, listOf(STREAM_A, STREAM_B, STREAM_C)),
             Unrecognized(STATION),
             Unrecognized(STATION),
             Unrecognized(STATION),
@@ -197,9 +199,9 @@ class PlaylistFallbackTest {
         assertEquals(Exhausted(STATION, 1), state)
         assertEquals(
             listOf(
-                Action.Play(STATION, URL_A),
-                Action.Play(STATION, URL_B),
-                Action.Play(STATION, URL_C),
+                Action.Play(STATION, STREAM_A),
+                Action.Play(STATION, STREAM_B),
+                Action.Play(STATION, STREAM_C),
                 Action.GiveUp(STATION),
             ),
             actions,
@@ -208,25 +210,25 @@ class PlaylistFallbackTest {
 
     @Test
     fun tryingIgnoresARepeatOfItsOwnRead() {
-        val trying = Trying(STATION, listOf(URL_B), 1)
+        val trying = Trying(STATION, listOf(STREAM_B), 1)
 
-        val step = trying.onResolved(FIRST_READ, listOf(URL_C))
+        val step = trying.onResolved(FIRST_READ, listOf(STREAM_C))
 
         assertEquals(Step(trying, Action.Ignore), step)
     }
 
     @Test
     fun tryingIgnoresTheReadOfAnotherStation() {
-        val trying = Trying(STATION, listOf(URL_B), 1)
+        val trying = Trying(STATION, listOf(STREAM_B), 1)
 
-        val step = trying.onResolved(Resolution(OTHER_STATION, 2), listOf(URL_C))
+        val step = trying.onResolved(Resolution(OTHER_STATION, 2), listOf(STREAM_C))
 
         assertEquals(Step(trying, Action.Ignore), step)
     }
 
     @Test
     fun tryingStartsOverForAFailureOfAnotherStation() {
-        val step = Trying(STATION, listOf(URL_B), 1).onUnrecognized(OTHER_STATION)
+        val step = Trying(STATION, listOf(STREAM_B), 1).onUnrecognized(OTHER_STATION)
 
         val read = Resolution(OTHER_STATION, 2)
         assertEquals(Step(Resolving(read), Action.Resolve(read)), step)
@@ -241,7 +243,7 @@ class PlaylistFallbackTest {
 
     @Test
     fun exhaustedIgnoresARead() {
-        val step = Exhausted(STATION, 1).onResolved(FIRST_READ, listOf(URL_A))
+        val step = Exhausted(STATION, 1).onResolved(FIRST_READ, listOf(STREAM_A))
 
         assertEquals(Step(Exhausted(STATION, 1), Action.Ignore), step)
     }
@@ -259,7 +261,7 @@ class PlaylistFallbackTest {
         val states = listOf(
             Idle(4),
             Resolving(Resolution(STATION, 4)),
-            Trying(STATION, listOf(URL_A), 4),
+            Trying(STATION, listOf(STREAM_A), 4),
             Exhausted(STATION, 4),
         )
 
@@ -289,13 +291,13 @@ class PlaylistFallbackTest {
         val (state, actions) = fold(
             start.newRequest(),
             Unrecognized(STATION),
-            Resolved(FIRST_READ, listOf(URL_A)),
-            Resolved(secondRead, listOf(URL_B)),
+            Resolved(FIRST_READ, listOf(STREAM_A)),
+            Resolved(secondRead, listOf(STREAM_B)),
         )
 
         assertEquals(Trying(STATION, emptyList(), 2), state)
         assertEquals(
-            listOf(Action.Resolve(secondRead), Action.Ignore, Action.Play(STATION, URL_B)),
+            listOf(Action.Resolve(secondRead), Action.Ignore, Action.Play(STATION, STREAM_B)),
             actions,
         )
     }
@@ -303,7 +305,7 @@ class PlaylistFallbackTest {
     @Test
     fun aPlaylistWhoseOnlyStreamKeepsFailingIsResolvedExactlyOnce() {
         val failures = List(10) { Unrecognized(STATION) }
-        val events = listOf(failures.first(), Resolved(FIRST_READ, listOf(URL_A))) + failures.drop(1)
+        val events = listOf(failures.first(), Resolved(FIRST_READ, listOf(STREAM_A))) + failures.drop(1)
 
         val (state, actions) = fold(Idle(), *events.toTypedArray())
 
@@ -311,18 +313,18 @@ class PlaylistFallbackTest {
         assertEquals(1, actions.count { it is Action.Resolve })
         assertEquals(1, actions.count { it is Action.Play })
         assertEquals(
-            listOf(Action.Resolve(FIRST_READ), Action.Play(STATION, URL_A)) +
+            listOf(Action.Resolve(FIRST_READ), Action.Play(STATION, STREAM_A)) +
                 List(9) { Action.GiveUp(STATION) },
             actions,
         )
     }
 
     @Test
-    fun duplicateUrlsInAPlaylistAreEachTried() {
+    fun duplicateStreamsInAPlaylistAreEachTried() {
         val (state, actions) = fold(
             Idle(),
             Unrecognized(STATION),
-            Resolved(FIRST_READ, listOf(URL_A, URL_A, URL_B)),
+            Resolved(FIRST_READ, listOf(STREAM_A, STREAM_A, STREAM_B)),
             Unrecognized(STATION),
             Unrecognized(STATION),
             Unrecognized(STATION),
@@ -332,9 +334,9 @@ class PlaylistFallbackTest {
         assertEquals(
             listOf(
                 Action.Resolve(FIRST_READ),
-                Action.Play(STATION, URL_A),
-                Action.Play(STATION, URL_A),
-                Action.Play(STATION, URL_B),
+                Action.Play(STATION, STREAM_A),
+                Action.Play(STATION, STREAM_A),
+                Action.Play(STATION, STREAM_B),
                 Action.GiveUp(STATION),
             ),
             actions,
@@ -349,7 +351,7 @@ class PlaylistFallbackTest {
             Unrecognized(STATION),
             Resolved(FIRST_READ, emptyList()),
             Unrecognized(OTHER_STATION),
-            Resolved(otherRead, listOf(URL_C)),
+            Resolved(otherRead, listOf(STREAM_C)),
             Unrecognized(OTHER_STATION),
             Unrecognized(OTHER_STATION),
         )
@@ -360,7 +362,7 @@ class PlaylistFallbackTest {
                 Action.Resolve(FIRST_READ),
                 Action.GiveUp(STATION),
                 Action.Resolve(otherRead),
-                Action.Play(OTHER_STATION, URL_C),
+                Action.Play(OTHER_STATION, STREAM_C),
                 Action.GiveUp(OTHER_STATION),
                 Action.GiveUp(OTHER_STATION),
             ),
@@ -386,7 +388,7 @@ class PlaylistFallbackTest {
     fun aBlockedReadIsIgnoredWhenNoReadIsPending() {
         val states = listOf(
             Idle(1),
-            Trying(STATION, listOf(URL_A), 1),
+            Trying(STATION, listOf(STREAM_A), 1),
             Exhausted(STATION, 1),
         )
 
@@ -399,7 +401,7 @@ class PlaylistFallbackTest {
     fun onlyResolvingHasAReadPending() {
         assertTrue(Resolving(FIRST_READ).isReadPending)
         assertFalse(Idle(1).isReadPending)
-        assertFalse(Trying(STATION, listOf(URL_A), 1).isReadPending)
+        assertFalse(Trying(STATION, listOf(STREAM_A), 1).isReadPending)
         assertFalse(Exhausted(STATION, 1).isReadPending)
     }
 
@@ -416,7 +418,7 @@ class PlaylistFallbackTest {
     fun abandoningAReadKeepsEveryStateWithoutOne() {
         val states = listOf(
             Idle(1),
-            Trying(STATION, listOf(URL_A), 1),
+            Trying(STATION, listOf(STREAM_A), 1),
             Exhausted(STATION, 1),
         )
 
@@ -437,14 +439,14 @@ class PlaylistFallbackTest {
 
         val (state, actions) = fold(
             pending.abandonRead(),
-            Resolved(FIRST_READ, listOf(URL_A)),
+            Resolved(FIRST_READ, listOf(STREAM_A)),
             Unrecognized(STATION),
-            Resolved(secondRead, listOf(URL_B)),
+            Resolved(secondRead, listOf(STREAM_B)),
         )
 
         assertEquals(Trying(STATION, emptyList(), 2), state)
         assertEquals(
-            listOf(Action.Ignore, Action.Resolve(secondRead), Action.Play(STATION, URL_B)),
+            listOf(Action.Ignore, Action.Resolve(secondRead), Action.Play(STATION, STREAM_B)),
             actions,
         )
     }
@@ -458,7 +460,7 @@ class PlaylistFallbackTest {
             Unrecognized(STATION),
             ReadBlocked(FIRST_READ),
             Unrecognized(STATION),
-            Resolved(secondRead, listOf(URL_A)),
+            Resolved(secondRead, listOf(STREAM_A)),
         )
 
         assertEquals(Trying(STATION, emptyList(), 2), state)
@@ -467,7 +469,7 @@ class PlaylistFallbackTest {
                 Action.Resolve(FIRST_READ),
                 Action.PauseForNetworkPolicy(STATION),
                 Action.Resolve(secondRead),
-                Action.Play(STATION, URL_A),
+                Action.Play(STATION, STREAM_A),
             ),
             actions,
         )
@@ -520,9 +522,9 @@ class PlaylistFallbackTest {
         override fun applyTo(state: PlaylistFallback) = state.onUnrecognized(mediaId)
     }
 
-    private data class Resolved(val resolution: Resolution, val urls: List<String>) : Event() {
+    private data class Resolved(val resolution: Resolution, val streams: List<ResolvedStream>) : Event() {
 
-        override fun applyTo(state: PlaylistFallback) = state.onResolved(resolution, urls)
+        override fun applyTo(state: PlaylistFallback) = state.onResolved(resolution, streams)
     }
 
     private data class ReadBlocked(val resolution: Resolution) : Event() {
@@ -548,9 +550,9 @@ class PlaylistFallbackTest {
     private companion object {
         const val STATION = "station-1"
         const val OTHER_STATION = "station-2"
-        const val URL_A = "http://stream.test/a"
-        const val URL_B = "http://stream.test/b"
-        const val URL_C = "http://stream.test/c"
+        val STREAM_A = ResolvedStream("http://stream.test/a", MimeTypes.AUDIO_MPEG)
+        val STREAM_B = ResolvedStream("http://stream.test/b", MimeTypes.APPLICATION_M3U8)
+        val STREAM_C = ResolvedStream("http://stream.test/c", MimeTypes.AUDIO_UNKNOWN)
 
         val FIRST_READ = Resolution(STATION, 1)
     }

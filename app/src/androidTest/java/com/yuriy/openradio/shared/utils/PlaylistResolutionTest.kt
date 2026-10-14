@@ -500,7 +500,7 @@ class PlaylistResolutionTest {
         downloader: DownloaderLayer = HTTPDownloaderImpl(DirectUrlResolver())
     ): Array<String> {
         return when (val answer = read(url, downloader) { true }) {
-            is PlaylistRead.Urls -> answer.urls.toTypedArray()
+            is PlaylistRead.Streams -> answer.streams.map { it.url }.toTypedArray()
             PlaylistRead.Failed -> throw AssertionError("The read of $url failed")
             PlaylistRead.Blocked -> throw AssertionError("A read on a usable network was blocked")
         }

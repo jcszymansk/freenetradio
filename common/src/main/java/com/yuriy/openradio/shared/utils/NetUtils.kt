@@ -23,7 +23,6 @@ import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import wseemann.media.jplaylistparser.parser.AutoDetectParser
 import wseemann.media.jplaylistparser.playlist.Playlist
-import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 import java.io.BufferedWriter
 import java.io.IOException
 import java.io.OutputStreamWriter
@@ -258,7 +257,7 @@ object NetUtils {
      * thread this runs on and on the threads [downloader] reads on, and may be revoked from any.
      * @return [PlaylistRead.Blocked] when the permit ended before the read finished,
      * [PlaylistRead.Failed] when [playlistUrl] cannot be opened, is refused, or serves no playlist
-     * that can be read, otherwise [PlaylistRead.Urls] with the stream urls, none when the playlist
+     * that can be read, otherwise [PlaylistRead.Streams] with the streams, none when the playlist
      * names none.
      */
     fun extractUrlsFromPlaylist(
@@ -288,7 +287,7 @@ object NetUtils {
                     val stream = GatedInputStream(connection.inputStream, permit::mayContinue)
                     gated = stream
                     parser.parse(playlistUrl, contentType, stream, playlist)
-                    PlaylistRead.Urls(playlist.playlistEntries.map { it[PlaylistEntry.URI] })
+                    PlaylistRead.Streams(playlist.playlistEntries.map { ResolvedStream.of(it) })
                 }
             }
             when (held) {

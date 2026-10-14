@@ -67,6 +67,7 @@ import com.yuriy.openradio.shared.utils.MediaItemHelper
 import com.yuriy.openradio.shared.utils.NetUtils
 import com.yuriy.openradio.shared.utils.NetworkPermit
 import com.yuriy.openradio.shared.utils.PlaylistRead
+import com.yuriy.openradio.shared.utils.ResolvedStream
 import com.yuriy.openradio.shared.utils.SafeToast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -338,7 +339,7 @@ class OpenRadioService : MediaLibraryService() {
         when (val action = step.action) {
             PlaylistFallback.Action.Ignore -> Unit
             is PlaylistFallback.Action.Resolve -> resolvePlaylist(action.resolution)
-            is PlaylistFallback.Action.Play -> playResolvedStream(action.mediaId, action.streamUrl)
+            is PlaylistFallback.Action.Play -> playResolvedStream(action.mediaId, action.stream)
             is PlaylistFallback.Action.GiveUp -> {
                 mPlayer.stop()
                 mPlayer.reportUnplayableStream()
@@ -377,7 +378,7 @@ class OpenRadioService : MediaLibraryService() {
                 AppLogger.i("$TAG playlist read $read for $resolution")
                 when (read) {
                     PlaylistRead.Blocked -> advancePlaylistFallback(mPlaylistFallback.onReadBlocked(resolution))
-                    is PlaylistRead.Urls -> advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, read.urls))
+                    is PlaylistRead.Streams -> advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, read.streams))
                     PlaylistRead.Failed -> advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, emptyList()))
                 }
             }
@@ -400,20 +401,20 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     @MainThread
-    private fun playResolvedStream(mediaId: String, streamUrl: String) {
+    private fun playResolvedStream(mediaId: String, stream: ResolvedStream) {
         val current = mPlayer.currentMediaItem
         if (current == null || current.mediaId != mediaId) {
-            AppLogger.w("$TAG drop stream $streamUrl of $mediaId, now at ${current?.mediaId}")
+            AppLogger.w("$TAG drop stream $stream of $mediaId, now at ${current?.mediaId}")
             return
         }
-        AppLogger.i("$TAG play $streamUrl in place of $mediaId")
+        AppLogger.i("$TAG play $stream in place of $mediaId")
         mPlayer.stopForReplacementStream()
-        if (mPlayer.replaceAwaitedStream(MediaItemBuilder.withStreamUrl(current, streamUrl)).not()) {
-            AppLogger.i("$TAG keep $streamUrl of $mediaId paused")
+        if (mPlayer.replaceAwaitedStream(MediaItemBuilder.withStream(current, stream)).not()) {
+            AppLogger.i("$TAG keep $stream of $mediaId paused")
             return
         }
         if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
-            AppLogger.i("$TAG hold $streamUrl of $mediaId until a network it may use connects")
+            AppLogger.i("$TAG hold $stream of $mediaId until a network it may use connects")
             pauseForNetworkPolicyUiThread()
             return
         }
