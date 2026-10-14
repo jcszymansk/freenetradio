@@ -148,7 +148,10 @@ declares is part of how the format is recognised. Every playlist that one names 
 own and load no external XML entity. One `AutoDetectParser` per resolution remembers the URLs it
 has followed and stops a chain at `AutoDetectParser.MAX_DEPTH`. A fetched playlist is dispatched
 on its extension and then on its first bytes, and an entry without a playlist extension is kept as
-a stream.
+a stream. HLS is left to the player: an entry whose URL ends in `.m3u8` is kept as a stream, and a
+URL found to serve HLS only by reading it, the station URL included, is answered with itself and
+the HLS MIME type. Each `ResolvedStream` carries its type to the player, because the player picks
+its media source from the type before the URL.
 
 Reading a station's playlist counts as playing it, so the mobile-network policy applies to it.
 `extractUrlsFromPlaylist` asks the policy before every request, redirect hops included, and,
