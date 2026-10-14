@@ -25,6 +25,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -51,6 +52,8 @@ internal class LoopbackHttpFixture {
     private val mBroadcasts = ConcurrentHashMap<String, Broadcast>()
 
     private val mStalls = ConcurrentHashMap<String, Stall>()
+
+    private val mGates = ConcurrentHashMap<String, Gate>()
 
     private val mRequests = CopyOnWriteArrayList<String>()
 
@@ -132,6 +135,16 @@ internal class LoopbackHttpFixture {
     }
 
     /**
+     * Serves [body] at [path] the way [serve] does, but holds every request for it unanswered
+     * until [Gate.release] is called, so a test can act while the client waits for the response.
+     */
+    fun serveOnRelease(path: String, contentType: String, body: String): Gate {
+        val gate = Gate(serve(path, contentType, body))
+        mGates[path] = gate
+        return gate
+    }
+
+    /**
      * Redirects [path] to [location] with [status], and returns the url that reaches it.
      * [location] is sent as given, so it can be relative.
      */
@@ -201,6 +214,10 @@ internal class LoopbackHttpFixture {
             val broadcast = mBroadcasts[path]
             if (broadcast != null) {
                 broadcast.transmit(it)
+                return
+            }
+            val gate = mGates[path]
+            if (gate != null && gate.pass().not()) {
                 return
             }
             val response = mRoutes[path] ?: Response(HTTP_NOT_FOUND, "Not Found", TEXT_PLAIN, ByteArray(0))
@@ -400,6 +417,45 @@ internal class LoopbackHttpFixture {
                 /* The client reset the connection, which ends a stall too. */
             } finally {
                 mOpenConnections.decrementAndGet()
+            }
+        }
+    }
+
+    /**
+     * A response held back until the test lets it through.
+     */
+    class Gate internal constructor(val url: String) {
+
+        private val mReleased = CountDownLatch(1)
+
+        private val mConnections = AtomicInteger()
+
+        /**
+         * Connections that asked for the response, whether it was sent yet or not.
+         */
+        fun connections(): Int {
+            return mConnections.get()
+        }
+
+        /**
+         * Answers every request held so far, and every later one at once.
+         */
+        fun release() {
+            mReleased.countDown()
+        }
+
+        /**
+         * Waits for [release].
+         *
+         * @return whether the response may be sent, which it may not when the fixture is stopping.
+         */
+        internal fun pass(): Boolean {
+            mConnections.incrementAndGet()
+            return try {
+                mReleased.await()
+                true
+            } catch (exception: InterruptedException) {
+                false
             }
         }
     }

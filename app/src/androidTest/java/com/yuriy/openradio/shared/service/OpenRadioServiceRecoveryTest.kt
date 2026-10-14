@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.service
 
 import android.content.Context
+import android.media.AudioManager
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.SessionResult
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -255,6 +256,50 @@ class OpenRadioServiceRecoveryTest {
         assertEquals(READ_ONCE + 1, requestsFor("/again.pls"))
     }
 
+    /**
+     * The service pauses the player itself, without a controller and so without a new play
+     * request, on noisy audio and on a Bluetooth disconnect, and ExoPlayer does the same when it
+     * loses the audio focus for good. A pause that lands while the service is still looking for
+     * the station's stream must hold the stream it finds rather than start it (TASK-105).
+     *
+     * Of the three, a test can cause only the focus loss, and only while the player is opening a
+     * stream, because the player holds the focus only then. So the pause lands while the first
+     * stream the playlist names is being opened, and the second, which the service tries once the
+     * first proves unreadable, is the one that has to stay unstarted.
+     */
+    @Test
+    fun aStationPausedWhileItsStreamIsSoughtStaysPaused() {
+        val noise = mServer.serveOnRelease("/slow-noise", LoopbackHttpFixture.TEXT_PLAIN, NOT_AUDIO)
+        val broadcast = mServer.broadcast(
+            "/live.wav",
+            LoopbackHttpFixture.AUDIO_WAV,
+            mAudio.endlessWavHeader(),
+            LocalAudioFixture.BYTES_PER_SECOND
+        )
+        val playlist = mServer.serve(
+            "/paused.pls", LoopbackHttpFixture.AUDIO_PLS, plsPointingAt(noise.url, broadcast.url)
+        )
+        selectAndPlay(mStations.seed(playlist).first())
+        mBrowser.awaitPlayback("the first stream the playlist names to be opened") {
+            noise.connections() == 1
+        }
+
+        withTheAudioFocusTaken {
+            mBrowser.awaitPlayback("the focus loss to pause the station") {
+                mBrowser.playWhenReady().not()
+            }
+            noise.release()
+            mBrowser.awaitPlayback("the second stream the playlist names to replace the first") {
+                mBrowser.currentMediaItemUri() == broadcast.url
+            }
+            awaitSettled()
+        }
+
+        assertEquals("A station paused while its stream was sought was started", 0, broadcast.connections())
+        assertFalse(mBrowser.playWhenReady())
+        assertEquals(READ_ONCE, requestsFor("/paused.pls"))
+    }
+
     @Test
     fun aForbiddenStreamIsReportedAsForbidden() {
         val refused = mServer.refuse("/forbidden.mp3", LoopbackHttpFixture.HTTP_FORBIDDEN, "Forbidden")
@@ -337,6 +382,26 @@ class OpenRadioServiceRecoveryTest {
     private fun selectAndPlay(station: RadioStation) {
         mBrowser.setMediaItem(mStations.item(station))
         mBrowser.prepareAndPlay()
+    }
+
+    /**
+     * Runs [block] while a listener of this test holds the audio focus, which the player loses for
+     * good when it is taken.
+     */
+    @Suppress("DEPRECATION")
+    private fun withTheAudioFocusTaken(block: () -> Unit) {
+        val audioManager = mContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val listener = AudioManager.OnAudioFocusChangeListener { }
+        assertEquals(
+            "The audio focus was not granted to the test",
+            AudioManager.AUDIOFOCUS_REQUEST_GRANTED,
+            audioManager.requestAudioFocus(listener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+        )
+        try {
+            block()
+        } finally {
+            audioManager.abandonAudioFocus(listener)
+        }
     }
 
     /**
