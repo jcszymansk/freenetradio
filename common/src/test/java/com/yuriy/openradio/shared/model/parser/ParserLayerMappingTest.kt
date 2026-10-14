@@ -317,7 +317,7 @@ class ParserLayerMappingTest {
     }
 
     @Test
-    fun webRadioSkipsMalformedEntriesAndMissingCriteria() {
+    fun webRadioSkipsMalformedEntries() {
         val data = """
             {
               "not-an-object": "invalid",
@@ -342,12 +342,41 @@ class ParserLayerMappingTest {
                 Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
             ).isEmpty()
         )
+    }
+
+    /**
+     * The station matches every kind of criteria, and each is asked first, so the empty answer to
+     * the request without any is down to the missing criteria and not to the station.
+     */
+    @Test
+    fun webRadioListsNothingWithoutCriteria() {
+        val data = """
+            {
+              "rock-station": {
+                "Genre": ["Rock"],
+                "Name": "Morning Rock",
+                "StreamUri": "https://radio.example/rock",
+                "Country": "Poland"
+              }
+            }
+        """.trimIndent()
+        val parser = ParserLayerWebRadioImpl(setOf(Country("Poland", "PL")))
+
+        for (key in listOf(
+            "${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock",
+            "${UrlLayerWebRadioImpl.KEY_COUNTRY_ID}PL",
+            "${UrlLayerWebRadioImpl.KEY_SEARCH_ID}Rock"
+        )) {
+            assertEquals(
+                key,
+                setOf("rock-station"),
+                parser.getRadioStations(data, MediaIdBuilderDefault(), Uri.parse("https://example.com?$key"))
+                    .map { it.id }
+                    .toSet()
+            )
+        }
         assertTrue(
-            parser.getRadioStations(
-                data,
-                MediaIdBuilderDefault(),
-                Uri.parse("https://example.com")
-            ).isEmpty()
+            parser.getRadioStations(data, MediaIdBuilderDefault(), Uri.parse("https://example.com")).isEmpty()
         )
     }
 
