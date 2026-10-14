@@ -213,6 +213,10 @@ class OpenRadioServicePresenterImpl(
         mApiCachePersistent.clear()
         mApiCacheInMemory.clear()
         mImagesPersistenceLayer.deleteAll()
+        // The registry builds this set once per process, so nothing else would ever empty it.
+        synchronized(this) {
+            mCountriesCache.clear()
+        }
         mLatestRadioStationStorage.clear()
     }
 

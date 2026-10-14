@@ -303,6 +303,27 @@ class OpenRadioServicePresenterImplTest {
         assertTrue(presenter.getLastRadioStation().isInvalid())
     }
 
+    /**
+     * The registry builds the country set once per process and hands the same instance to the
+     * WebRadio parser, so a clear that left it filled would go on serving the first list it ever
+     * held, past every clear, until the process died. The set is checked directly because the
+     * parser reads it without asking the presenter. Was TASK-035.
+     */
+    @Test
+    fun clearingForgetsTheCountriesSoTheNextLookupAsksTheModelAgain() {
+        val modelLayer = RecordingModelLayer(countries = setOf(Country("Poland", "PL")))
+        val cache = TreeSet<Country>()
+        val presenter = presenter(modelLayer = modelLayer, countriesCache = cache)
+        assertEquals(setOf(Country("Poland", "PL")), presenter.getAllCountries())
+
+        presenter.clear()
+
+        assertTrue("The country set outlived the clear: $cache", cache.isEmpty())
+        modelLayer.countries = setOf(Country("Germany", "DE"))
+        assertEquals(setOf(Country("Germany", "DE")), presenter.getAllCountries())
+        assertEquals(2, modelLayer.countriesRequests)
+    }
+
     @Test
     fun closingOnlyDropsWhatIsHeldInMemory() {
         val persistentCache = RecordingApiCache()
@@ -488,7 +509,7 @@ class OpenRadioServicePresenterImplTest {
 
     private class RecordingModelLayer(
         private val categories: Set<Category> = emptySet(),
-        private val countries: Set<Country> = emptySet(),
+        var countries: Set<Country> = emptySet(),
         private val stations: Set<RadioStation> = emptySet()
     ) : ModelLayer {
 
