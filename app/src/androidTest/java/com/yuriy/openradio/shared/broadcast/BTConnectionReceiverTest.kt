@@ -238,8 +238,8 @@ class BTConnectionReceiverTest {
 
     /**
      * The intent filter already keeps other actions out, and the receiver checks the action again
-     * because it is registered exported. An intent that carries the same extras under another
-     * action must neither be reported nor be remembered as the device last seen connecting.
+     * as defence in depth. An intent that carries the same extras under another action must
+     * neither be reported nor be remembered as the device last seen connecting.
      */
     @Test
     fun anEventWithAnotherActionIsIgnored() {
