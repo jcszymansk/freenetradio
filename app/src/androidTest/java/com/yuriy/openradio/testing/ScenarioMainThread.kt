@@ -33,6 +33,9 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * Assert on what this returns, not inside [block]. A throw that reaches here is still reported
  * properly, but the block is for reading and acting on views, which only the main thread may do.
+ *
+ * Only a throw from [block] is caught. Calling this after the Activity is destroyed still kills the
+ * process, because `onActivity` then fails its own check on the main thread before the block runs.
  */
 fun <A : Activity, T> ActivityScenario<A>.withActivity(block: (A) -> T): T {
     val outcome = AtomicReference<Result<T>?>(null)

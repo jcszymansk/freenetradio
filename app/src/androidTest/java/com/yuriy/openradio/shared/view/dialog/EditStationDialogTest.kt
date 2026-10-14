@@ -205,8 +205,14 @@ class EditStationDialogTest {
             return read<View, Boolean>(id) { it.isEnabled }
         }
 
-        private fun <T : View, R> read(id: Int, reader: (T) -> R): R {
-            return mScenario.withActivity { reader(mDialog.requireView().findViewById(id)) }
+        private fun <T : View, R : Any> read(id: Int, reader: (T) -> R): R {
+            return mScenario.withActivity { mDialog.requireView().findViewById<T>(id)?.let(reader) }
+                ?: throw AssertionError("The edit dialog holds no view ${resourceName(id)}")
+        }
+
+        private fun resourceName(id: Int): String {
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            return context.resources.getResourceEntryName(id)
         }
     }
 
