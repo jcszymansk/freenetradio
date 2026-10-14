@@ -231,6 +231,36 @@ class OpenRadioServicePresenterImplTest {
         assertTrue(presenter(settingsContext = context).isRadioStationFavorite(station))
     }
 
+    /**
+     * Asking for the state a station is already in is a legitimate request, and it is answered
+     * as one that changed nothing, so that the service can tell its caller so. The station is
+     * named differently on the second mark: rewriting the stored entry would replace the name,
+     * and the name read back is what shows the entry was not written.
+     */
+    @Test
+    fun aFavoriteUpdateAnswersWhetherItChangedTheStore() {
+        val context = preferencesContext()
+        val presenter = presenter(settingsContext = context)
+        val station = RadioStation.makeDefaultInstance("station").apply {
+            name = "Stored"
+            setVariant(128, "https://radio.example/station.mp3")
+        }
+
+        assertFalse(presenter.updateRadioStationFavorite(station, false))
+        assertTrue(presenter(settingsContext = context).getAllFavorites().isEmpty())
+
+        assertTrue(presenter.updateRadioStationFavorite(station, true))
+        val renamed = RadioStation.makeCopyInstance(station).apply { name = "Renamed" }
+        assertFalse(presenter.updateRadioStationFavorite(renamed, true))
+        assertEquals(
+            listOf("Stored"),
+            presenter(settingsContext = context).getAllFavorites().map { it.name }
+        )
+
+        assertTrue(presenter.updateRadioStationFavorite(station, false))
+        assertTrue(presenter(settingsContext = context).getAllFavorites().isEmpty())
+    }
+
     @Test
     fun clearingDropsEveryCacheAndTheLatestStation() {
         val images = RecordingImagesPersistenceLayer()

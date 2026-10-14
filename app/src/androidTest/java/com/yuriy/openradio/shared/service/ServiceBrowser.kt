@@ -244,6 +244,19 @@ internal class ServiceBrowser {
      * Waits for a children-changed push for [parentId], discarding notifications for other nodes.
      */
     fun awaitChildrenChanged(parentId: String): ChildrenChanged {
+        return childrenChangesUntil(parentId).last()
+    }
+
+    /**
+     * Waits for a children-changed push for [parentId], and returns it together with every push
+     * before it that neither [forgetNotifications] nor an earlier wait consumed, oldest first.
+     *
+     * The session delivers its pushes to a controller in the order it sent them, so a push the
+     * test provokes after an action serves as a barrier: whatever the action notified arrives
+     * before it. That is how the absence of a notification is asserted without a fixed sleep.
+     */
+    fun childrenChangesUntil(parentId: String): List<ChildrenChanged> {
+        val changes = mutableListOf<ChildrenChanged>()
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
         while (true) {
             val remaining = deadline - System.nanoTime()
@@ -251,8 +264,9 @@ internal class ServiceBrowser {
                 break
             }
             val change = mChildrenChanges.poll(remaining, TimeUnit.NANOSECONDS) ?: break
+            changes.add(change)
             if (change.parentId == parentId) {
-                return change
+                return changes
             }
         }
         throw AssertionError("No children-changed notification arrived for $parentId")

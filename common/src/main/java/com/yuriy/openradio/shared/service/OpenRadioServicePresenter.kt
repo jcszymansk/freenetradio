@@ -70,7 +70,13 @@ interface OpenRadioServicePresenter {
 
     fun updateRadioStationFavorite(radioStation: RadioStation)
 
-    fun updateRadioStationFavorite(radioStation: RadioStation, isFavorite: Boolean)
+    /**
+     * Marks [radioStation] as a favorite or unmarks it, as [isFavorite] says.
+     *
+     * @return whether the favorites store changed: false when the station already was in the
+     *   requested state, in which case nothing is written.
+     */
+    fun updateRadioStationFavorite(radioStation: RadioStation, isFavorite: Boolean): Boolean
 
     fun updateSortIds(mediaId: String, sortId: Int, categoryMediaId: String)
 

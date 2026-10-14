@@ -713,6 +713,7 @@ class OpenRadioService : MediaLibraryService() {
         private val mSessionCmdSuccess = Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         private val mSessionCmdNotSupported =
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+        private val mSessionCmdSkipped = Futures.immediateFuture(SessionResult(SessionResult.RESULT_INFO_SKIPPED))
 
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
@@ -1000,18 +1001,12 @@ class OpenRadioService : MediaLibraryService() {
 
                 CMD_MARK_FAVORITE -> {
                     session.setCustomLayout(listOf(mUnmarkFavoriteButton))
-                    if (handleFavorite(args, true).not()) {
-                        return mSessionCmdNotSupported
-                    }
-                    return mSessionCmdSuccess
+                    return handleFavorite(args, true)
                 }
 
                 CMD_UNMARK_FAVORITE -> {
                     session.setCustomLayout(listOf(mMarkFavoriteButton))
-                    if (handleFavorite(args, false).not()) {
-                        return mSessionCmdNotSupported
-                    }
-                    return mSessionCmdSuccess
+                    return handleFavorite(args, false)
                 }
 
                 CMD_STOP_SERVICE -> {
@@ -1182,12 +1177,19 @@ class OpenRadioService : MediaLibraryService() {
         }
 
         /**
-         * Marks or unmarks the station [args] name as a favorite, and answers whether it could.
+         * Marks or unmarks the station [args] name as a favorite.
          *
-         * The favorites store is written only once the station is known, so a refused command
-         * leaves it as it found it.
+         * The answer tells the three outcomes apart: success when the favorites store changed,
+         * [SessionResult.RESULT_INFO_SKIPPED] when the station already was in the requested
+         * state, and [SessionResult.RESULT_ERROR_NOT_SUPPORTED] when the station is unknown. A
+         * caller that only wants the station in that state, such as a button pressed twice or
+         * one of two racing clients, can take a skip as success; a caller that sent the wrong
+         * command or acted on stale metadata learns that nothing happened. Only a change is
+         * followed by updating the browse tree, the player metadata and the subscribers, and the
+         * store is written only once the station is known, so a refused command leaves it as it
+         * found it.
          */
-        private fun handleFavorite(args: Bundle, isFavorite: Boolean): Boolean {
+        private fun handleFavorite(args: Bundle, isFavorite: Boolean): ListenableFuture<SessionResult> {
             // The favorite button the session publishes, which is what the automotive UI shows,
             // names no station: it only ever concerns the now playing one. A command that does
             // name a station is about that station and no other.
@@ -1201,9 +1203,12 @@ class OpenRadioService : MediaLibraryService() {
             }
             if (rs.isInvalid()) {
                 AppLogger.e("$TAG can't handle fav. for '$mediaId'")
-                return false
+                return mSessionCmdNotSupported
             }
-            mPresenter.updateRadioStationFavorite(rs, isFavorite)
+            if (mPresenter.updateRadioStationFavorite(rs, isFavorite).not()) {
+                AppLogger.w("$TAG fav. for '$mediaId' already $isFavorite, nothing changed")
+                return mSessionCmdSkipped
+            }
             mBrowseTree.getMediaItemByMediaId(mediaId)?.let {
                 MediaItemHelper.updateFavoriteField(it.mediaMetadata, isFavorite)
             }
@@ -1213,7 +1218,7 @@ class OpenRadioService : MediaLibraryService() {
             }
             mPlayer.invalidateMetaData()
             maybeNotifyRootChanged()
-            return true
+            return mSessionCmdSuccess
         }
     }
 
