@@ -245,6 +245,23 @@ class SleepTimerModelImplTest {
         assertTrue("The second listener was never notified", second.awaitCompletion())
     }
 
+    /**
+     * The service's listener, the one that stops playback, is registered like any other, so a
+     * listener ahead of it that fails must not keep the completion from reaching it.
+     */
+    @Test
+    fun aFailingListenerDoesNotSilenceTheListenersAfterIt() {
+        val failing = ThrowingListener()
+        val after = RecordingListener()
+        mModel.addSleepTimerListener(failing)
+        mModel.addSleepTimerListener(after)
+
+        mModel.updateTimer(System.currentTimeMillis() + DELAY_MS, true)
+
+        assertTrue("The failing listener was never called", failing.awaitCall())
+        assertTrue("The listener after a failing one was never notified", after.awaitCompletion())
+    }
+
     @Test
     fun aRemovedListenerHearsNothing() {
         val kept = RecordingListener()
@@ -349,6 +366,23 @@ class SleepTimerModelImplTest {
 
         fun awaitCompletionDuring(millis: Long): Boolean {
             return mCompleted.await(millis, TimeUnit.MILLISECONDS)
+        }
+    }
+
+    /**
+     * Fails every completion it hears, after recording that it heard one.
+     */
+    private class ThrowingListener : SleepTimerListener {
+
+        private val mCalled = CountDownLatch(1)
+
+        override fun onComplete() {
+            mCalled.countDown()
+            throw IllegalStateException("A listener that fails")
+        }
+
+        fun awaitCall(): Boolean {
+            return mCalled.await(COMPLETION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         }
     }
 

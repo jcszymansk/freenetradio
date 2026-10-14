@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.model.timer
 
 import android.content.Context
 import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
+import com.yuriy.openradio.shared.utils.AppLogger
 import java.lang.ref.WeakReference
 import java.util.Calendar
 import java.util.Date
@@ -38,7 +39,7 @@ class SleepTimerModelImpl(
 ) : SleepTimerModel {
 
     private val mSleepTimerStorage = SleepTimerStorage(contextRef)
-    private var mTimerListenerExt = ConcurrentLinkedQueue<SleepTimerListener>()
+    private val mTimerListenerExt = ConcurrentLinkedQueue<SleepTimerListener>()
     private val mTimerListener = SleepTimerListenerImpl()
     private val mTimer = SleepTimerImpl(mTimerListener, mClock)
 
@@ -164,13 +165,20 @@ class SleepTimerModelImpl(
         mTimerListenerExt.remove(listener)
     }
 
+    /**
+     * Fans a completion out to every registered listener. Each one is shielded from the others: the
+     * service's listener, which is the one that stops playback, must hear the completion even when
+     * a listener ahead of it fails.
+     */
     private inner class SleepTimerListenerImpl : SleepTimerListener {
 
         override fun onComplete() {
             mSleepTimerStorage.saveEnabled(false)
-            synchronized(mTimerListenerExt) {
-                for (listener in mTimerListenerExt) {
+            for (listener in mTimerListenerExt) {
+                try {
                     listener.onComplete()
+                } catch (e: Exception) {
+                    AppLogger.e("Sleep timer listener $listener failed on completion", e)
                 }
             }
         }
