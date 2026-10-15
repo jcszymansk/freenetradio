@@ -264,7 +264,7 @@ The shared manifest registers:
 
 Permissions cover internet and network state, wake lock, coarse location, foreground media playback, Bluetooth state and connection, and external image access. Android's platform `LocationManager` is used to choose a likely local country without Google Play Services. The 15.0.0 baseline no longer ships the offline country-boundary dataset used by earlier revisions.
 
-The shared application manifest enables cleartext traffic and exports `ImagesProvider`; these are notable deployment and security settings.
+The shared application manifest enables cleartext traffic. `ImagesProvider` is not exported: the app reads artwork in its own process, and `OpenRadioService` grants the Android Auto browser read access to the artwork uri of each item it browses.
 
 ## Build and release
 
