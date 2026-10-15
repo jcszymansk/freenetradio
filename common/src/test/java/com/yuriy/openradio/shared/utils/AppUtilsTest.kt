@@ -23,7 +23,7 @@ import org.junit.Test
 class AppUtilsTest {
 
     @Test
-    fun testSerializeMap() {
+    fun aSerializedMapReadsBackAndNoDataReadsAsEmpty() {
         val keyA = "KEY_FAV"
         val keyB = "KEY_LOC"
         val data = hashMapOf(
