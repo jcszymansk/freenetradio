@@ -28,10 +28,18 @@ import com.yuriy.openradio.shared.model.media.BrowseTree
 /**
  * Builds an [OpenRadioPlayer] the way the service does, minus the parts no player test is about:
  * its listener is ignored and its equalizer is never attached. Call it on the main thread.
+ *
+ * @param retrySchedule When the player tries again a stream the network stopped. A test that
+ * spends the retries passes a short one instead of waiting out the minutes the service's takes.
  */
 @UnstableApi
-internal fun newOpenRadioPlayer(context: Context): OpenRadioPlayer {
-    return OpenRadioPlayer(context, IgnoringListener(), InertEqualizerLayer(), BrowseTree())
+internal fun newOpenRadioPlayer(
+    context: Context,
+    retrySchedule: StreamRetrySchedule = StreamRetrySchedule()
+): OpenRadioPlayer {
+    return OpenRadioPlayer(
+        context, IgnoringListener(), InertEqualizerLayer(), BrowseTree(), retrySchedule
+    )
 }
 
 /**

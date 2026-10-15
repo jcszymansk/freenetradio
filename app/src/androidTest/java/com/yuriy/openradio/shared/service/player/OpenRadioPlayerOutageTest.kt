@@ -347,12 +347,14 @@ class OpenRadioPlayerOutageTest {
         /**
          * Longer than the station takes to be ready once it is back on the air. The attempt that
          * found it silent times out and the next one plays it, ten seconds or so. This allows for
-         * the worst case too: every attempt ExoPlayer makes failing until it gives the stream up,
-         * the player trying it again after its delay, and that attempt buffering enough to play.
+         * the worst case too: every attempt ExoPlayer makes in the player's first retry failing
+         * until it gives the stream up, the player trying it again after its second delay, and
+         * that attempt buffering enough to play. The schedule allows more retries than that, so
+         * the station comes back well within its bound.
          */
         val RESUME_SECONDS = SLACK_FACTOR * toSeconds(
             GIVE_UP_LIVE_MILLIS
-                + OpenRadioPlayer.STREAM_RETRY_DELAY_MS
+                + StreamRetrySchedule.DEFAULT_DELAYS_MS[1]
                 + DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS
         )
 
@@ -365,7 +367,8 @@ class OpenRadioPlayerOutageTest {
          * Comfortably longer than the player waits before it tries a stream the network stopped
          * again.
          */
-        val RETRY_SECONDS = TimeUnit.MILLISECONDS.toSeconds(OpenRadioPlayer.STREAM_RETRY_DELAY_MS) * 2
+        val RETRY_SECONDS =
+            TimeUnit.MILLISECONDS.toSeconds(StreamRetrySchedule.DEFAULT_DELAYS_MS.first()) * 2
 
         const val POLL_MILLIS = 50L
 
