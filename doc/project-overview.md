@@ -22,7 +22,7 @@ production artifact.
 | `common/` | Domain models, provider APIs, parsing, caching, persistence, playback, Media3 service, equalizer, location, timers, and broadcast receivers |
 | `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, file import/export, logging, and service-command glue |
 | `app/` | Phone/tablet UI and Android Auto metadata |
-| `android-jvm-stubs/` | Working JVM implementations of the Android value types unit tests need — `Uri`, `Bundle`, `MimeTypeMap`, and the resource lookups of `Context`. `:common` takes it as `testRuntimeOnly`, so tests compile against the real Android API and only the implementation is swapped at run time |
+| `android-jvm-stubs/` | Working JVM implementations of the Android types unit tests need — `Uri`, `Bundle`, `MimeTypeMap`, the resource lookups of `Context`, and the `android.database.Observable` behind `RecyclerView.Adapter` notifications. `:common` and `:common-ui` take it as `testRuntimeOnly`, so tests compile against the real Android API and only the implementation is swapped at run time |
 
 The application uses `applicationId` `com.github.jcszymansk.freenetradio`. Kotlin namespaces retain the recovered source package names; they do not define the installed application identity.
 
@@ -40,13 +40,13 @@ The central component is `common/src/main/java/com/yuriy/openradio/shared/servic
 - Sleep-timer completion
 - Custom commands from the application UIs
 
-The service advertises both `android.media.browse.MediaBrowserService` and `androidx.media3.session.MediaLibraryService`. This lets the same content tree serve the phone UI, Android Auto, Automotive OS, and other MediaBrowser clients.
+The service advertises both `android.media.browse.MediaBrowserService` and `androidx.media3.session.MediaLibraryService`. This lets the same content tree serve the phone UI, Android Auto, and other MediaBrowser clients. Native Android Automotive OS is out of scope and has no module.
 
 ### Runtime flow
 
 ```mermaid
 flowchart LR
-    UI["Platform Activity or vehicle UI"]
+    UI["MainActivity or Android Auto"]
     Presenter["MediaPresenterImpl"]
     Browser["MediaResourcesManager / MediaBrowser"]
     Service["OpenRadioService"]
@@ -95,9 +95,9 @@ The children it fetches reach the Activity only through `MediaPresenterImpl`, wh
 - Local or user-defined stations
 - Popular and new stations
 - Search results
-- Automotive-specific browse nodes
+- The Android Auto browse node
 
-Content generation uses a command pattern. Separate `MediaItemCommand` implementations produce major nodes such as `MediaItemFavoritesList`, `MediaItemCountriesList`, `MediaItemCountryStations`, `MediaItemSearchFromService`, and `MediaItemBrowseCar`.
+Content generation uses a command pattern. Separate `MediaItemCommand` implementations produce major nodes such as `MediaItemFavoritesList`, `MediaItemCountriesList`, `MediaItemCountryStations`, and `MediaItemSearchFromService`. When the process starts in car mode, `OpenRadioServicePresenterImpl` answers the root with `MediaItemRootCar`, which keeps the top level short, and moves the remaining entries under `MediaItemBrowseCar`.
 
 `BrowseTree.kt` is an in-memory cache mapping parent IDs to child `MediaItem` lists, corresponding `RadioStation` sets, and individual item lookups. Nodes are invalidated when favorites, sorting, source selection, or local stations change.
 
@@ -114,7 +114,6 @@ Content generation uses a command pattern. Separate `MediaItemCommand` implement
 - Most-clicked stations
 - Recently changed stations
 - Search
-- Station submission
 - Country lists
 
 It performs DNS discovery for available Radio Browser servers, caches discovered hosts, chooses one, and retains fallback mirrors. `ParserLayerRadioBrowserImpl` parses JSON results into `RadioStation` objects. Pagination uses a shared page size of 250.
@@ -196,6 +195,7 @@ Most settings and small domain collections use SharedPreferences through `Abstra
 - User-added or local stations
 - Last played station
 - Location and country choice
+- Station provider choice
 - Network preferences
 - Sleep-timer state
 - Equalizer state
@@ -234,7 +234,7 @@ At startup, `DependencyRegistryCommon.init()` creates the main object graph:
 - Radio-station manager
 - Service presenter
 
-It also detects whether the process is running on TV or in a car.
+It also reads the UI mode once, at startup, to tell whether the process runs in a car; that choice selects the car root described above.
 
 ## Supported platforms
 
@@ -270,17 +270,22 @@ The shared application manifest enables cleartext traffic. `ImagesProvider` is n
 
 | Component | Version |
 | --- | ---: |
-| Gradle wrapper | 8.0 |
-| Android Gradle Plugin | 8.1.2 |
+| Gradle wrapper | 8.2 |
+| Android Gradle Plugin | 8.2.2 |
 | Kotlin | 1.9.10 |
+| KSP | 1.9.0-1.0.13 |
 | JVM target | Java 8 |
 | Compile and target SDK | 34 |
 | Mobile minimum SDK | 17 |
 | Media3 | 1.2.1 |
+| `androidx.media` | 1.6.0 |
 | Room | 2.6.1 |
 | OkHttp | 3.12.13 |
 
-OkHttp is pinned to a version compatible with API 17.
+The wrapper version comes from `gradle/wrapper/gradle-wrapper.properties`, KSP from the root
+`build.gradle`, and the rest from `constants.gradle`. OkHttp and `androidx.media` are pinned to the
+last versions compatible with API 17. `AGENTS.md` names the JDK and Android SDK a fresh clone builds
+with.
 
 The configured release version is `15.0.0`; `version.properties` contains version code `716`. The application ID is `com.github.jcszymansk.freenetradio` and the user-visible name is FreeNetRadio. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project creates its release signing key.
 
@@ -288,11 +293,23 @@ Historical APKs are retained under `app/store/`. No continuous-integration workf
 
 ## Tests and project state
 
-The repository contains:
+The repository contains these test classes, counted as files holding JUnit `@Test` methods:
 
-- Four JVM unit-test files under `common/src/test`
-- Nine Android instrumentation-test files under `app/src/androidTest`
+| Source set | Runs on | Classes | Subject |
+| --- | --- | ---: | --- |
+| `common/src/test` | JVM | 56 | Playlist parsers, URL and parser layers, API caches, the model layer, browse commands and `BrowseTree`, media IDs and media-item building, station serialization and validation, sorting and filtering, network policy and recovery, playback state and error classification, equalizer serialization, sleep timer, artwork grants |
+| `common-ui/src/test` | JVM | 6 | `MediaPresenterImpl` browse stack and child delivery, `MediaItemsAdapter`, `ServiceCommander`, diagnostic report files |
+| `android-jvm-stubs/src/test` | JVM | 4 | The stubs themselves: `Uri`, `Bundle`, `MimeTypeMap`, `Observable` |
+| `app/src/androidTest` | Device | 42 | SharedPreferences storages, the Room API cache and its schema upgrade, `ImagesProvider` access, file import and export, receivers, `OpenRadioService` browse, search, playback, commands and recovery, `OpenRadioPlayer`, `MediaResourcesManager`, station dialogs, and end-to-end journeys through `MainActivity` |
 
-Coverage includes playlist detection, station serialization, media-ID helpers, storage, equalizer serialization, network utilities, and the image provider. There are no Android Auto-specific tests.
+The instrumented suite runs under `OfflineTestRunner`, which refuses to run on a device that
+reports a network; the urls its fixtures hand the app point at loopback or at an unreachable
+origin, never at a host name. The coverage gate `./gradlew verifyPureCoreCoverage`, part of
+`./gradlew check`, holds the pure-core classes listed in `gradle/pure-core-coverage.tsv` to a
+coverage floor; `doc/testing-roadmap.md` explains the rules.
+
+Android Auto is covered where the app decides something for it: the car root and browse node on
+the JVM, and the artwork grant to the Android Auto browser on the JVM and the device. No test runs
+against an Android Auto head unit.
 
 The project is licensed under Apache 2.0. `NOTICE` retains attribution for the embedded playlist parser, the formerly bundled country-boundary library, and Android Open Source Project material. The imported baseline is preserved from the original repository's January 2024 history; see `doc/source-provenance.md`.
