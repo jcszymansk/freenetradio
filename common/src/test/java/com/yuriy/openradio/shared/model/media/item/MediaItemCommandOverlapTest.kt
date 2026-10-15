@@ -116,23 +116,28 @@ class MediaItemCommandOverlapTest {
             dependencies(presenter, listener, parentId = parentId).execute(command, listener.playbackStateListener)
         }
 
-        assertTrue(
-            "The two executions were never inside the provider at the same time, so their answers " +
-                "say nothing about overlapping requests",
-            bothAsked.await(RecordingCommandListener.AWAIT_MILLIS, TimeUnit.MILLISECONDS)
-        )
-        // Long enough for the empty answer a cancelled execution gets, which follows the
-        // cancellation at once; a correct command cannot answer before the release whatever the wait.
-        Thread.sleep(HELD_MILLIS)
-        for ((name, listener) in requests) {
-            assertEquals(
-                "The $name request was answered while its provider was still working, so the other " +
-                    "execution cut it short",
-                0,
-                listener.results
+        // Released in finally so that a failed check does not leave both provider threads held
+        // into the next test.
+        try {
+            assertTrue(
+                "The two executions were never inside the provider at the same time, so their answers " +
+                    "say nothing about overlapping requests",
+                bothAsked.await(RecordingCommandListener.AWAIT_MILLIS, TimeUnit.MILLISECONDS)
             )
+            // Long enough for the empty answer a cancelled execution gets, which follows the
+            // cancellation at once; a correct command cannot answer before the release whatever the wait.
+            Thread.sleep(HELD_MILLIS)
+            for ((name, listener) in requests) {
+                assertEquals(
+                    "The $name request was answered while its provider was still working, so the other " +
+                        "execution cut it short",
+                    0,
+                    listener.results
+                )
+            }
+        } finally {
+            released.countDown()
         }
-        released.countDown()
 
         for ((name, listener) in requests) {
             listener.awaitResult()
