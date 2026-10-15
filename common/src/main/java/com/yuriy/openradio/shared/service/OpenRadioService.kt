@@ -163,9 +163,10 @@ class OpenRadioService : MediaLibraryService() {
      * Opens the artwork of browsed items to the Android Auto browser, which reads it from another
      * process while the artwork provider itself is not exported.
      */
-    private val mArtworkGrants = ArtworkGrants { packageName, uri ->
-        grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
+    private val mArtworkGrants = ArtworkGrants(
+        { browser -> mSession.isAutoCompanionController(browser) },
+        { packageName, uri -> grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+    )
 
     /**
      * The button a controller shows beside the transport controls while the active station is
@@ -817,7 +818,7 @@ class OpenRadioService : MediaLibraryService() {
                 val list = mBrowseTree[parentId] ?: ImmutableList.of()
                 val sublist = list.subList(it, list.size)
                 AppLogger.d("$TAG GetChildren for $parentId page $page return ${sublist.size}|${list.size} from pos:$it")
-                grantArtwork(session, browser, sublist)
+                mArtworkGrants.grant(browser, sublist)
                 LibraryResult.ofItemList(
                     sublist,
                     LibraryParams.Builder().build()
@@ -835,7 +836,7 @@ class OpenRadioService : MediaLibraryService() {
                 ?: return Futures.immediateFuture(
                     LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
                 )
-            grantArtwork(session, browser, listOf(item))
+            mArtworkGrants.grant(browser, listOf(item))
             return Futures.immediateFuture(LibraryResult.ofItem(item, LibraryParams.Builder().build()))
         }
 
@@ -879,11 +880,11 @@ class OpenRadioService : MediaLibraryService() {
             if (list.isEmpty()) {
                 return callWhenSearchReady(queryStr) {
                     val found = mBrowseTree[queryStr] ?: mutableListOf()
-                    grantArtwork(session, browser, found)
+                    mArtworkGrants.grant(browser, found)
                     LibraryResult.ofItemList(found, LibraryParams.Builder().build())
                 }
             }
-            grantArtwork(session, browser, list)
+            mArtworkGrants.grant(browser, list)
             return Futures.immediateFuture(
                 LibraryResult.ofItemList(
                     list,
@@ -1075,19 +1076,6 @@ class OpenRadioService : MediaLibraryService() {
                 else -> {
                     mSessionCmdNotSupported
                 }
-            }
-        }
-
-        /**
-         * Lets [browser] read the artwork of [items] when it is Android Auto.
-         *
-         * Any application may connect to this service, so a grant to every browser would reopen the
-         * artwork store, which holds the images the user picked for their own stations, to all of
-         * them. The phone UI needs no grant because it reads the provider from this process.
-         */
-        private fun grantArtwork(session: MediaSession, browser: MediaSession.ControllerInfo, items: List<MediaItem>) {
-            if (session.isAutoCompanionController(browser)) {
-                mArtworkGrants.grant(browser.packageName, items)
             }
         }
 

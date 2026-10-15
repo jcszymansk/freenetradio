@@ -17,27 +17,33 @@
 package com.yuriy.openradio.shared.model.storage.images
 
 import android.net.Uri
+import android.os.Bundle
+import androidx.media.MediaSessionManager
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.session.MediaSession
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Covers which artwork [ArtworkGrants] lets the car's media browser read, against a recording
- * grant function in place of `Context.grantUriPermission`.
+ * Covers which browser [ArtworkGrants] grants artwork to and which artwork it grants, against a
+ * recording grant function in place of `Context.grantUriPermission` and a car check that
+ * recognises one browser in place of `MediaSession.isAutoCompanionController`.
  */
 class ArtworkGrantsTest {
 
     private val mGranted = mutableListOf<Pair<String, Uri>>()
 
-    private val mGrants = ArtworkGrants { packageName, uri -> mGranted.add(packageName to uri) }
+    private val mCar = browser(CAR_PACKAGE)
+
+    private val mGrants = ArtworkGrants({ it === mCar }, { packageName, uri -> mGranted.add(packageName to uri) })
 
     @Test
     fun theArtworkOfEveryItemIsGrantedToTheBrowserInOrder() {
         val first = ImagesStore.buildImageUri("first", "https://radio.example/first.png")
         val second = ImagesStore.buildImageUri("second", "/data/local/second.jpg")
 
-        mGrants.grant(CAR_PACKAGE, listOf(item("first", first), item("second", second)))
+        mGrants.grant(mCar, listOf(item("first", first), item("second", second)))
 
         assertEquals(listOf(CAR_PACKAGE to first, CAR_PACKAGE to second), mGranted)
     }
@@ -52,7 +58,7 @@ class ArtworkGrantsTest {
         val ours = ImagesStore.buildImageUri("station", "https://radio.example/station.png")
 
         mGrants.grant(
-            CAR_PACKAGE,
+            mCar,
             listOf(
                 item("category", Uri.parse("android.resource://com.github.jcszymansk.freenetradio/drawable/1")),
                 item("web", Uri.parse("https://radio.example/icon.png")),
@@ -66,9 +72,37 @@ class ArtworkGrantsTest {
 
     @Test
     fun anEmptyListGrantsNothing() {
-        mGrants.grant(CAR_PACKAGE, emptyList())
+        mGrants.grant(mCar, emptyList())
 
         assertEquals(emptyList<Pair<String, Uri>>(), mGranted)
+    }
+
+    /**
+     * Any application may connect to the media browser service; one that is not Android Auto
+     * must not be able to read the artwork store through the items it browses.
+     */
+    @Test
+    fun aBrowserThatIsNotTheCarIsGrantedNothing() {
+        val station = ImagesStore.buildImageUri("station", "https://radio.example/station.png")
+
+        mGrants.grant(browser("com.example.other"), listOf(item("station", station)))
+
+        assertEquals(emptyList<Pair<String, Uri>>(), mGranted)
+    }
+
+    /**
+     * The grant goes to the package of the browser that asked, not to a fixed car package, so the
+     * name the grant carries is the one the session verified against the caller's uid.
+     */
+    @Test
+    fun theGrantNamesThePackageOfTheBrowser() {
+        val station = ImagesStore.buildImageUri("station", "https://radio.example/station.png")
+        val car = browser("com.example.car")
+
+        ArtworkGrants({ it === car }, { packageName, uri -> mGranted.add(packageName to uri) })
+            .grant(car, listOf(item("station", station)))
+
+        assertEquals(listOf("com.example.car" to station), mGranted)
     }
 
     private fun item(mediaId: String, artwork: Uri?): MediaItem {
@@ -76,6 +110,16 @@ class ArtworkGrantsTest {
             .setMediaId(mediaId)
             .setMediaMetadata(MediaMetadata.Builder().setArtworkUri(artwork).build())
             .build()
+    }
+
+    private fun browser(packageName: String): MediaSession.ControllerInfo {
+        return MediaSession.ControllerInfo.createTestOnlyControllerInfo(
+            MediaSessionManager.RemoteUserInfo(packageName, 0, 0),
+            MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION,
+            MediaSession.ControllerInfo.LEGACY_CONTROLLER_INTERFACE_VERSION,
+            false,
+            Bundle()
+        )
     }
 
     companion object {
