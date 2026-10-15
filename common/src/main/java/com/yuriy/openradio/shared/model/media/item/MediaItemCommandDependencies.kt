@@ -77,6 +77,8 @@ class MediaItemCommandDependencies(
 
     private val mMediaItems = ArrayList<MediaItem>()
 
+    private val mExecuted = AtomicBoolean(false)
+
     fun addMediaItem(item: MediaItem) {
         mMediaItems.add(item)
     }
@@ -101,8 +103,13 @@ class MediaItemCommandDependencies(
      *
      * A stuck [command] keeps its thread until the presenter call returns; nothing can interrupt it
      * safely in the middle of a cache or database write.
+     *
+     * Runs at most once per dependencies object: the answer gate and the collected media items
+     * belong to one browse request, so a second execution would have its answer dropped and add its
+     * items to the first one's.
      */
     fun execute(command: MediaItemCommand, playbackStateListener: IUpdatePlaybackState) {
+        check(mExecuted.compareAndSet(false, true)) { "$CLASS_NAME $parentId has already executed a command" }
         // Undispatched, so the try below is entered before this returns: a job cancelled before a
         // thread picked it up would otherwise never run its finally, and never answer.
         mScope.launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {

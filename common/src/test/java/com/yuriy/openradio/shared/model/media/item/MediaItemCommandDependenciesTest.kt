@@ -150,6 +150,27 @@ class MediaItemCommandDependenciesTest {
         assertEquals(emptyList<String>(), listener.mediaIds)
     }
 
+    @Test
+    fun aSecondExecutionOfTheSameDependenciesIsRefused() {
+        val listener = RecordingCommandListener()
+        val dependencies = dependencies(RecordingPresenter(), listener)
+        dependencies.execute(
+            MediaItemCommand { _, _ -> dependencies.resultListener.onResult(listOf(item("first"))) },
+            listener.playbackStateListener
+        )
+        listener.awaitResult()
+
+        assertThrows(IllegalStateException::class.java) {
+            dependencies.execute(
+                MediaItemCommand { _, _ -> dependencies.resultListener.onResult(listOf(item("second"))) },
+                listener.playbackStateListener
+            )
+        }
+
+        listener.assertMediaIds("first")
+        assertEquals(1, listener.results)
+    }
+
     private fun item(id: String) = MediaItemBuilder.buildPlayable(station(id), false)
 
     companion object {
