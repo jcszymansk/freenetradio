@@ -81,7 +81,7 @@ object IntentUtils {
         val builder = StringBuilder("Bundle[")
         try {
             for (key in bundle.keySet()) {
-                builder.append(key).append(":").append(if (bundle[key] != null) bundle[key] else "NULL")
+                builder.append(key).append(":").append(bundle.get(key) ?: "NULL")
                 builder.append("|")
             }
             builder.delete(builder.length - 1, builder.length)

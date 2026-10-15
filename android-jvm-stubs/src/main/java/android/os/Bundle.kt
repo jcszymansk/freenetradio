@@ -60,6 +60,10 @@ class Bundle {
         return mValues[key] as? Boolean ?: defaultValue
     }
 
+    fun get(key: String): Any? {
+        return mValues[key]
+    }
+
     fun containsKey(key: String): Boolean {
         return mValues.containsKey(key)
     }
