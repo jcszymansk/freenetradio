@@ -2,6 +2,7 @@
 /build
 /.idea
 /local.properties
+/.envrc
 *.iml
 sign.properties
 
