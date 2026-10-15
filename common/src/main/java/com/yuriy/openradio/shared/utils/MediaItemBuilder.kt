@@ -69,22 +69,17 @@ object MediaItemBuilder {
                 MediaMetadata.Builder()
                     .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS)
                     .setTitle(category.title)
-                    .setSubtitle(categoryDescription(context, category.stationsCount))
+                    .setSubtitle(
+                        context.resources.getQuantityString(
+                            R.plurals.radio_stations_count, category.stationsCount, category.stationsCount
+                        )
+                    )
                     .setExtras(bundle)
                     .setIsBrowsable(true)
                     .setIsPlayable(false)
                     .build()
             )
             .build()
-    }
-
-    private fun categoryDescription(context: Context, stationsCount: Int): String {
-        val label = if (stationsCount == 1) {
-            context.getString(R.string.radio_station)
-        } else {
-            context.getString(R.string.radio_stations)
-        }
-        return "$stationsCount $label"
     }
 
     fun buildChildCategories(): MediaItem {
