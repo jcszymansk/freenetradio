@@ -213,7 +213,8 @@ class MediaItemCommandDependencies(
          */
         fun newCommandScope(onFailure: (String, Throwable) -> Unit = AppLogger::e): CoroutineScope {
             val handler = CoroutineExceptionHandler { context, failure ->
-                onFailure("Browse command failed, its request was answered empty: $context", failure)
+                val execution = context[CoroutineName]?.name ?: context
+                onFailure("Browse command failed, its request was answered empty: $execution", failure)
             }
             return CoroutineScope(SupervisorJob() + Dispatchers.IO + handler)
         }

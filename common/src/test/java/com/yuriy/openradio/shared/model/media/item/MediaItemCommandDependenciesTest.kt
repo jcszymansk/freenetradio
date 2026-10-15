@@ -253,17 +253,21 @@ class MediaItemCommandDependenciesTest {
     fun aFailedCommandIsLoggedWithItsNode() {
         val logged = ConcurrentLinkedQueue<Pair<String, Throwable>>()
         val scope = MediaItemCommandDependencies.newCommandScope { message, failure -> logged.add(message to failure) }
-        val failure = IllegalStateException("provider failed")
-        val listener = RecordingCommandListener()
-        dependencies(RecordingPresenter(), listener, parentId = "failing node", scope = scope)
-            .execute(MediaItemCommand { _, _ -> throw failure }, listener.playbackStateListener)
+        try {
+            val failure = IllegalStateException("provider failed")
+            val listener = RecordingCommandListener()
+            dependencies(RecordingPresenter(), listener, parentId = "failing node", scope = scope)
+                .execute(MediaItemCommand { _, _ -> throw failure }, listener.playbackStateListener)
 
-        assertTrue("A failed execution was not answered", listener.awaitDelivery())
-        joinChildren(scope)
+            assertTrue("A failed execution was not answered", listener.awaitDelivery())
+            joinChildren(scope)
 
-        val (message, reported) = logged.single()
-        assertSame(failure, reported)
-        assertTrue("The log does not name the node: $message", message.contains("failing node"))
+            val (message, reported) = logged.single()
+            assertSame(failure, reported)
+            assertTrue("The log does not name the node: $message", message.contains("failing node"))
+        } finally {
+            scope.cancel()
+        }
     }
 
     /**
