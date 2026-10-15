@@ -227,24 +227,37 @@ class MediaItemHelperTest {
         assertEquals(DEFAULT, MediaItemHelper.getDisplayDescription(metadata, DEFAULT))
     }
 
-    /**
-     * Current behaviour, and it looks unintended: an absent subtitle ends the chain at the
-     * default, while an empty one goes on to the description and the artist extra.
-     */
     @Test
-    fun aMissingSubtitleAnswersTheDefaultWithoutConsultingDescriptionOrArtist() {
+    fun aMissingSubtitleFallsBackToTheDescription() {
         val metadata = metadata(subtitle = null, description = "description", extras = artist("artist"))
 
-        assertEquals(DEFAULT, MediaItemHelper.getDisplayDescription(metadata, DEFAULT))
+        assertEquals("description", MediaItemHelper.getDisplayDescription(metadata, DEFAULT))
     }
 
-    /**
-     * Current behaviour, and it looks unintended: an absent description ends the chain at the
-     * default, while an empty one goes on to the artist extra.
-     */
     @Test
-    fun aMissingDescriptionAnswersTheDefaultWithoutConsultingTheArtist() {
+    fun aMissingSubtitleAndDescriptionFallBackToTheArtistExtra() {
+        val metadata = metadata(subtitle = null, description = null, extras = artist("artist"))
+
+        assertEquals("artist", MediaItemHelper.getDisplayDescription(metadata, DEFAULT))
+    }
+
+    @Test
+    fun anEmptySubtitleAndAMissingDescriptionFallBackToTheArtistExtra() {
         val metadata = metadata(subtitle = "", description = null, extras = artist("artist"))
+
+        assertEquals("artist", MediaItemHelper.getDisplayDescription(metadata, DEFAULT))
+    }
+
+    @Test
+    fun aMissingSubtitleAndAnEmptyDescriptionFallBackToTheArtistExtra() {
+        val metadata = metadata(subtitle = null, description = "", extras = artist("artist"))
+
+        assertEquals("artist", MediaItemHelper.getDisplayDescription(metadata, DEFAULT))
+    }
+
+    @Test
+    fun aMissingSubtitleAndDescriptionWithoutExtrasFallBackToTheDefault() {
+        val metadata = metadata(subtitle = null, description = null, extras = null)
 
         assertEquals(DEFAULT, MediaItemHelper.getDisplayDescription(metadata, DEFAULT))
     }

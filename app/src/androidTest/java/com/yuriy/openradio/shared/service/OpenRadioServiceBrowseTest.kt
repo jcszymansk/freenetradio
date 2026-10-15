@@ -479,10 +479,10 @@ class OpenRadioServiceBrowseTest {
      * right request without the app having stored that country anywhere.
      *
      * The countries URL is deliberately left unseeded. The command warms the country list before
-     * its own fetch and throws the answer away, and the presenter memoizes that list in a set
-     * nothing ever empties (TASK-035), so seeding it here would leave
-     * [seededCountriesBecomeBrowsableChildren] asserting this fixture instead of its own whenever
-     * this case ran first.
+     * its own fetch and throws the answer away, and the presenter memoizes that list until the
+     * next `CMD_CLEAR_CACHE`, which no case here sends between browses, so seeding it here would
+     * leave [seededCountriesBecomeBrowsableChildren] asserting this fixture instead of its own
+     * whenever this case ran first.
      */
     @Test
     fun aCountryParentIdBrowsesTheStationsOfThatCountry() {
@@ -512,10 +512,9 @@ class OpenRadioServiceBrowseTest {
      * the in-memory entry before they browse: that map is static and a case that found the other's
      * response there would assert nothing.
      *
-     * `__COUNTRIES_LIST__` used to be browsed here as well and cannot be any more. The presenter
-     * memoizes the country list in a set that nothing empties, so once any case in the run has
-     * browsed that node the miss is unreachable whatever the order (TASK-035). Its empty answer is
-     * covered by `MediaItemCountriesListTest` against a fake presenter.
+     * `__COUNTRIES_LIST__` has a case of its own,
+     * [theCountriesNodeIsEmptyAgainAfterAClearOnceItWasBrowsed], because the presenter memoizes
+     * that list and only a clear empties it.
      */
     @Test
     fun aProviderNodeAnswersWithAnEmptyListWhenNothingIsCached() {
@@ -535,6 +534,52 @@ class OpenRadioServiceBrowseTest {
         assertTrue(
             "The categories node offered children with nothing cached",
             result.value!!.isEmpty()
+        )
+    }
+
+    /**
+     * The offline-empty case for `__COUNTRIES_LIST__`, reached after the node has been browsed.
+     *
+     * The presenter memoizes the country list for the life of the process, and the suite shares
+     * one process, so the first browse of that node in the run would otherwise answer every later
+     * one. This case does that first browse itself, so it holds whichever case ran before it, and
+     * then clears the app data the way the settings do. A clear that left the memo behind would
+     * answer the second browse with the seeded countries although nothing is cached any more
+     * (TASK-035). The settings stop at the clear, but it leaves the node in the browse tree, so the
+     * case invalidates the node itself to make the second browse reach the presenter.
+     */
+    @Test
+    fun theCountriesNodeIsEmptyAgainAfterAClearOnceItWasBrowsed() {
+        val url = mUrls.getAllCountries().toString()
+        seedResponse(url, COUNTRIES_RESPONSE, MediaId.MEDIA_ID_COUNTRIES_LIST)
+        assertTrue(
+            "The countries node offered nothing, so the memo was never filled",
+            mBrowser.children(MediaId.MEDIA_ID_COUNTRIES_LIST).isNotEmpty()
+        )
+
+        forgetCachedResponse(url)
+        mStorages.latest.add(makeStation(CLEAR_PROBE_STATION_ID))
+        assertFalse(
+            "The clear probe was not stored, so waiting for it to go would prove nothing",
+            mStorages.latest.get().isInvalid()
+        )
+        mAppData.clearCaches(mBrowser) { mStorages.latest.get().isInvalid() }
+        invalidate(MediaId.MEDIA_ID_COUNTRIES_LIST)
+
+        val result = mBrowser.childrenResult(
+            MediaId.MEDIA_ID_COUNTRIES_LIST,
+            timeoutSeconds = EMPTY_NODE_TIMEOUT_SECONDS
+        )
+
+        assertEquals(
+            "The countries node did not answer with a success",
+            LibraryResult.RESULT_SUCCESS,
+            result.resultCode
+        )
+        assertEquals(
+            "The countries node answered from before the clear",
+            emptyList<String>(),
+            result.value!!.map { it.mediaId }
         )
     }
 

@@ -540,6 +540,8 @@ internal class RecordingPresenter(
 
     override fun getMediaItemCommand(commandId: String) = unexpected()
 
+    override fun getSearchCommand() = unexpected()
+
     override fun startNetworkMonitor(context: Context, listener: NetworkMonitorListener) = unexpected()
 
     override fun stopNetworkMonitor(context: Context) = unexpected()

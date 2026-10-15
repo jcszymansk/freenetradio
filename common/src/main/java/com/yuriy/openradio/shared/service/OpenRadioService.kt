@@ -158,7 +158,17 @@ class OpenRadioService : MediaLibraryService() {
 
     private val mExecutorService = Executors.newSingleThreadExecutor()
 
-    private lateinit var mFavoriteCommands: List<CommandButton>
+    /**
+     * The button a controller shows beside the transport controls while the active station is
+     * not a favorite.
+     */
+    private lateinit var mMarkFavoriteButton: CommandButton
+
+    /**
+     * The button a controller shows beside the transport controls while the active station is a
+     * favorite.
+     */
+    private lateinit var mUnmarkFavoriteButton: CommandButton
 
     /**
      * Default constructor.
@@ -221,20 +231,18 @@ class OpenRadioService : MediaLibraryService() {
             build()
         }
 
-        mFavoriteCommands = listOf(
-            CommandButton.Builder()
-                .setDisplayName(getString(R.string.favorite))
-                .setEnabled(true)
-                .setIconResId(R.drawable.ic_favorite_off)
-                .setSessionCommand(SessionCommand(CMD_FAVORITE_OFF, Bundle()))
-                .build(),
-            CommandButton.Builder()
-                .setDisplayName(getString(R.string.favorite))
-                .setEnabled(true)
-                .setIconResId(R.drawable.ic_favorite_on)
-                .setSessionCommand(SessionCommand(CMD_FAVORITE_ON, Bundle()))
-                .build()
-        )
+        mMarkFavoriteButton = CommandButton.Builder()
+            .setDisplayName(getString(R.string.favorite))
+            .setEnabled(true)
+            .setIconResId(R.drawable.ic_favorite_off)
+            .setSessionCommand(SessionCommand(CMD_MARK_FAVORITE, Bundle()))
+            .build()
+        mUnmarkFavoriteButton = CommandButton.Builder()
+            .setDisplayName(getString(R.string.favorite))
+            .setEnabled(true)
+            .setIconResId(R.drawable.ic_favorite_on)
+            .setSessionCommand(SessionCommand(CMD_UNMARK_FAVORITE, Bundle()))
+            .build()
 
         publishActiveStation()
         updateFavoriteState()
@@ -261,14 +269,22 @@ class OpenRadioService : MediaLibraryService() {
         }
     }
 
-    private fun maybeNotifyRootChanged() {
-        // To force update Favorite menu tab.
-        var mediaId = MediaId.MEDIA_ID_ROOT
-        if (mCurrentParentId == MediaId.MEDIA_ID_FAVORITES_LIST && mPresenter.getAllFavorites().isNotEmpty()) {
-            // To force update Favorites list.
-            mediaId = MediaId.MEDIA_ID_FAVORITES_LIST
-        }
-        notifyChildrenChanged(mediaId)
+    /**
+     * Tells subscribers that the favorites store changed: the root gains or loses the favorites
+     * node, and the favorites list gains or loses the station.
+     *
+     * Both are always named. Which list a controller shows is not something the service knows:
+     * the last parent it answered a browse for is shared by every connected controller, so the
+     * phone UI, Android Auto and any other browser each move it. A notification reaches only the
+     * controllers subscribed to the node it names, so naming one nobody shows sends nothing.
+     *
+     * The favorites list is told without being invalidated. A browse always rebuilds it, so it
+     * needs no invalidation to be fresh, and its browse tree entry is what keeps a queue played
+     * from it resolvable while no controller is subscribed to re-browse it.
+     */
+    private fun notifyFavoritesChanged() {
+        notifyChildrenChanged(MediaId.MEDIA_ID_ROOT)
+        mSession.notifyChildrenChanged(MediaId.MEDIA_ID_FAVORITES_LIST, Int.MAX_VALUE, null)
     }
 
     private fun registerReceivers() {
@@ -306,9 +322,9 @@ class OpenRadioService : MediaLibraryService() {
 
     private fun updateFavoriteState() {
         if (mActiveRS != RadioStation.INVALID_INSTANCE) {
-            val command =
-                if (mPresenter.isRadioStationFavorite(mActiveRS)) mFavoriteCommands[1] else mFavoriteCommands[0]
-            mSession.setCustomLayout(listOf(command))
+            val button =
+                if (mPresenter.isRadioStationFavorite(mActiveRS)) mUnmarkFavoriteButton else mMarkFavoriteButton
+            mSession.setCustomLayout(listOf(button))
         }
     }
 
@@ -705,6 +721,7 @@ class OpenRadioService : MediaLibraryService() {
         private val mSessionCmdSuccess = Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         private val mSessionCmdNotSupported =
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+        private val mSessionCmdSkipped = Futures.immediateFuture(SessionResult(SessionResult.RESULT_INFO_SKIPPED))
 
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
@@ -898,8 +915,8 @@ class OpenRadioService : MediaLibraryService() {
                 MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                     .buildUpon()
                     // Add custom commands
-                    .add(SessionCommand(CMD_FAVORITE_ON, Bundle()))
-                    .add(SessionCommand(CMD_FAVORITE_OFF, Bundle()))
+                    .add(SessionCommand(CMD_MARK_FAVORITE, Bundle()))
+                    .add(SessionCommand(CMD_UNMARK_FAVORITE, Bundle()))
                     .add(SessionCommand(CMD_NET_CHANGED, Bundle()))
                     .add(SessionCommand(CMD_CLEAR_CACHE, Bundle()))
                     .add(SessionCommand(CMD_MASTER_VOLUME_CHANGED, Bundle()))
@@ -990,22 +1007,14 @@ class OpenRadioService : MediaLibraryService() {
                     return mSessionCmdSuccess
                 }
 
-                CMD_FAVORITE_OFF -> {
-                    // Transition station to Favorite ON
-                    session.setCustomLayout(listOf(mFavoriteCommands[1]))
-                    if (handleFavorite(args, true).not()) {
-                        return mSessionCmdNotSupported
-                    }
-                    return mSessionCmdSuccess
+                CMD_MARK_FAVORITE -> {
+                    session.setCustomLayout(listOf(mUnmarkFavoriteButton))
+                    return handleFavorite(args, true)
                 }
 
-                CMD_FAVORITE_ON -> {
-                    // Transition station to Favorite OFF
-                    session.setCustomLayout(listOf(mFavoriteCommands[0]))
-                    if (handleFavorite(args, false).not()) {
-                        return mSessionCmdNotSupported
-                    }
-                    return mSessionCmdSuccess
+                CMD_UNMARK_FAVORITE -> {
+                    session.setCustomLayout(listOf(mMarkFavoriteButton))
+                    return handleFavorite(args, false)
                 }
 
                 CMD_STOP_SERVICE -> {
@@ -1141,7 +1150,6 @@ class OpenRadioService : MediaLibraryService() {
             action: (size: Int) -> LibraryResult<V>
         ): ListenableFuture<LibraryResult<V>> {
             val id = MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
-            val command = mPresenter.getMediaItemCommand(id)
             val future = SettableFuture.create<LibraryResult<V>>()
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, Country.COUNTRY_CODE_DEFAULT, id,
@@ -1161,61 +1169,65 @@ class OpenRadioService : MediaLibraryService() {
                     }
                 }
             )
-            if (command != null) {
-                command.execute(
-                    MediaItemCommand.IUpdatePlaybackState { error ->
-                        AppLogger.e("$TAG update playback state error $error")
-                    },
-                    dependencies
-                )
-            } else {
-                AppLogger.w("$TAG no command for parentId: $id")
-                future.set(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
-            }
+            mPresenter.getSearchCommand().execute(
+                MediaItemCommand.IUpdatePlaybackState { error ->
+                    AppLogger.e("$TAG update playback state error $error")
+                },
+                dependencies
+            )
             return future
         }
 
-        private fun handleFavorite(args: Bundle, isFavorite: Boolean): Boolean {
-            var mediaId = OpenRadioStore.extractMediaId(args)
+        /**
+         * Marks or unmarks the station [args] name as a favorite.
+         *
+         * The answer tells the three outcomes apart: success when the favorites store changed,
+         * [SessionResult.RESULT_INFO_SKIPPED] when the station already was in the requested
+         * state, and [SessionResult.RESULT_ERROR_NOT_SUPPORTED] when the station is unknown. A
+         * caller that only wants the station in that state, such as a button pressed twice or
+         * one of two racing clients, can take a skip as success; a caller that sent the wrong
+         * command or acted on stale metadata learns that nothing happened. Only a change is
+         * followed by updating the browse tree, the player metadata and the subscribers, and the
+         * store is written only once the station is known, so a refused command leaves it as it
+         * found it.
+         */
+        private fun handleFavorite(args: Bundle, isFavorite: Boolean): ListenableFuture<SessionResult> {
+            // The favorite button the session publishes, which is what the automotive UI shows,
+            // names no station: it only ever concerns the now playing one. A command that does
+            // name a station is about that station and no other.
+            val mediaId = OpenRadioStore.extractMediaId(args).ifEmpty { mActiveRS.id }
             var rs = getRadioStationByMediaId(mediaId)
-            // This can happen when Favorite changed from automotive UI.
-            // The assumption is this event can be delivered from the now playing item only.
+            // The now playing station can leave the browse tree while it plays, for instance when
+            // it is unmarked from the favorites list a controller is showing. It is still the
+            // station the button concerns.
+            if (rs.isInvalid() && mediaId == mActiveRS.id) {
+                rs = RadioStation.makeCopyInstance(mActiveRS)
+            }
             if (rs.isInvalid()) {
-                if (mActiveRS.id == mediaId) {
-                    rs = RadioStation.makeCopyInstance(mActiveRS)
-                }
-                // Lastly, get the current playing station.
-                if (rs.isInvalid()) {
-                    rs = RadioStation.makeCopyInstance(mActiveRS)
-                    mediaId = rs.id
-                }
-                // We failed both cases, something went wrong ...
-                if (rs.isInvalid()) {
-                    return false
-                }
+                AppLogger.e("$TAG can't handle fav. for '$mediaId'")
+                return mSessionCmdNotSupported
             }
-            // Update Favorites Radio station: whether add it or remove it from the storage
-            mPresenter.updateRadioStationFavorite(rs, isFavorite)
-            val mediaItem = mBrowseTree.getMediaItemByMediaId(mediaId)
-            if (mediaItem == null) {
-                AppLogger.e("Can't handle fav. for $mediaId $rs")
-                return false
+            if (mPresenter.updateRadioStationFavorite(rs, isFavorite).not()) {
+                AppLogger.i("$TAG fav. for '$mediaId' already $isFavorite, nothing changed")
+                return mSessionCmdSkipped
             }
-            MediaItemHelper.updateFavoriteField(mediaItem.mediaMetadata, isFavorite)
+            mBrowseTree.getMediaItemByMediaId(mediaId)?.let {
+                MediaItemHelper.updateFavoriteField(it.mediaMetadata, isFavorite)
+            }
             val currentMediaItem = mPlayer.currentMediaItem
             if (currentMediaItem?.mediaId == mediaId) {
                 MediaItemHelper.updateFavoriteField(currentMediaItem.mediaMetadata, isFavorite)
             }
             mPlayer.invalidateMetaData()
-            maybeNotifyRootChanged()
-            return true
+            notifyFavoritesChanged()
+            return mSessionCmdSuccess
         }
     }
 
     companion object {
 
-        const val CMD_FAVORITE_ON = "com.github.jcszymansk.freenetradio.COMMAND.FAVORITE_ON"
-        const val CMD_FAVORITE_OFF = "com.github.jcszymansk.freenetradio.COMMAND.FAVORITE_OFF"
+        const val CMD_MARK_FAVORITE = "com.github.jcszymansk.freenetradio.COMMAND.MARK_FAVORITE"
+        const val CMD_UNMARK_FAVORITE = "com.github.jcszymansk.freenetradio.COMMAND.UNMARK_FAVORITE"
         const val CMD_NET_CHANGED = "com.github.jcszymansk.freenetradio.COMMAND.NET_CHANGED"
         const val CMD_STOP_SERVICE = "com.github.jcszymansk.freenetradio.COMMAND.STOP_SERVICE"
         const val CMD_TOGGLE_LAST_PLAYED_ITEM =

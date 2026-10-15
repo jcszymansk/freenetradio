@@ -19,6 +19,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
+import androidx.core.content.ContextCompat
 import com.yuriy.openradio.shared.utils.AppLogger.i
 
 /**
@@ -29,8 +30,10 @@ import com.yuriy.openradio.shared.utils.AppLogger.i
  *
  * This class designed in a way to listen for audio noisy events, such as disconnecting bluetooth device or unplug
  * headphones.
+ *
+ * Not exported: system_server sends [AudioManager.ACTION_AUDIO_BECOMING_NOISY].
  */
-class BecomingNoisyReceiver(private val mListener: Listener) : AbstractReceiver() {
+class BecomingNoisyReceiver(private val mListener: Listener) : AbstractReceiver(ContextCompat.RECEIVER_NOT_EXPORTED) {
     /**
      * Hears that audio is about to become noisy.
      */

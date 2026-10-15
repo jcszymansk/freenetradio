@@ -251,7 +251,7 @@ class SettingsPersistenceJourneyTest {
         dialogs.click(general, DialogR.id.user_agent_check_view)
         dialogs.type(general, DialogR.id.user_agent_input_view, CUSTOM_USER_AGENT)
 
-        chooseCountry(dialogs, general, CHOSEN_COUNTRY_CODE)
+        dialogs.chooseCountry(general, CHOSEN_COUNTRY_CODE)
         awaitChosenCountry()
         dialogs.dismiss(GENERAL_TAG)
     }
@@ -434,23 +434,6 @@ class SettingsPersistenceJourneyTest {
 
     private fun activityIdentity(scenario: ActivityScenario<MainActivity>): Int {
         return scenario.withActivity { System.identityHashCode(it) }
-    }
-
-    /**
-     * Selects the country [code] in the general dialog's spinner, which is sorted by name and
-     * carries a "use location" entry ahead of every real country, so its position has to be
-     * looked up rather than assumed.
-     */
-    private fun chooseCountry(dialogs: JourneyDialogs, general: DialogFragment, code: String) {
-        val spinnerId = DialogR.id.default_country_spinner
-        val codes = dialogs.read<Spinner, List<String>>(general, spinnerId) { spinner ->
-            (0 until spinner.adapter.count).map { (spinner.adapter.getItem(it) as Country).code }
-        }
-        val position = codes.indexOf(code)
-        if (position < 0) {
-            throw AssertionError("The country spinner offers no entry for '$code'")
-        }
-        dialogs.read<Spinner, Unit>(general, spinnerId) { it.setSelection(position) }
     }
 
     /**

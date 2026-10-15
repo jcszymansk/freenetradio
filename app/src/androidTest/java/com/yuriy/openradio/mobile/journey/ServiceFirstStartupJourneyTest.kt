@@ -371,10 +371,6 @@ class ServiceFirstStartupJourneyTest {
     /**
      * Marks the seeded station the way a head unit does, through the session's own command.
      *
-     * The command that marks a station is `CMD_FAVORITE_OFF`: both favorite commands name the
-     * state the control is leaving rather than the one it is asking for, which is also how the
-     * phone's own check box sends them.
-     *
      * The subscription is part of the gesture rather than scaffolding: a client that is showing a
      * list subscribes to it, and `notifyChildrenChanged` reaches subscribers only, so it is also
      * what makes the root the mark rebuilt observable from here.
@@ -401,7 +397,7 @@ class ServiceFirstStartupJourneyTest {
             "The session refused the favorite command",
             SessionResult.RESULT_SUCCESS,
             mProfile.browser.command(
-                OpenRadioService.CMD_FAVORITE_OFF,
+                OpenRadioService.CMD_MARK_FAVORITE,
                 OpenRadioStore.makeUpdateIsFavoriteBundle(mStation.id)
             ).resultCode
         )

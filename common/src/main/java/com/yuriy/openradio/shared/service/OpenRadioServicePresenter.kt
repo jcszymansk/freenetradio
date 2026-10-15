@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.service
 import android.content.Context
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.media.Category
+import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
@@ -29,6 +30,14 @@ import com.yuriy.openradio.shared.service.location.Country
 interface OpenRadioServicePresenter {
 
     fun getMediaItemCommand(commandId: String): MediaItemCommand?
+
+    /**
+     * The command that answers a search from the service. It is the instance
+     * [getMediaItemCommand] returns for [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE], because the
+     * search page index lives on it. Every presenter holds one, so the caller has no missing case
+     * to handle.
+     */
+    fun getSearchCommand(): MediaItemCommand
 
     fun startNetworkMonitor(context: Context, listener: NetworkMonitorListener)
 
@@ -70,7 +79,13 @@ interface OpenRadioServicePresenter {
 
     fun updateRadioStationFavorite(radioStation: RadioStation)
 
-    fun updateRadioStationFavorite(radioStation: RadioStation, isFavorite: Boolean)
+    /**
+     * Marks [radioStation] as a favorite or unmarks it, as [isFavorite] says.
+     *
+     * @return whether the favorites store changed: false when the station already was in the
+     *   requested state, in which case nothing is written.
+     */
+    fun updateRadioStationFavorite(radioStation: RadioStation, isFavorite: Boolean): Boolean
 
     fun updateSortIds(mediaId: String, sortId: Int, categoryMediaId: String)
 

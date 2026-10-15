@@ -35,7 +35,7 @@ import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.SortUtils
-import java.util.TreeSet
+import java.util.concurrent.ConcurrentSkipListSet
 
 class OpenRadioServicePresenterImpl(
     isCar: Boolean,
@@ -53,13 +53,15 @@ class OpenRadioServicePresenterImpl(
     private val mApiCachePersistent: ApiCache,
     private val mApiCacheInMemory: ApiCache,
     private val mSleepTimerModel: SleepTimerModel,
-    private val mCountriesCache:TreeSet<Country>
+    private val mCountriesCache: ConcurrentSkipListSet<Country>
 ) : OpenRadioServicePresenter {
 
     /**
      * Map of the Media Item commands that responsible for the Media Items List creation.
      */
     private val mMediaItemCommands = HashMap<String, MediaItemCommand>()
+
+    private val mSearchCommand = MediaItemSearchFromService()
 
     init {
         if (isCar) {
@@ -74,13 +76,17 @@ class OpenRadioServicePresenterImpl(
         mMediaItemCommands[MediaId.MEDIA_ID_CHILD_CATEGORIES] = MediaItemChildCategories()
         mMediaItemCommands[MediaId.MEDIA_ID_FAVORITES_LIST] = MediaItemFavoritesList()
         mMediaItemCommands[MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST] = MediaItemLocalsList()
-        mMediaItemCommands[MediaId.MEDIA_ID_SEARCH_FROM_SERVICE] = MediaItemSearchFromService()
+        mMediaItemCommands[MediaId.MEDIA_ID_SEARCH_FROM_SERVICE] = mSearchCommand
         mMediaItemCommands[MediaId.MEDIA_ID_POPULAR_STATIONS] = MediaItemPopularStations()
         mMediaItemCommands[MediaId.MEDIA_ID_NEW_STATIONS] = MediaItemNewStations()
     }
 
     override fun getMediaItemCommand(commandId: String): MediaItemCommand? {
         return mMediaItemCommands[commandId]
+    }
+
+    override fun getSearchCommand(): MediaItemCommand {
+        return mSearchCommand
     }
 
     override fun startNetworkMonitor(context: Context, listener: NetworkMonitorListener) {
@@ -176,12 +182,16 @@ class OpenRadioServicePresenterImpl(
         updateRadioStationFavorite(radioStation, isRadioStationFavorite(radioStation).not())
     }
 
-    override fun updateRadioStationFavorite(radioStation: RadioStation, isFavorite: Boolean) {
+    override fun updateRadioStationFavorite(radioStation: RadioStation, isFavorite: Boolean): Boolean {
+        if (isRadioStationFavorite(radioStation) == isFavorite) {
+            return false
+        }
         if (isFavorite) {
             mFavoritesStorage.add(radioStation)
         } else {
             mFavoritesStorage.remove(radioStation)
         }
+        return true
     }
 
     override fun updateSortIds(
@@ -203,6 +213,10 @@ class OpenRadioServicePresenterImpl(
         mApiCachePersistent.clear()
         mApiCacheInMemory.clear()
         mImagesPersistenceLayer.deleteAll()
+        // The registry builds this set once per process, so nothing else would ever empty it.
+        synchronized(this) {
+            mCountriesCache.clear()
+        }
         mLatestRadioStationStorage.clear()
     }
 

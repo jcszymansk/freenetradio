@@ -237,9 +237,9 @@ class BTConnectionReceiverTest {
     }
 
     /**
-     * The receiver is registered exported, so any application can send it an intent that carries
-     * the same extras under another action. Such an intent must neither be reported nor be
-     * remembered as the device last seen connecting.
+     * The intent filter already keeps other actions out, and the receiver checks the action again
+     * as defence in depth. An intent that carries the same extras under another action must
+     * neither be reported nor be remembered as the device last seen connecting.
      */
     @Test
     fun anEventWithAnotherActionIsIgnored() {

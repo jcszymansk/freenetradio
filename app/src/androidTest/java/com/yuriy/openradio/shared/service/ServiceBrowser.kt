@@ -23,6 +23,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaBrowser
 import androidx.media3.session.MediaLibraryService.LibraryParams
@@ -225,6 +226,14 @@ internal class ServiceBrowser {
         return await { sendCustomCommand(SessionCommand(action, Bundle()), args) }
     }
 
+    /**
+     * @return the buttons the session last published for controllers to show beside the transport
+     *   controls, which is where Android Auto puts the favorite button.
+     */
+    fun customLayout(): List<CommandButton> {
+        return read { customLayout }
+    }
+
     fun availableSessionCommands(): SessionCommands {
         val holder = AtomicReference<SessionCommands>()
         mInstrumentation.runOnMainSync { holder.set(browser().availableSessionCommands) }
@@ -235,6 +244,19 @@ internal class ServiceBrowser {
      * Waits for a children-changed push for [parentId], discarding notifications for other nodes.
      */
     fun awaitChildrenChanged(parentId: String): ChildrenChanged {
+        return childrenChangesUntil(parentId).last()
+    }
+
+    /**
+     * Waits for a children-changed push for [parentId], and returns it together with every push
+     * before it that neither [forgetNotifications] nor an earlier wait consumed, oldest first.
+     *
+     * The session delivers its pushes to a controller in the order it sent them, so a push the
+     * test provokes after an action serves as a barrier: whatever the action notified arrives
+     * before it. That is how the absence of a notification is asserted without a fixed sleep.
+     */
+    fun childrenChangesUntil(parentId: String): List<ChildrenChanged> {
+        val changes = mutableListOf<ChildrenChanged>()
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
         while (true) {
             val remaining = deadline - System.nanoTime()
@@ -242,8 +264,9 @@ internal class ServiceBrowser {
                 break
             }
             val change = mChildrenChanges.poll(remaining, TimeUnit.NANOSECONDS) ?: break
+            changes.add(change)
             if (change.parentId == parentId) {
-                return change
+                return changes
             }
         }
         throw AssertionError("No children-changed notification arrived for $parentId")

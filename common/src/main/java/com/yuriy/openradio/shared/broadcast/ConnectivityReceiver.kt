@@ -19,6 +19,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
+import androidx.core.content.ContextCompat
 
 /**
  * Created by Chernyshov Yurii
@@ -27,8 +28,10 @@ import android.net.ConnectivityManager
  * E-Mail: chernyshov.yuriy@gmail.com
  *
  * Receiver for the connectivity changed event.
+ *
+ * Not exported: system_server sends [ConnectivityManager.CONNECTIVITY_ACTION].
  */
-class ConnectivityReceiver(private val mListener: Listener) : AbstractReceiver() {
+class ConnectivityReceiver(private val mListener: Listener) : AbstractReceiver(ContextCompat.RECEIVER_NOT_EXPORTED) {
 
     /**
      * Listener to provide callback about connectivity events.

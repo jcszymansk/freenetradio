@@ -57,7 +57,7 @@ import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
 import java.util.Date
-import java.util.TreeSet
+import java.util.concurrent.ConcurrentSkipListSet
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -123,6 +123,22 @@ class OpenRadioServicePresenterImplTest {
             presenter.getMediaItemCommand(MediaId.MEDIA_ID_CHILD_CATEGORIES),
             presenter.getMediaItemCommand(MediaId.MEDIA_ID_CHILD_CATEGORIES)
         )
+    }
+
+    /**
+     * A search from the service pages through the command the presenter holds for
+     * [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE]: the page index lives on that instance, so a second
+     * copy would restart every search at its first page.
+     */
+    @Test
+    fun theSearchCommandIsTheInstanceRegisteredForTheServiceSearch() {
+        for (presenter in listOf(presenter(isCar = false), presenter(isCar = true))) {
+            assertSame(
+                presenter.getMediaItemCommand(MediaId.MEDIA_ID_SEARCH_FROM_SERVICE),
+                presenter.getSearchCommand()
+            )
+            assertSame(presenter.getSearchCommand(), presenter.getSearchCommand())
+        }
     }
 
     @Test
@@ -194,7 +210,7 @@ class OpenRadioServicePresenterImplTest {
     @Test
     fun aSeededCountryCacheIsServedWithoutTouchingTheModel() {
         val modelLayer = RecordingModelLayer(countries = setOf(Country("Germany", "DE")))
-        val cache = TreeSet<Country>()
+        val cache = ConcurrentSkipListSet<Country>()
         cache.add(Country("Poland", "PL"))
         val presenter = presenter(modelLayer = modelLayer, countriesCache = cache)
 
@@ -231,6 +247,36 @@ class OpenRadioServicePresenterImplTest {
         assertTrue(presenter(settingsContext = context).isRadioStationFavorite(station))
     }
 
+    /**
+     * Asking for the state a station is already in is a legitimate request, and it is answered
+     * as one that changed nothing, so that the service can tell its caller so. The station is
+     * named differently on the second mark: rewriting the stored entry would replace the name,
+     * and the name read back is what shows the entry was not written.
+     */
+    @Test
+    fun aFavoriteUpdateAnswersWhetherItChangedTheStore() {
+        val context = preferencesContext()
+        val presenter = presenter(settingsContext = context)
+        val station = RadioStation.makeDefaultInstance("station").apply {
+            name = "Stored"
+            setVariant(128, "https://radio.example/station.mp3")
+        }
+
+        assertFalse(presenter.updateRadioStationFavorite(station, false))
+        assertTrue(presenter(settingsContext = context).getAllFavorites().isEmpty())
+
+        assertTrue(presenter.updateRadioStationFavorite(station, true))
+        val renamed = RadioStation.makeCopyInstance(station).apply { name = "Renamed" }
+        assertFalse(presenter.updateRadioStationFavorite(renamed, true))
+        assertEquals(
+            listOf("Stored"),
+            presenter(settingsContext = context).getAllFavorites().map { it.name }
+        )
+
+        assertTrue(presenter.updateRadioStationFavorite(station, false))
+        assertTrue(presenter(settingsContext = context).getAllFavorites().isEmpty())
+    }
+
     @Test
     fun clearingDropsEveryCacheAndTheLatestStation() {
         val images = RecordingImagesPersistenceLayer()
@@ -255,6 +301,50 @@ class OpenRadioServicePresenterImplTest {
         // process, so a clear that left the cache behind would go unnoticed by the presenter and
         // the next service start would adopt the station anyway. Was TASK-027.
         assertTrue(presenter.getLastRadioStation().isInvalid())
+    }
+
+    /**
+     * The registry builds the country set once per process and hands the same instance to the
+     * WebRadio parser, so a clear that left it filled would go on serving the first list it ever
+     * held, past every clear, until the process died. The set is checked directly because the
+     * parser reads it without asking the presenter. Was TASK-035.
+     */
+    @Test
+    fun clearingForgetsTheCountriesSoTheNextLookupAsksTheModelAgain() {
+        val modelLayer = RecordingModelLayer(countries = setOf(Country("Poland", "PL")))
+        val cache = ConcurrentSkipListSet<Country>()
+        val presenter = presenter(modelLayer = modelLayer, countriesCache = cache)
+        assertEquals(setOf(Country("Poland", "PL")), presenter.getAllCountries())
+
+        presenter.clear()
+
+        assertTrue("The country set outlived the clear: $cache", cache.isEmpty())
+        modelLayer.countries = setOf(Country("Germany", "DE"))
+        assertEquals(setOf(Country("Germany", "DE")), presenter.getAllCountries())
+        assertEquals(2, modelLayer.countriesRequests)
+    }
+
+    /**
+     * The countries browse and the WebRadio parser walk the set the presenter hands out without
+     * its lock, and a settings clear runs on another thread, so it can land mid-walk. A set whose
+     * iterator fails fast would throw from that walk and take the service scope down with it.
+     */
+    @Test
+    fun aClearDuringAWalkOfTheCountriesLetsTheWalkFinish() {
+        val modelLayer = RecordingModelLayer(
+            countries = setOf(Country("Germany", "DE"), Country("Poland", "PL"))
+        )
+        val presenter = presenter(modelLayer = modelLayer)
+        val countries = presenter.getAllCountries()
+        val walked = ArrayList<Country>()
+
+        for (country in countries) {
+            walked.add(country)
+            presenter.clear()
+        }
+
+        assertEquals(Country("Germany", "DE"), walked.first())
+        assertTrue("The clear left countries behind: $countries", countries.isEmpty())
     }
 
     @Test
@@ -382,7 +472,7 @@ class OpenRadioServicePresenterImplTest {
         persistentCache: RecordingApiCache = RecordingApiCache(),
         memoryCache: RecordingApiCache = RecordingApiCache(),
         sleepTimer: RecordingSleepTimerModel = RecordingSleepTimerModel(),
-        countriesCache: TreeSet<Country> = TreeSet(),
+        countriesCache: ConcurrentSkipListSet<Country> = ConcurrentSkipListSet(),
         settingsContext: Context = preferencesContext()
     ): OpenRadioServicePresenter {
         val contextRef = StrongContextReference(settingsContext)
@@ -442,7 +532,7 @@ class OpenRadioServicePresenterImplTest {
 
     private class RecordingModelLayer(
         private val categories: Set<Category> = emptySet(),
-        private val countries: Set<Country> = emptySet(),
+        var countries: Set<Country> = emptySet(),
         private val stations: Set<RadioStation> = emptySet()
     ) : ModelLayer {
 

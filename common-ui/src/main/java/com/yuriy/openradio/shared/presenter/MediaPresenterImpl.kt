@@ -47,6 +47,7 @@ import com.yuriy.openradio.shared.broadcast.AppLocalReceiver
 import com.yuriy.openradio.shared.broadcast.AppLocalReceiverCallback
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.ServiceCommander
+import com.yuriy.openradio.shared.model.updateBrowseTree
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.MediaItemsSubscription
 import com.yuriy.openradio.shared.model.media.MediaResourceManagerListener
@@ -303,34 +304,25 @@ class MediaPresenterImpl(
         mActivity?.finish()
     }
 
+    /**
+     * Stores [countryCode] and has the service drop the root it cached, whose country stations row
+     * is titled after the stored country.
+     *
+     * The service rebuilds the root on the next browse of it and tells the controllers subscribed
+     * to it, so a root on screen is rewritten in place and a root the user walks back to later is
+     * built afresh, whichever node the country was chosen from.
+     */
     override fun onLocationChanged(countryCode: String) {
         mLocationStorage.setCountryCode(countryCode)
-        updateRootView()
+        CoroutineScope(Dispatchers.Main).launch {
+            if (!mServiceCommander.updateBrowseTree()) {
+                AppLogger.w("$TAG country changed to $countryCode with no service to rebuild the root")
+            }
+        }
     }
 
     override fun getCountryCode(): String {
         return mLocationStorage.getCountryCode()
-    }
-
-    /**
-     * Updates root view if there was changes in collection.
-     * Should be call only if current media id is [MediaId.MEDIA_ID_ROOT] or [MediaId.MEDIA_ID_BROWSE_CAR]
-     * if application runs on car.
-     */
-    override fun updateRootView() {
-        if (getOnSaveInstancePassed()) {
-            AppLogger.w("$TAG can not do Location Changed after OnSaveInstanceState")
-            return
-        }
-        if (MediaId.MEDIA_ID_ROOT != mCurrentParentId) {
-            AppLogger.w(
-                "$TAG can not do Location Changed for non root. " +
-                        "Current is '$mCurrentParentId'"
-            )
-            return
-        }
-        unsubscribeFromItem(mCurrentParentId)
-        addMediaItemToStack(mCurrentParentId)
     }
 
     override fun handleBackPressed(): Boolean {
