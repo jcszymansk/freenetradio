@@ -188,7 +188,9 @@ class SleepTimerModelImpl(
     /**
      * Fans a completion out to every registered listener. Each one is shielded from the others: the
      * service's listener, which is the one that stops playback, must hear the completion even when
-     * a listener ahead of it fails.
+     * a listener ahead of it fails, with an [Error] as much as with an [Exception]. A failure is
+     * logged rather than rethrown because the timer task running this logs and drops anything
+     * thrown at it anyway, so rethrowing would only log it twice.
      */
     private inner class SleepTimerListenerImpl : SleepTimerListener {
 
@@ -197,7 +199,7 @@ class SleepTimerModelImpl(
             for (listener in mTimerListenerExt) {
                 try {
                     listener.onComplete()
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     AppLogger.e("Sleep timer listener $listener failed on completion", e)
                 }
             }

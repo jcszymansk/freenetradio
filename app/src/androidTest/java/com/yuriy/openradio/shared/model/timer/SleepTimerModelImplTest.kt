@@ -353,7 +353,7 @@ class SleepTimerModelImplTest {
      */
     @Test
     fun aFailingListenerDoesNotSilenceTheListenersAfterIt() {
-        val failing = ThrowingListener()
+        val failing = ThrowingListener(IllegalStateException("A listener that fails"))
         val after = RecordingListener()
         mModel.addSleepTimerListener(failing)
         mModel.addSleepTimerListener(after)
@@ -362,6 +362,23 @@ class SleepTimerModelImplTest {
 
         assertTrue("The failing listener was never called", failing.awaitCall())
         assertTrue("The listener after a failing one was never notified", after.awaitCompletion())
+    }
+
+    /**
+     * An [Error] is not an [Exception], and a listener that throws one, as `TODO()` does, must not
+     * keep the completion from the listener that stops playback either.
+     */
+    @Test
+    fun aListenerThrowingAnErrorDoesNotSilenceTheListenersAfterIt() {
+        val failing = ThrowingListener(NotImplementedError("A listener that is not written yet"))
+        val after = RecordingListener()
+        mModel.addSleepTimerListener(failing)
+        mModel.addSleepTimerListener(after)
+
+        mModel.updateTimer(System.currentTimeMillis() + DELAY_MS, true)
+
+        assertTrue("The failing listener was never called", failing.awaitCall())
+        assertTrue("The listener after an Error was never notified", after.awaitCompletion())
     }
 
     @Test
@@ -472,15 +489,15 @@ class SleepTimerModelImplTest {
     }
 
     /**
-     * Fails every completion it hears, after recording that it heard one.
+     * Fails every completion it hears with [mFailure], after recording that it heard one.
      */
-    private class ThrowingListener : SleepTimerListener {
+    private class ThrowingListener(private val mFailure: Throwable) : SleepTimerListener {
 
         private val mCalled = CountDownLatch(1)
 
         override fun onComplete() {
             mCalled.countDown()
-            throw IllegalStateException("A listener that fails")
+            throw mFailure
         }
 
         fun awaitCall(): Boolean {
