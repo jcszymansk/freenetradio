@@ -283,9 +283,8 @@ The shared application manifest enables cleartext traffic. `ImagesProvider` is n
 | OkHttp | 3.12.13 |
 
 The wrapper version comes from `gradle/wrapper/gradle-wrapper.properties`, KSP from the root
-`build.gradle`, and the rest from `constants.gradle`. OkHttp and `androidx.media` are pinned to the
-last versions compatible with API 17. `AGENTS.md` names the JDK and Android SDK a fresh clone builds
-with.
+`build.gradle`, and the rest from `constants.gradle`. OkHttp and `androidx.media` are pinned for API 17.
+`AGENTS.md` names the JDK and Android SDK a fresh clone builds with.
 
 The configured release version is `15.0.0`; `version.properties` contains version code `716`. The application ID is `com.github.jcszymansk.freenetradio` and the user-visible name is FreeNetRadio. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project creates its release signing key.
 
@@ -300,7 +299,7 @@ The repository contains these test classes, counted as files holding JUnit `@Tes
 | `common/src/test` | JVM | 56 | Playlist parsers, URL and parser layers, API caches, the model layer, browse commands and `BrowseTree`, media IDs and media-item building, station serialization and validation, sorting and filtering, network policy and recovery, playback state and error classification, equalizer serialization, sleep timer, artwork grants |
 | `common-ui/src/test` | JVM | 6 | `MediaPresenterImpl` browse stack and child delivery, `MediaItemsAdapter`, `ServiceCommander`, diagnostic report files |
 | `android-jvm-stubs/src/test` | JVM | 4 | The stubs themselves: `Uri`, `Bundle`, `MimeTypeMap`, `Observable` |
-| `app/src/androidTest` | Device | 42 | SharedPreferences storages, the Room API cache and its schema upgrade, `ImagesProvider` access, file import and export, receivers, `OpenRadioService` browse, search, playback, commands and recovery, `OpenRadioPlayer`, `MediaResourcesManager`, station dialogs, and end-to-end journeys through `MainActivity` |
+| `app/src/androidTest` | Device | 42 | SharedPreferences storages, the Room API cache and its schema upgrade, `ImagesProvider` access, file import and export, receivers, `OpenRadioService` browse, search, playback, commands and recovery, `OpenRadioPlayer`, `MediaResourcesManager`, the sleep timer, playlist resolution, station dialogs, end-to-end journeys through `MainActivity`, and the offline test harness itself |
 
 The instrumented suite runs under `OfflineTestRunner`, which refuses to run on a device that
 reports a network; the urls its fixtures hand the app point at loopback or at an unreachable
