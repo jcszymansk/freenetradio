@@ -21,7 +21,6 @@ import androidx.core.util.Pair
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.NetUtils
-import java.net.InetAddress
 import java.net.MalformedURLException
 import java.net.URL
 import java.net.UnknownHostException
@@ -38,8 +37,11 @@ import java.util.Random
  *
  * Addresses without the prefix are passed through untouched: station artwork and stream probes
  * go through the same downloader and must not be redirected at a Radio Browser mirror.
+ *
+ * @param mLookup Finds the mirrors. Only [DnsHostLookup] asks a name server, so a test builds this
+ * class over a fake and cannot send a query whatever the prefix check lets through.
  */
-class DnsMirrorUrlResolver : ConnectionUrlResolver {
+class DnsMirrorUrlResolver(private val mLookup: HostLookup) : ConnectionUrlResolver {
 
     private val mRandom = Random()
     private var mUrlsSet = Array(0) { AppUtils.EMPTY_STRING }
@@ -58,13 +60,11 @@ class DnsMirrorUrlResolver : ConnectionUrlResolver {
         }
 
         try {
-            val list = InetAddress.getAllByName(LOOK_UP_DNS)
+            val hosts = mLookup.hostsOf(LOOK_UP_DNS)
             synchronized(mRandom) {
-                mUrlsSet = Array(list.size) { AppUtils.EMPTY_STRING }
-                var i = 0
-                for (item in list) {
-                    mUrlsSet[i++] = "https://" + item.canonicalHostName
-                    AppLogger.i("$TAG look up host:" + mUrlsSet[i - 1])
+                mUrlsSet = Array(hosts.size) { "https://" + hosts[it] }
+                for (url in mUrlsSet) {
+                    AppLogger.i("$TAG look up host:$url")
                 }
             }
         } catch (exception: UnknownHostException) {

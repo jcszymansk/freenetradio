@@ -25,8 +25,10 @@ import android.os.ParcelFileDescriptor
 import androidx.exifinterface.media.ExifInterface
 import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
+import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.NetUtils
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,18 +41,23 @@ import java.io.FileNotFoundException
 import java.io.IOException
 
 /**
- * Implementation fo the [ImagesPersistenceLayer] interface to work with room database.
+ * Implementation of the [ImagesPersistenceLayer] interface to work with room database.
+ *
+ * @param mNetworkLayer Answers whether a network is connected at all.
+ * @param ioDispatcher  Dispatcher the database writes and the downloads run on.
  */
 class ImagesPersistenceLayerImpl(
     private val mContext: Context,
     private val mDownloader: DownloaderLayer,
-    private val mImagesDatabase: ImagesDatabase
+    private val mImagesDatabase: ImagesDatabase,
+    private val mNetworkLayer: NetworkLayer,
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ImagesPersistenceLayer {
 
     /**
      * Coroutine scope to handle non UI operations.
      */
-    private val mIoScope = CoroutineScope(Job() + Dispatchers.IO)
+    private val mIoScope = CoroutineScope(Job() + ioDispatcher)
 
     override fun open(uri: Uri): ParcelFileDescriptor? {
         AppLogger.d("$TAG open file for '$uri'")
@@ -71,7 +78,7 @@ class ImagesPersistenceLayerImpl(
         }
         if (bytes.isEmpty()) {
             AppLogger.w("$TAG no bytes available for $uri")
-            mIoScope.launch(Dispatchers.IO) {
+            mIoScope.launch {
                 try {
                     ImageDownloader(id, url, uri).run()
                 } catch (e: Exception) {
@@ -84,7 +91,7 @@ class ImagesPersistenceLayerImpl(
         val pipe: Array<ParcelFileDescriptor>
         return try {
             pipe = ParcelFileDescriptor.createPipe()
-            mIoScope.launch(Dispatchers.IO) {
+            mIoScope.launch {
                 val output = ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])
                 try {
                     // Write data to pipe:
@@ -117,7 +124,7 @@ class ImagesPersistenceLayerImpl(
     }
 
     override fun delete(mediaId: String) {
-        mIoScope.launch(Dispatchers.IO) {
+        mIoScope.launch {
             synchronized(mImagesDatabase) {
                 mImagesDatabase.rsImageDao().delete(mediaId)
             }
@@ -151,8 +158,15 @@ class ImagesPersistenceLayerImpl(
                 return
             }
             AppLogger.d("$TAG execute task for $mId $mImageUrl")
+            val isWebUrl = NetUtils.isWebUrl(mImageUrl)
+            // Artwork loads whenever a station is shown, so offline this gives up quietly instead
+            // of toasting or spending connection attempts; the next showing online fetches it.
+            if (isWebUrl && !mNetworkLayer.isConnected()) {
+                AppLogger.d("$TAG no network to download $mImageUrl for $mId")
+                return
+            }
             var orientation = ExifInterface.ORIENTATION_NORMAL
-            var bytes = if (NetUtils.isWebUrl(mImageUrl)) {
+            var bytes = if (isWebUrl) {
                 mDownloader.downloadDataFromUri(
                     mContext, Uri.parse(mImageUrl), contentTypeFilter = HTTPDownloaderImpl.CONTENT_TYPE_IMG
                 )

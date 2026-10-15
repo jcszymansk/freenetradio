@@ -24,7 +24,4 @@ interface LoggingLayer {
         onSuccess: (file: File) -> Unit,
         onError: (msg: String) -> Unit
     )
-
-
-    fun clearLogs()
 }

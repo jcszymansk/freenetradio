@@ -54,7 +54,6 @@ import com.yuriy.openradio.shared.model.storage.images.ImagesPersistenceLayer
 import com.yuriy.openradio.shared.model.timer.SleepTimerListener
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.model.translation.MediaIdBuilder
-import com.yuriy.openradio.shared.model.translation.MediaIdBuilderDefault
 import com.yuriy.openradio.shared.service.location.Country
 import java.util.Date
 import java.util.concurrent.ConcurrentSkipListSet
@@ -151,7 +150,7 @@ class OpenRadioServicePresenterImplTest {
         presenter.getStationsByCountry("PL", 3)
         presenter.getNewStations()
         presenter.getPopularStations()
-        presenter.getSearchStations("jazz")
+        presenter.getSearchStations("jazz", SearchTagBuilder())
 
         assertEquals(
             listOf("category:rock:2", "country:PL:3", "new", "popular", "search:jazz"),
@@ -163,28 +162,21 @@ class OpenRadioServicePresenterImplTest {
     }
 
     @Test
-    fun aSearchWithoutABuilderStillTagsNothingOntoTheStationIds() {
+    fun onlyASearchBuildsItsStationIdsWithTheCallersBuilder() {
         val modelLayer = RecordingModelLayer()
         val presenter = presenter(modelLayer = modelLayer)
+        val builder = SearchTagBuilder()
 
-        presenter.getSearchStations("jazz")
-
-        assertTrue(modelLayer.mediaIdBuilders.single() is MediaIdBuilderDefault)
-        assertEquals("station", modelLayer.mediaIdBuilders.single().build("station"))
-    }
-
-    @Test
-    fun aSearchFromTheServicePassesItsOwnBuilderThrough() {
-        val modelLayer = RecordingModelLayer()
-        val presenter = presenter(modelLayer = modelLayer)
-        val builder = object : MediaIdBuilder {
-
-            override fun build(value: String) = MediaId.makeSearchId(value)
-        }
-
+        presenter.getStationsInCategory("rock", 0)
+        presenter.getStationsByCountry("PL", 0)
+        presenter.getNewStations()
+        presenter.getPopularStations()
         presenter.getSearchStations("jazz", builder)
 
-        assertSame(builder, modelLayer.mediaIdBuilders.single())
+        val catalogueBuilders = modelLayer.mediaIdBuilders.dropLast(1)
+        assertEquals(4, catalogueBuilders.size)
+        assertEquals(listOf("station"), catalogueBuilders.map { it.build("station") }.distinct())
+        assertSame(builder, modelLayer.mediaIdBuilders.last())
     }
 
     @Test
@@ -498,6 +490,12 @@ class OpenRadioServicePresenterImplTest {
         )
     }
 
+    /** The builder [MediaItemSearchFromService] hands the presenter: search ids carry their tag. */
+    private class SearchTagBuilder : MediaIdBuilder {
+
+        override fun build(value: String) = MediaId.makeSearchId(value)
+    }
+
     private class RecordingUrlLayer : com.yuriy.openradio.shared.model.net.UrlLayer {
 
         val categoryRequests = mutableListOf<kotlin.Pair<String, Int>>()
@@ -582,6 +580,8 @@ class OpenRadioServicePresenterImplTest {
         }
 
         override fun checkConnectivityAndNotify(context: Context) = true
+
+        override fun isConnected() = true
 
         override fun isMobileNetwork() = mobile
     }

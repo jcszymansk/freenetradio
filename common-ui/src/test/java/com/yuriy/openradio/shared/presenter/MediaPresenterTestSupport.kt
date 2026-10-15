@@ -59,6 +59,8 @@ private class UnusedNetworkLayer : NetworkLayer {
 
     override fun checkConnectivityAndNotify(context: Context) = unexpected()
 
+    override fun isConnected() = unexpected()
+
     override fun isMobileNetwork() = unexpected()
 }
 

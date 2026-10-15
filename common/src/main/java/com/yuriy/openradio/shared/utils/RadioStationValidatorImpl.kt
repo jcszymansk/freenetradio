@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.utils
 
 import android.content.Context
 import com.yuriy.openradio.shared.model.media.RadioStationToAdd
+import com.yuriy.openradio.shared.model.net.NetworkLayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.net.URL
@@ -31,14 +32,20 @@ import java.net.URL
  * the candidate. The home page is optional: an empty one is not probed at all, and an
  * unreachable one warns ahead of the success.
  *
+ * A probe that fails while no network is connected checked nothing, so the answer then says the
+ * network is missing rather than blame the url. Connectivity is asked only after a failure,
+ * because a stream served from the device itself answers with no network at all.
+ *
  * @param mUiScope Scope the answers are delivered on.
  * @param mScope   Scope the network probes run on.
  * @param mProbe   Answers whether a url can be opened.
+ * @param mNetworkLayer Answers whether a network is connected at all.
  */
 class RadioStationValidatorImpl(
     private val mUiScope: CoroutineScope,
     private val mScope: CoroutineScope,
-    private val mProbe: ResourceProbe
+    private val mProbe: ResourceProbe,
+    private val mNetworkLayer: NetworkLayer
 ) : RadioStationValidator {
 
     override fun validate(
@@ -62,16 +69,28 @@ class RadioStationValidatorImpl(
         mScope.launch {
             AppLogger.d("$CLASS_NAME probing stream $url")
             if (!mProbe.isReachable(context, url)) {
-                AppLogger.w("$CLASS_NAME stream $url is unreachable")
-                mUiScope.launch { onFailure("Radio Station's stream is invalid") }
+                val msg = if (mNetworkLayer.isConnected()) {
+                    AppLogger.w("$CLASS_NAME stream $url is unreachable")
+                    "Radio Station's stream is invalid"
+                } else {
+                    AppLogger.w("$CLASS_NAME stream $url is unreachable without a network")
+                    "No network connection, Radio Station can not be validated"
+                }
+                mUiScope.launch { onFailure(msg) }
                 return@launch
             }
             val homePage = rsToAdd.homePage
             if (homePage.isEmpty()) {
                 AppLogger.d("$CLASS_NAME candidate '${rsToAdd.name}' has no home page to probe")
             } else if (!mProbe.isReachable(context, homePage)) {
-                AppLogger.w("$CLASS_NAME home page $homePage is unreachable")
-                mUiScope.launch { onWarning("Radio Station's home page is invalid") }
+                val msg = if (mNetworkLayer.isConnected()) {
+                    AppLogger.w("$CLASS_NAME home page $homePage is unreachable")
+                    "Radio Station's home page is invalid"
+                } else {
+                    AppLogger.w("$CLASS_NAME home page $homePage is unreachable without a network")
+                    "No network connection, Radio Station's home page can not be checked"
+                }
+                mUiScope.launch { onWarning(msg) }
             }
             AppLogger.d("$CLASS_NAME candidate '${rsToAdd.name}' validated")
             mUiScope.launch { onSuccess("Radio Station validated successfully") }

@@ -29,6 +29,7 @@ import com.yuriy.openradio.shared.model.media.RadioStationManagerLayer
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImpl
 import com.yuriy.openradio.shared.model.net.ConnectionUrlResolver
 import com.yuriy.openradio.shared.model.net.DirectUrlResolver
+import com.yuriy.openradio.shared.model.net.DnsHostLookup
 import com.yuriy.openradio.shared.model.net.DnsMirrorUrlResolver
 import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.HTTPDownloaderImpl
@@ -153,11 +154,14 @@ object DependencyRegistryCommon {
         val equalizerStorage = EqualizerStorage(contextRef)
         sEqualizerLayer = EqualizerLayerImpl(equalizerStorage)
         val imagesDatabase = ImagesDatabase.getInstance(context)
-        sImagesPersistenceLayer = ImagesPersistenceLayerImpl(context, downloader, imagesDatabase)
+        sImagesPersistenceLayer = ImagesPersistenceLayerImpl(
+            context, downloader, imagesDatabase, sNetworkLayer
+        )
 
         sRadioStationManagerLayer = RadioStationManagerLayerImpl(
             RadioStationValidatorImpl(
-                CoroutineScope(Dispatchers.Main), CoroutineScope(Dispatchers.IO), NetUtils::checkResource
+                CoroutineScope(Dispatchers.Main), CoroutineScope(Dispatchers.IO), NetUtils::checkResource,
+                sNetworkLayer
             ),
             sDeviceLocalsStorage, sFavoritesStorage, sImagesPersistenceLayer
         )
@@ -256,7 +260,7 @@ object DependencyRegistryCommon {
 
     private fun getUrlResolver(source: Source): ConnectionUrlResolver {
         return if (source == Source.RADIO_BROWSER) {
-            DnsMirrorUrlResolver()
+            DnsMirrorUrlResolver(DnsHostLookup())
         } else {
             DirectUrlResolver()
         }

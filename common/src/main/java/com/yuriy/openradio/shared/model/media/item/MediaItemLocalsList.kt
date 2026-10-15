@@ -47,8 +47,7 @@ class MediaItemLocalsList : MediaItemCommand {
                 dependencies.addMediaItem(
                     MediaItemBuilder.buildPlayable(
                         radioStation,
-                        dependencies.presenter.isRadioStationFavorite(radioStation),
-                        true
+                        dependencies.presenter.isRadioStationFavorite(radioStation)
                     )
                 )
             }

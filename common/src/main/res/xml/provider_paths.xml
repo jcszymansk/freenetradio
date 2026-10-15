@@ -15,5 +15,6 @@
     limitations under the License.
 -->
 <paths>
-    <files-path name="internal_files" path="."/>
+    <!-- Diagnostic reports only; LoggingLayerImpl writes them to this cache directory. -->
+    <cache-path name="diagnostic_reports" path="diagnostic_reports/"/>
 </paths>

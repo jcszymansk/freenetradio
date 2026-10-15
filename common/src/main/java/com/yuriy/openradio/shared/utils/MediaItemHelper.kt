@@ -33,7 +33,6 @@ object MediaItemHelper {
 
     private const val DRAWABLE_ID_UNDEFINED = MediaSessionCompat.QueueItem.UNKNOWN_ID
     private const val KEY_IS_FAVORITE = "KEY_IS_FAVORITE"
-    private const val KEY_IS_LOCAL = "KEY_IS_LOCAL"
     private const val KEY_SORT_ID = "KEY_SORT_ID"
     private const val KEY_BITRATE = "KEY_BITRATE"
     private const val KEY_DRAWABLE_ID = "DRAWABLE_ID"
@@ -72,16 +71,6 @@ object MediaItemHelper {
 
     fun updateFavoriteField(bundle: Bundle, isFavorite: Boolean) {
         bundle.putBoolean(KEY_IS_FAVORITE, isFavorite)
-    }
-
-    /**
-     * Sets key that indicates Radio Station is in Local Radio Stations.
-     *
-     * @param bundle
-     * @param isLocal   Whether Item is in Local Radio Stations.
-     */
-    fun updateLocalRadioStationField(bundle: Bundle, isLocal: Boolean) {
-        bundle.putBoolean(KEY_IS_LOCAL, isLocal)
     }
 
     fun updateSortIdField(bundle: Bundle, sortId: Int) {

@@ -96,7 +96,7 @@ class NetworkLayerImpl(private val mConnectivityManager: ConnectivityManager) : 
      * @return true if connection is available, false otherwise.
      */
     override fun checkConnectivityAndNotify(context: Context): Boolean {
-        if (checkConnectivity()) {
+        if (isConnected()) {
             return true
         }
         SafeToast.showAnyThread(
@@ -106,12 +106,7 @@ class NetworkLayerImpl(private val mConnectivityManager: ConnectivityManager) : 
         return false
     }
 
-    /**
-     * Checks for the connection availability.
-     *
-     * @return true if connection is available, false otherwise.
-     */
-    private fun checkConnectivity(): Boolean {
+    override fun isConnected(): Boolean {
         val networkInfo = mConnectivityManager.activeNetworkInfo
         return !(networkInfo == null || !networkInfo.isConnectedOrConnecting)
     }

@@ -211,9 +211,12 @@ class PlaylistResolutionTest {
     }
 
     /**
-     * A url that names a playlist can answer with a live stream, which never ends. The read is
-     * bounded so that the process does not grow until it dies; a response over the limit is
-     * refused whole, because half a playlist is not a shorter playlist.
+     * A url that names a playlist can answer with a live stream, which never ends, so the read is
+     * bounded. Where the read stops, on a stream that never ends, is pinned on the JVM in
+     * `BoundedReadTest`. What only a connection shows is that the limit reaches it: the playlist
+     * is referenced, so [NetUtils] picks the limit, and the downloader applies it to the body of
+     * the `HttpURLConnection` it opens. The two fixtures sit either side of that limit, so a limit
+     * that is lost or set far off fails one of them.
      */
     @Test
     fun aReferencedPlaylistLongerThanTheLimitIsRefused() {

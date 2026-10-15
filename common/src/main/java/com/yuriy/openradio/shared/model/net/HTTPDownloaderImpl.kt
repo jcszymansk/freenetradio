@@ -23,10 +23,7 @@ import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.GatedInputStream
 import com.yuriy.openradio.shared.utils.NetworkPermit
 import com.yuriy.openradio.shared.utils.NetUtils
-import java.io.BufferedInputStream
-import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Callable
@@ -138,17 +135,15 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
 
             try {
                 val held = mPermit.hold(connection) {
-                    val gated = GatedInputStream(connection.inputStream, mPermit::mayContinue)
-                    val content = toByteArray(BufferedInputStream(gated), mMaxBytes)
-                    if (gated.isCutShort) ByteRead.CutShort else content
+                    BoundedRead.of(GatedInputStream(connection.inputStream, mPermit::mayContinue), mMaxBytes)
                 }
-                val read = if (held is NetworkPermit.Held.Answered) held.value else ByteRead.CutShort
+                val read = if (held is NetworkPermit.Held.Answered) held.value else BoundedRead.CutShort
                 response = when (read) {
-                    is ByteRead.Done -> read.bytes
-                    ByteRead.CutShort -> ByteArray(0).also {
+                    is BoundedRead.Done -> read.bytes
+                    BoundedRead.CutShort -> ByteArray(0).also {
                         AppLogger.i("$CLASS_NAME stopped reading ${responseObj.url}, the network may not be used")
                     }
-                    ByteRead.TooLong -> ByteArray(0).also {
+                    BoundedRead.TooLong -> ByteArray(0).also {
                         AppLogger.e("$CLASS_NAME more than $mMaxBytes bytes at ${responseObj.url}")
                     }
                 }
@@ -169,64 +164,12 @@ class HTTPDownloaderImpl(private val mResolver: ConnectionUrlResolver) : Downloa
         }
     }
 
-    /**
-     * How reading a response body ended.
-     */
-    private sealed class ByteRead {
-
-        /**
-         * The whole body, [bytes].
-         */
-        class Done(val bytes: ByteArray) : ByteRead()
-
-        /**
-         * The body was longer than the caller allowed.
-         */
-        object TooLong : ByteRead()
-
-        /**
-         * The network may no longer be used, and the body was abandoned.
-         */
-        object CutShort : ByteRead()
-    }
-
     companion object {
         /**
          * Tag to use in logging message.
          */
         private const val CLASS_NAME = "HTTPDI"
 
-        private const val DEFAULT_BUFFER_SIZE = 1024 * 4
-
-        /**
-         * Represents the end-of-file (or stream).
-         */
-        private const val EOF = -1
-
         const val CONTENT_TYPE_IMG = "image/"
-
-        /**
-         * Reads [input] whole.
-         *
-         * @param maxBytes Most that may be read, or [DownloaderLayer.NO_LIMIT].
-         * @return The content, or [ByteRead.TooLong] when there is more of it than [maxBytes]. A
-         * response that long is not the document the caller asked for, so it is refused rather
-         * than cut short.
-         */
-        @Throws(IOException::class)
-        private fun toByteArray(input: InputStream, maxBytes: Int): ByteRead {
-            val output = ByteArrayOutputStream()
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            while (true) {
-                val read = input.read(buffer)
-                if (read == EOF) {
-                    return ByteRead.Done(output.toByteArray())
-                }
-                if (maxBytes != DownloaderLayer.NO_LIMIT && output.size() + read > maxBytes) {
-                    return ByteRead.TooLong
-                }
-                output.write(buffer, 0, read)
-            }
-        }
     }
 }

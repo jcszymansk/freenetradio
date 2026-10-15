@@ -23,107 +23,54 @@ import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.BufferedOutputStream
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.FileWriter
-import java.io.IOException
 import java.io.InputStreamReader
+import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
+/**
+ * Collects diagnostic reports into the application cache, from where they are shared through
+ * `FileProvider` (see `res/xml/provider_paths.xml`, which must name the same directory).
+ */
 class LoggingLayerImpl(private val mContext: Context) : LoggingLayer {
 
+    private val mReports = DiagnosticReportFiles(File(mContext.cacheDir, REPORTS_DIR_NAME))
 
     override fun collectAdbLogs(onSuccess: (file: File) -> Unit, onError: (msg: String) -> Unit) {
         CoroutineScope(Dispatchers.IO).launch {
-            clearLogs()
-            val logFile = File(getInternalStorageDir(mContext), "$LOGS_FILE_NAME.txt")
-            try {
-                captureLogcatOutput(logFile)
-                onSuccess(zipLogFile(logFile))
-            } catch (e: IOException) {
-                onError(e.message.toString())
+            deleteLegacyReports()
+            mReports.deleteExpired()
+            mReports.write(::writeReport).fold(onSuccess) { onError(it.message.toString()) }
+        }
+    }
+
+    private fun writeReport(output: OutputStream) {
+        ZipOutputStream(output.buffered()).use { zip ->
+            zip.putNextEntry(ZipEntry(LOG_ENTRY_NAME))
+            val writer = zip.bufferedWriter()
+            writer.writeLine(getDeviceInfo())
+            writer.writeLine(getApplicationBuildInfo(mContext))
+            val process = ProcessBuilder("logcat", "-d").start()
+            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                reader.lineSequence().forEach { writer.writeLine(it) }
             }
+            writer.flush()
         }
     }
 
-    private fun captureLogcatOutput(logFile: File) {
-        val deviceInfo = getDeviceInfo()
-        writeDeviceInfoToFile(deviceInfo, logFile, false)
-
-        val applicationBuildInfo = getApplicationBuildInfo(mContext)
-        writeDeviceInfoToFile(applicationBuildInfo, logFile, true)
-
-        val processBuilder = ProcessBuilder("logcat", "-d")
-        val process = processBuilder.start()
-
-        val reader = BufferedReader(InputStreamReader(process.inputStream))
-        val writer = BufferedWriter(FileWriter(logFile, true))
-
-        reader.use { readerIt ->
-            writer.use { writerIt ->
-                var line: String?
-                while (readerIt.readLine().also { line = it } != null) {
-                    writerIt.write(line)
-                    writerIt.newLine()
-                }
-            }
-        }
+    /**
+     * Reports used to be written to persistent internal storage, where they outlived the share.
+     */
+    private fun deleteLegacyReports() {
+        File(mContext.filesDir, LEGACY_LOGS_DIR_NAME).deleteRecursively()
     }
 
-
-    override fun clearLogs() {
-        val logFile = File(getInternalStorageDir(mContext), "$LOGS_FILE_NAME.txt")
-        val zipFile = File(getInternalStorageDir(mContext), "$LOGS_FILE_NAME.zip")
-
-        // Delete the log file
-        if (logFile.exists()) {
-            logFile.delete()
-        }
-
-        // Delete the zip file
-        if (zipFile.exists()) {
-            zipFile.delete()
-        }
-    }
-
-
-    private fun zipLogFile(logFile: File): File {
-        val zipFile = File(getInternalStorageDir(mContext), "$LOGS_FILE_NAME.zip")
-        zipFile.createNewFile()
-        FileOutputStream(zipFile).use { fileOutputStream ->
-            ZipOutputStream(BufferedOutputStream(fileOutputStream)).use { zipOutputStream ->
-                zipOutputStream.putNextEntry(ZipEntry("$LOGS_FILE_NAME.txt"))
-                FileInputStream(logFile).use { fileInputStream ->
-                    val buffer = ByteArray(1024)
-                    var count: Int
-                    while (fileInputStream.read(buffer).also { count = it } != -1) {
-                        zipOutputStream.write(buffer, 0, count)
-                    }
-                }
-            }
-        }
-
-        return zipFile
-    }
-
-    private fun getInternalStorageDir(context: Context): File {
-        val directory = File(context.filesDir, LOGS_DIR_NAME)
-        if (!directory.exists()) {
-            directory.mkdirs()
-        }
-        return directory
-    }
-
-    private fun writeDeviceInfoToFile(deviceInfo: String, logFile: File, append: Boolean) {
-        BufferedWriter(FileWriter(logFile, append)).use { writer ->
-            writer.write(deviceInfo)
-            writer.newLine()
-        }
+    private fun BufferedWriter.writeLine(line: String) {
+        write(line)
+        newLine()
     }
 
     private fun getDeviceInfo(): String {
@@ -191,7 +138,12 @@ class LoggingLayerImpl(private val mContext: Context) : LoggingLayer {
 
     companion object {
 
-        private const val LOGS_FILE_NAME = "adb_logs"
-        private const val LOGS_DIR_NAME = "logs"
+        private const val LOG_ENTRY_NAME = "adb_logs.txt"
+        private const val LEGACY_LOGS_DIR_NAME = "logs"
+
+        /**
+         * Directory under the cache that holds the reports.
+         */
+        private const val REPORTS_DIR_NAME = "diagnostic_reports"
     }
 }
