@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.service
 
 import android.content.Context
+import com.yuriy.openradio.R
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -91,6 +92,14 @@ internal class LocalAudioFixture(private val mContext: Context) {
         val frame = ByteArray(MP3_FRAME_SIZE)
         MP3_FRAME_HEADER.copyInto(frame)
         return frame
+    }
+
+    /**
+     * @return what the player writes on the description line of a stream that is open and has
+     *   told it nothing else about itself, which is every moment of the audio generated here.
+     */
+    fun liveStreamDescription(): String {
+        return mContext.getString(R.string.media_description_default)
     }
 
     /**

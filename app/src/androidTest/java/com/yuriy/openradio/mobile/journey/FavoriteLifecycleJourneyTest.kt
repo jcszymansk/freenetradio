@@ -25,7 +25,6 @@ import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.storage.makeStation
-import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -105,7 +104,7 @@ class FavoriteLifecycleJourneyTest {
     fun markingAStationFromItsRowPutsTheFavoritesNodeOnTheRoot() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             assertNull(
                 "A browsable row offers a favorite box, so the box this journey clicks is not " +
                     "the station's own control",
@@ -136,7 +135,7 @@ class FavoriteLifecycleJourneyTest {
     fun theFavoritesNodeShowsTheStationTheUserMarked() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             markTheStationFromTheLocalsList(scenario, list)
             list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
 
@@ -170,7 +169,7 @@ class FavoriteLifecycleJourneyTest {
     fun unmarkingAStationFromTheFavoritesNodeTakesItOffTheRoot() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             markTheStationFromTheLocalsList(scenario, list)
             list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
 
@@ -181,7 +180,7 @@ class FavoriteLifecycleJourneyTest {
 
                 list.tapRowFavorite(mStation.id)
 
-                awaitFavorites(emptyList())
+                mProfile.awaitFavorites(emptyList())
                 list.awaitEmptied("the favorites list without the unmarked station")
                 assertEquals(
                     "The list that emptied is not the favorites list the station was unmarked in",
@@ -194,7 +193,7 @@ class FavoriteLifecycleJourneyTest {
 
             assertEquals(
                 "Unmarking the last favorite left the favorites node on the root list",
-                mProfile.cleanInstallRoot() + mProfile.localsRow(),
+                mProfile.seededRoot(),
                 list.awaitRows("the favorites node gone") {
                     !it.contains(mProfile.favoritesRow())
                 }
@@ -228,7 +227,7 @@ class FavoriteLifecycleJourneyTest {
     fun theMarkOutlivesTheActivityThatMadeIt() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             markTheStationFromTheLocalsList(scenario, list)
             list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
         }
@@ -284,7 +283,7 @@ class FavoriteLifecycleJourneyTest {
     fun theFavoritesRowDoesNotOpenWithoutANetwork() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             markTheStationFromTheLocalsList(scenario, list)
             val root = list.awaitRows("the favorites node") {
                 it.contains(mProfile.favoritesRow())
@@ -305,28 +304,6 @@ class FavoriteLifecycleJourneyTest {
                 navigation.returnToRoot()
             }
         }
-    }
-
-    /**
-     * Waits for the list to be the root of the profile every case here starts from: a cleared
-     * install holding one station of the user's own and no favorites.
-     *
-     * This is a precondition rather than a restatement of the cold launch journey. The presenter
-     * is one of the registry's singletons and its node stack outlives the Activity, so a case that
-     * left the stack inside a node would send the next case's Activity straight back there. Every
-     * case here returns to the root, which this asserts rather than assumes, because Phase 6 asks
-     * for a suite with no order assumptions in it.
-     */
-    private fun awaitSeededRoot(list: BrowseListView) {
-        assertEquals(
-            "This case did not start at the root of the seeded profile. A case that walks into a " +
-                "node leaves the presenter's stack there, and it is a registry singleton that " +
-                "outlives the Activity, so the next case launches back into that node.",
-            mProfile.cleanInstallRoot() + mProfile.localsRow(),
-            list.awaitRows("the root of the seeded profile") {
-                it == mProfile.cleanInstallRoot() + mProfile.localsRow()
-            }
-        )
     }
 
     /**
@@ -354,33 +331,10 @@ class FavoriteLifecycleJourneyTest {
             list.tapRowFavorite(mStation.id)
 
             list.awaitRowFavorite(mStation.id, true)
-            awaitFavorites(listOf(mStation.id))
+            mProfile.awaitFavorites(listOf(mStation.id))
         } finally {
             navigation.returnToRoot()
         }
-    }
-
-    /**
-     * Waits for the favorites store to hold exactly [expected], read through an instance that has
-     * cached no answers.
-     *
-     * The click hands the command to a coroutine and returns, so the store is written some time
-     * after the box on screen has already flipped.
-     */
-    private fun awaitFavorites(expected: List<String>) {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STORE_TIMEOUT_SECONDS)
-        var stored = emptyList<String>()
-        while (System.nanoTime() < deadline) {
-            stored = mProfile.storages.freshFavorites().getAll().map { it.id }
-            if (stored == expected) {
-                return
-            }
-            Thread.sleep(POLL_MILLIS)
-        }
-        throw AssertionError(
-            "The favorites store held $stored rather than $expected within " +
-                "$STORE_TIMEOUT_SECONDS seconds."
-        )
     }
 
     /**
@@ -389,7 +343,7 @@ class FavoriteLifecycleJourneyTest {
      *   them.
      */
     private fun favoritesRoot(): List<BrowseRow> {
-        return listOf(mProfile.favoritesRow()) + mProfile.cleanInstallRoot() + mProfile.localsRow()
+        return listOf(mProfile.favoritesRow()) + mProfile.seededRoot()
     }
 
     private companion object {
@@ -397,13 +351,5 @@ class FavoriteLifecycleJourneyTest {
         const val STATION_NAME = "Journey favorite one"
 
         const val FAVORITES_PREFERENCE_FILE = "FavoritesPreferences"
-
-        /**
-         * Covers the hop onto the main thread the command is sent from, the round trip to the
-         * service, and the write.
-         */
-        const val STORE_TIMEOUT_SECONDS = 20L
-
-        const val POLL_MILLIS = 50L
     }
 }
