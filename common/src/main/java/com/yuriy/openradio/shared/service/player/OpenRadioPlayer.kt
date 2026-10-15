@@ -152,9 +152,10 @@ class OpenRadioPlayer(
      * The pending retry of a stream ExoPlayer gave up for a lost network. A network-connected
      * event resumes such a stream too, but a phone that loses its signal in a dead zone usually
      * keeps reporting the network it had, so that event may never come (TASK-018). Pending only
-     * while [mNetworkRecovery] awaits the network. Started and cancelled on the main thread.
+     * while [mNetworkRecovery] awaits the network; [NO_STREAM_RETRY] when none is. Started and
+     * cancelled on the main thread.
      */
-    private var mStreamRetry: Job? = null
+    private var mStreamRetry: Job = NO_STREAM_RETRY
 
     private val mExoPlayer: Player by lazy {
         AppLogger.i("Init ExoPlayer")
@@ -948,7 +949,7 @@ class OpenRadioPlayer(
         AppLogger.i("$TAG retry the stream in $delayMs ms")
         mStreamRetry = mUiScope.launch {
             delay(delayMs)
-            mStreamRetry = null
+            mStreamRetry = NO_STREAM_RETRY
             if (mNetworkRecovery != NetworkRecovery.AWAITING_NETWORK
                 || mPlayer.playbackState != Player.STATE_IDLE
             ) {
@@ -966,10 +967,13 @@ class OpenRadioPlayer(
     }
 
     private fun cancelStreamRetry(event: String) {
-        val retry = mStreamRetry ?: return
+        val retry = mStreamRetry
+        if (!retry.isActive) {
+            return
+        }
         AppLogger.i("$TAG cancel the stream retry on $event")
         retry.cancel()
-        mStreamRetry = null
+        mStreamRetry = NO_STREAM_RETRY
     }
 
     private fun forgetAwaitedStream(event: String) {
@@ -1209,5 +1213,11 @@ class OpenRadioPlayer(
          * String tag to use in logs.
          */
         private const val TAG = "ORP"
+
+        /**
+         * A retry that has already finished, standing for "no retry pending" so that
+         * [mStreamRetry] is never null: it is not active and cancelling it does nothing.
+         */
+        private val NO_STREAM_RETRY: Job = Job().apply { complete() }
     }
 }
