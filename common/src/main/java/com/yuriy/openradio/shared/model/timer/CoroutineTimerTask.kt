@@ -18,43 +18,43 @@ package com.yuriy.openradio.shared.model.timer
 
 import com.yuriy.openradio.shared.utils.AppLogger
 import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
 
-class CoroutineTimerTask internal constructor(private val mName: String, action: suspend () -> Unit) {
+/**
+ * Runs an action once, after a delay, on a coroutine of its own scope.
+ *
+ * At most one run is pending at a time: [start] replaces the pending run, so calls that race each
+ * other cannot leave two armed. The delay is an argument of [start] rather than state, so nothing
+ * can change it between one call and the next.
+ */
+class CoroutineTimerTask internal constructor(private val mName: String, private val mAction: suspend () -> Unit) {
 
-    var mDelay: Long = 0
-    private var mRepeat: Long? = null
-    private val mCoroutineScope = GlobalScope
-    private val mKeepRunning = AtomicBoolean(true)
+    private val mCoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * The pending run. Guarded by this task's monitor.
+     */
     private var mJob: Job? = null
 
-    private val tryAction = suspend {
-        try {
-            action()
-        } catch (e: Throwable) {
-            AppLogger.e("Can't do action on sleep timer", e)
-        }
-    }
-
-    fun start() {
-        mKeepRunning.set(true)
+    /**
+     * Cancels the pending run, if any, and schedules the action to run once after [delay]
+     * milliseconds.
+     */
+    @Synchronized
+    fun start(delay: Long) {
+        mJob?.cancel("replaced by start()")
         mJob = mCoroutineScope.launch(CoroutineName(mName)) {
-            delay(mDelay)
-            if (mRepeat != null) {
-                while (mKeepRunning.get()) {
-                    tryAction()
-                    delay(mRepeat!!)
-                }
-            } else {
-                if (mKeepRunning.get()) {
-                    tryAction()
-                    this@CoroutineTimerTask.cancel()
-                }
+            delay(delay)
+            try {
+                mAction()
+            } catch (e: Throwable) {
+                AppLogger.e("Can't do action on sleep timer", e)
             }
         }
     }
@@ -63,8 +63,9 @@ class CoroutineTimerTask internal constructor(private val mName: String, action:
      * Immediately stops the timer task, even if the job is currently running,
      * by cancelling the underlying Job.
      */
+    @Synchronized
     fun cancel() {
-        mKeepRunning.set(false)
         mJob?.cancel("cancel() called")
+        mJob = null
     }
 }

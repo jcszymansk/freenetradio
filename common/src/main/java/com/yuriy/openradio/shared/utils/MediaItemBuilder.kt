@@ -294,16 +294,15 @@ object MediaItemBuilder {
     }
 
     /**
-     * [item] playing [streamUrl] in place of its own address, for a stream resolved from the
-     * station's playlist. The MIME type is read from [streamUrl] again, because the player chooses
+     * [item] playing [stream] in place of its own address, for a stream resolved from the
+     * station's playlist. The MIME type is replaced with the stream's, because the player chooses
      * how to read a stream from the MIME type before the url: the playlist's own type would make it
      * open an HLS address as a progressive stream and fail on it.
      */
-    fun withStreamUrl(item: MediaItem, streamUrl: String): MediaItem {
-        val uri = Uri.parse(streamUrl)
+    fun withStream(item: MediaItem, stream: ResolvedStream): MediaItem {
         return item.buildUpon()
-            .setUri(uri)
-            .setMimeType(AppUtils.getMimeTypeFromUri(uri))
+            .setUri(Uri.parse(stream.url))
+            .setMimeType(stream.mimeType)
             .build()
     }
 

@@ -110,6 +110,7 @@ com/yuriy/openradio/shared/utils/SortUtils	com.yuriy.openradio.shared.utils.Sort
 com/yuriy/openradio/shared/utils/RadioStationValidatorImpl	com.yuriy.openradio.shared.utils.RadioStationValidatorImplTest	:common
 com/yuriy/openradio/shared/utils/MediaItemHelper	com.yuriy.openradio.shared.utils.MediaItemHelperTest	:common
 com/yuriy/openradio/shared/utils/PlayerUtils	com.yuriy.openradio.shared.utils.PlayerUtilsTest	:common
+com/yuriy/openradio/shared/utils/ResolvedStream	com.yuriy.openradio.shared.utils.ResolvedStreamTest	:common
 wseemann/media/jplaylistparser/parser/AutoDetectParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/AbstractParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common
 wseemann/media/jplaylistparser/parser/m3u/M3UPlaylistParser	wseemann.media.jplaylistparser.parser.AutoDetectParserTest	:common

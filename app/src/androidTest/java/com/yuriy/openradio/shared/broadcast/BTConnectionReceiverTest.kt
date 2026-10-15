@@ -133,18 +133,54 @@ class BTConnectionReceiverTest {
     }
 
     /**
-     * The disconnection branch asks only whether some device has ever connected, never whether the
-     * one that just went away is the remembered one. A headset dropping off while the car stereo
-     * still plays is therefore reported the same way, and the service pauses. This pins what the
-     * receiver does today, which is TASK-044, not what it should do.
+     * The service pauses on every reported disconnection, so a device other than the one last seen
+     * connecting must not be reported: a smartwatch going out of range would otherwise pause the
+     * music playing through the car stereo. This is TASK-044.
      */
     @Test
-    fun aDisconnectionIsReportedWhicheverDeviceItCameFrom() {
+    fun aDisconnectionOfAnotherDeviceIsIgnored() {
         mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
 
         mReceiver.onReceive(mContext, disconnected(SECOND_ADDRESS))
 
+        assertEquals(0, mListener.disconnections)
+        assertEquals(0, mListener.sameDeviceConnections)
+    }
+
+    /**
+     * The newer connection displaced the first device, so the first device's disconnection no
+     * longer counts while the second one's still does.
+     */
+    @Test
+    fun aDisconnectionOfTheDeviceConnectedBeforeTheLastOneIsIgnored() {
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+        mReceiver.onReceive(mContext, connected(SECOND_ADDRESS))
+
+        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
+
+        assertEquals(0, mListener.disconnections)
+
+        mReceiver.onReceive(mContext, disconnected(SECOND_ADDRESS))
+
         assertEquals(1, mListener.disconnections)
+    }
+
+    /**
+     * Ignoring another device's disconnection must not make the receiver forget the device it is
+     * following, or the next reconnection of that device would no longer resume playback.
+     */
+    @Test
+    fun aDisconnectionOfAnotherDeviceKeepsTheRememberedAddress() {
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+        mReceiver.onReceive(mContext, disconnected(SECOND_ADDRESS))
+
+        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
+
+        assertEquals(1, mListener.disconnections)
+
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+
+        assertEquals(1, mListener.sameDeviceConnections)
     }
 
     @Test

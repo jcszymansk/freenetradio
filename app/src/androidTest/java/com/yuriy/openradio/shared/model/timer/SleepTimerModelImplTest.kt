@@ -32,7 +32,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.math.abs
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 
 /**
  * Covers the half of the sleep timer that [SleepTimerImpl] does not own: what reaches Shared
@@ -112,6 +113,19 @@ class SleepTimerModelImplTest {
         assertTrue("The stored alarm was not armed", listener.awaitCompletion())
     }
 
+    /**
+     * A fresh install has no alarm, and starting the application must not invent one. The storage
+     * answers an unset date with the current time, so its own API cannot tell a stored alarm from
+     * none; the file it writes to is read by name instead.
+     */
+    @Test
+    fun initDoesNotStoreAnAlarmNobodySet() {
+        newModel().init()
+
+        val stored = mContext.getSharedPreferences(SLEEP_TIMER_FILE_NAME, Context.MODE_PRIVATE).all
+        assertEquals("init wrote to the sleep timer storage", emptyMap<String, Any?>(), stored)
+    }
+
     @Test
     fun initArmsNothingWhenTheStoredAlarmIsOff() {
         mStorage.saveDate(System.currentTimeMillis() + DELAY_MS)
@@ -140,11 +154,11 @@ class SleepTimerModelImplTest {
     @Test
     fun updateTimeWithTheTimerDisabledStartsFromNow() {
         mStorage.saveDate(ALARM_TIMESTAMP)
+        val model = newModel { CLOCK_NOW }
 
-        mModel.updateTime(false)
+        model.updateTime(false)
 
-        val drift = abs(System.currentTimeMillis() - mModel.getTimestamp())
-        assertTrue("A disabled timer started from $drift ms away from now", drift < NOW_TOLERANCE_MS)
+        assertEquals(CLOCK_NOW, model.getTimestamp())
     }
 
     @Test
@@ -166,17 +180,97 @@ class SleepTimerModelImplTest {
     }
 
     /**
-     * The exact boundary, a timestamp equal to the current millisecond, cannot be pinned from a
-     * test: the model reads the system clock itself, so by the time the assertion runs the
-     * timestamp is already in the past either way.
+     * The dialog sets the calendar on the main thread while other threads may read it, and
+     * [Calendar] is not thread safe: a read that lands between the fields of one [setTime] call
+     * sees an hour from one call and a minute from the other. Every read must see one whole call.
      */
     @Test
-    fun onlyATimestampInTheFutureIsValid() {
-        val now = System.currentTimeMillis()
+    fun aReadDuringSetTimeSeesOneWholeCall() {
+        mModel.setTime(ALARM_HOUR, ALARM_MINUTE)
+        val deadline = System.currentTimeMillis() + RACE_MS
+        val failure = AtomicReference<Throwable?>(null)
+        val writer = thread {
+            try {
+                while (System.currentTimeMillis() < deadline && failure.get() == null) {
+                    mModel.setTime(ALARM_HOUR, ALARM_MINUTE)
+                    mModel.setTime(OTHER_HOUR, OTHER_MINUTE)
+                }
+            } catch (e: Throwable) {
+                failure.compareAndSet(null, e)
+            }
+        }
+        val reader = thread {
+            try {
+                val seen = Calendar.getInstance()
+                while (System.currentTimeMillis() < deadline && failure.get() == null) {
+                    seen.time = mModel.getTime()
+                    val read = listOf(
+                        seen.get(Calendar.HOUR_OF_DAY),
+                        seen.get(Calendar.MINUTE),
+                        seen.get(Calendar.SECOND),
+                        seen.get(Calendar.MILLISECOND)
+                    )
+                    if (read != listOf(ALARM_HOUR, ALARM_MINUTE, 0, 0) &&
+                        read != listOf(OTHER_HOUR, OTHER_MINUTE, 0, 0)
+                    ) {
+                        failure.compareAndSet(
+                            null, AssertionError("Read $read, which no single setTime call wrote")
+                        )
+                    }
+                }
+            } catch (e: Throwable) {
+                failure.compareAndSet(null, e)
+            }
+        }
+        writer.join()
+        reader.join()
 
-        assertTrue(mModel.isTimestampNotValid(now))
-        assertTrue(mModel.isTimestampNotValid(now - FUTURE_MS))
-        assertFalse(mModel.isTimestampNotValid(now + FUTURE_MS))
+        failure.get()?.let { throw AssertionError("The calendar was read mid-write", it) }
+    }
+
+    @Test
+    fun onlyATimestampInTheFutureIsValid() {
+        val model = newModel { CLOCK_NOW }
+
+        assertTrue(model.isTimestampNotValid(CLOCK_NOW - 1))
+        assertTrue(model.isTimestampNotValid(CLOCK_NOW))
+        assertFalse(model.isTimestampNotValid(CLOCK_NOW + 1))
+    }
+
+    /**
+     * The settings dialog lets through what the model calls valid and hands it to the timer, so a
+     * timestamp the model rejects must be one the timer refuses as well, and the instant where the
+     * two used to part is the current millisecond.
+     */
+    @Test
+    fun theTimerRefusesTheTimestampTheModelRejects() {
+        val listener = RecordingListener()
+        val model = newModel { CLOCK_NOW }
+        model.addSleepTimerListener(listener)
+
+        assertTrue(model.isTimestampNotValid(CLOCK_NOW))
+        model.updateTimer(CLOCK_NOW, true)
+
+        assertFalse(
+            "The timer fired for a timestamp the model rejects",
+            listener.awaitCompletionDuring(SILENCE_MS)
+        )
+    }
+
+    /**
+     * The other half of the agreement: the model's clock is the one the timer measures its delay
+     * from, so a timestamp the model accepts is armed rather than refused as past.
+     */
+    @Test
+    fun theTimerArmsTheTimestampTheModelAccepts() {
+        val listener = RecordingListener()
+        val model = newModel { CLOCK_NOW }
+        model.addSleepTimerListener(listener)
+
+        assertFalse(model.isTimestampNotValid(CLOCK_NOW + DELAY_MS))
+        model.updateTimer(CLOCK_NOW + DELAY_MS, true)
+
+        assertTrue("The timer never completed", listener.awaitCompletion())
     }
 
     @Test
@@ -202,6 +296,23 @@ class SleepTimerModelImplTest {
         assertTrue("The second listener was never notified", second.awaitCompletion())
     }
 
+    /**
+     * The service's listener, the one that stops playback, is registered like any other, so a
+     * listener ahead of it that fails must not keep the completion from reaching it.
+     */
+    @Test
+    fun aFailingListenerDoesNotSilenceTheListenersAfterIt() {
+        val failing = ThrowingListener()
+        val after = RecordingListener()
+        mModel.addSleepTimerListener(failing)
+        mModel.addSleepTimerListener(after)
+
+        mModel.updateTimer(System.currentTimeMillis() + DELAY_MS, true)
+
+        assertTrue("The failing listener was never called", failing.awaitCall())
+        assertTrue("The listener after a failing one was never notified", after.awaitCompletion())
+    }
+
     @Test
     fun aRemovedListenerHearsNothing() {
         val kept = RecordingListener()
@@ -214,6 +325,39 @@ class SleepTimerModelImplTest {
 
         assertTrue("The kept listener was never notified", kept.awaitCompletion())
         assertFalse("A removed listener was notified", removed.awaitCompletionDuring(SILENCE_MS))
+    }
+
+    /**
+     * Turning the timer off has to stop the one that is counting down, not only the stored flag:
+     * otherwise it would still close the service while the settings say it is off.
+     */
+    @Test
+    fun disablingCancelsATimerThatIsRunning() {
+        val listener = RecordingListener()
+        mModel.addSleepTimerListener(listener)
+        mModel.setEnabled(true)
+        mModel.updateTimer(System.currentTimeMillis() + DELAY_MS, true)
+
+        mModel.setEnabled(false)
+
+        assertFalse("A disabled timer completed", listener.awaitCompletionDuring(SILENCE_MS))
+        assertFalse(mStorage.loadEnabled())
+    }
+
+    /**
+     * Enabling only records the choice. The stored date may be unset, which reads as the current
+     * time, so arming it here could fire at once; the dialog arms the time the user picked.
+     */
+    @Test
+    fun enablingArmsNothingByItself() {
+        val listener = RecordingListener()
+        mModel.addSleepTimerListener(listener)
+        mStorage.saveDate(System.currentTimeMillis() + DELAY_MS)
+
+        mModel.setEnabled(true)
+
+        assertFalse("Enabling armed the timer", listener.awaitCompletionDuring(SILENCE_MS))
+        assertTrue(mStorage.loadEnabled())
     }
 
     /**
@@ -251,8 +395,8 @@ class SleepTimerModelImplTest {
         assertEquals(alarm, mStorage.loadDate().time)
     }
 
-    private fun newModel(): SleepTimerModelImpl {
-        return SleepTimerModelImpl(WeakReference(mContext))
+    private fun newModel(clock: () -> Long = System::currentTimeMillis): SleepTimerModelImpl {
+        return SleepTimerModelImpl(WeakReference(mContext), clock)
     }
 
     /**
@@ -276,6 +420,23 @@ class SleepTimerModelImplTest {
         }
     }
 
+    /**
+     * Fails every completion it hears, after recording that it heard one.
+     */
+    private class ThrowingListener : SleepTimerListener {
+
+        private val mCalled = CountDownLatch(1)
+
+        override fun onComplete() {
+            mCalled.countDown()
+            throw IllegalStateException("A listener that fails")
+        }
+
+        fun awaitCall(): Boolean {
+            return mCalled.await(COMPLETION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        }
+    }
+
     private companion object {
 
         const val ALARM_TIMESTAMP = 1_700_000_000_000L
@@ -286,11 +447,30 @@ class SleepTimerModelImplTest {
         const val ALARM_HOUR = 22
         const val ALARM_MINUTE = 15
 
+        /**
+         * A second time of day that shares neither its hour nor its minute with the alarm, so a
+         * read mixing the two is told apart from both.
+         */
+        const val OTHER_HOUR = 7
+        const val OTHER_MINUTE = 40
+
+        /**
+         * How long the calendar is written and read at once.
+         */
+        const val RACE_MS = 3_000L
+
+        /**
+         * Mirrors the private file name of [SleepTimerStorage].
+         */
+        const val SLEEP_TIMER_FILE_NAME = "SleepTimerStorage"
+
         const val DELAY_MS = 300L
 
-        const val FUTURE_MS = 60_000L
-
-        const val NOW_TOLERANCE_MS = 10_000L
+        /**
+         * The instant a fixed clock reports, years before the real one, so a timer that measured
+         * its delay from the system clock instead would refuse everything as past.
+         */
+        const val CLOCK_NOW = 1_500_000_000_000L
 
         const val COMPLETION_TIMEOUT_MS = 5_000L
 

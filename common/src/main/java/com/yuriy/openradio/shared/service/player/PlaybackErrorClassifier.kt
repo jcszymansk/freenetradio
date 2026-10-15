@@ -52,7 +52,7 @@ class PlaybackErrorClassifier {
     }
 
     private fun decide(exception: PlaybackException): PlaybackErrorDecision {
-        if (exception.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) {
+        if (exception.errorCode in NETWORK_LOSS_CODES) {
             return PlaybackErrorDecision.NetworkLost
         }
         val cause = exception.cause
@@ -82,6 +82,17 @@ class PlaybackErrorClassifier {
          * String tag to use in logs.
          */
         private const val TAG = "PEC"
+
+        /**
+         * How a lost network fails a stream. A refused or unresolvable connection is the network
+         * the phone had going away. A timeout is the signal going while the phone keeps that
+         * network, which is what a dead zone does: the connection stays open, nothing more arrives
+         * over it, and a new one is never answered (TASK-018).
+         */
+        private val NETWORK_LOSS_CODES = setOf(
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+        )
 
         /**
          * Number of errors tolerated before the stream is treated as broken.

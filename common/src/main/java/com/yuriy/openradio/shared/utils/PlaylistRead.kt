@@ -22,9 +22,9 @@ package com.yuriy.openradio.shared.utils
 sealed class PlaylistRead {
 
     /**
-     * The read ran, and the playlist named [urls] in this order.
+     * The read ran, and the playlist named [streams] in this order.
      */
-    data class Urls(val urls: List<String>) : PlaylistRead()
+    data class Streams(val streams: List<ResolvedStream>) : PlaylistRead()
 
     /**
      * The read ran, and the station url could not be opened, or what it answered could not be

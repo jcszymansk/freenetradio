@@ -286,30 +286,29 @@ class OpenRadioServicePlaybackTest {
     }
 
     /**
-     * With nothing loaded, the same play request is the resumption path, and the session answers
-     * it out of the playlist the player remembers. That playlist is cleared along with the
-     * player's own queue, so the session has nothing left to offer and nothing starts.
-     *
-     * This is the behaviour as it stands, not the behaviour that was intended: TASK-040 records
-     * that the remembered playlist can never outlive the queue, which leaves the restoring branch
-     * of `onPlaybackResumption` unable to restore anything.
+     * TASK-040. With nothing loaded, the same play request is the resumption path, which is what a
+     * media button sends once the queue is gone. The session answers it out of the queue the
+     * player had before it was emptied, and starts the station that was current then, not the one
+     * the user first selected.
      */
     @Test
-    fun aPlayRequestWithNothingLoadedRestoresNothing() {
-        val stations = seedStations(2)
+    fun aPlayRequestWithNothingLoadedRestoresWhatWasPlaying() {
+        val stations = seedStations(3)
 
         selectAndPlay(stations[0])
         mBrowser.awaitPlaying()
+        mBrowser.seekToNext()
+        mBrowser.awaitPlayback("the next station to be current") {
+            mBrowser.currentMediaItemIndex() == 1
+        }
         clearTheQueue()
 
         mBrowser.play()
 
-        mBrowser.awaitPlayback("the play request to be answered") {
-            mBrowser.playbackState() != Player.STATE_IDLE
-        }
-        assertEquals(0, mBrowser.mediaItemCount())
-        assertNull(mBrowser.currentMediaId())
-        assertFalse(mBrowser.isPlaying())
+        mBrowser.awaitPlaying()
+        assertEquals(stations.map { it.id }, mBrowser.queueMediaIds())
+        assertEquals(stations[1].id, mBrowser.currentMediaId())
+        assertEquals(stations[1].getStreamUrlFixed(), mBrowser.currentMediaItemUri())
     }
 
     /**

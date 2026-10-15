@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.model.timer
 
 import android.content.Context
 import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
+import com.yuriy.openradio.shared.utils.AppLogger
 import java.lang.ref.WeakReference
 import java.util.Calendar
 import java.util.Date
@@ -27,24 +28,33 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * [SleepTimerModelImpl] is a class that is responsible for preparing and managing the data for an Activity or a Fragment.
  * It also handles the communication of the Activity / Fragment with the rest of the application
  * (e.g. calling the business logic classes).
+ *
+ * @param contextRef Weak reference to the application context, for the stored timer state.
+ * @param mClock Wall clock milliseconds. The timer measures its delay from the same clock, so the
+ * model and the timer agree about which timestamps are in the future.
  */
-class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel {
+class SleepTimerModelImpl(
+    contextRef: WeakReference<Context>,
+    private val mClock: () -> Long = System::currentTimeMillis
+) : SleepTimerModel {
 
     private val mSleepTimerStorage = SleepTimerStorage(contextRef)
-    private var mTimerListenerExt = ConcurrentLinkedQueue<SleepTimerListener>()
+    private val mTimerListenerExt = ConcurrentLinkedQueue<SleepTimerListener>()
     private val mTimerListener = SleepTimerListenerImpl()
-    private val mTimer = SleepTimerImpl(mTimerListener)
+    private val mTimer = SleepTimerImpl(mTimerListener, mClock)
 
     /**
-     * Current implementation of the calendar.
+     * The time the settings dialog is editing. [Calendar] is not thread safe and the model is
+     * shared across threads, so every access holds the calendar's monitor.
      */
     private val mCalendar = Calendar.getInstance()
 
+    /**
+     * Arms the stored alarm, if it is enabled, without writing anything back: an unset date reads
+     * as the current time, and storing that would turn it into an alarm nobody set.
+     */
     override fun init() {
-        updateTimer(
-            mSleepTimerStorage.loadDate().time,
-            isEnabled()
-        )
+        mTimer.handle(mSleepTimerStorage.loadDate().time, isEnabled())
     }
 
     /**
@@ -57,12 +67,17 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
     }
 
     /**
-     * Sets whether or not timer is enabled.
+     * Sets whether or not timer is enabled. Disabling also cancels a timer that is running, so it
+     * cannot close the service once the timer is off. Enabling arms nothing: the stored date may be
+     * unset, which reads as the current time, and [updateTimer] arms the time the user picked.
      *
      * @param value True if enabled, false otherwise.
      */
     override fun setEnabled(value: Boolean) {
         mSleepTimerStorage.saveEnabled(value)
+        if (!value) {
+            mTimer.cancel()
+        }
     }
 
     /**
@@ -71,10 +86,9 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
      * @param enabled Whether or not timer is enabled by the user.
      */
     override fun updateTime(enabled: Boolean) {
-        if (enabled) {
-            mCalendar.time = mSleepTimerStorage.loadDate()
-        } else {
-            mCalendar.time = Date(System.currentTimeMillis())
+        val time = if (enabled) mSleepTimerStorage.loadDate() else Date(mClock())
+        synchronized(mCalendar) {
+            mCalendar.time = time
         }
     }
 
@@ -96,9 +110,11 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
      * @param day Day of the month. This is a synonym for DATE. The first day of the month has value 1.
      */
     override fun setDate(year: Int, month: Int, day: Int) {
-        mCalendar.set(Calendar.YEAR, year)
-        mCalendar.set(Calendar.MONTH, month)
-        mCalendar.set(Calendar.DAY_OF_MONTH, day)
+        synchronized(mCalendar) {
+            mCalendar.set(Calendar.YEAR, year)
+            mCalendar.set(Calendar.MONTH, month)
+            mCalendar.set(Calendar.DAY_OF_MONTH, day)
+        }
     }
 
     /**
@@ -109,10 +125,12 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
      * @param minute Minute within the hour. E.g., at 10:04:15.250 PM the MINUTE is 4.
      */
     override fun setTime(hourOfDay: Int, minute: Int) {
-        mCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
-        mCalendar.set(Calendar.MINUTE, minute)
-        mCalendar.set(Calendar.SECOND, 0)
-        mCalendar.set(Calendar.MILLISECOND, 0)
+        synchronized(mCalendar) {
+            mCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+            mCalendar.set(Calendar.MINUTE, minute)
+            mCalendar.set(Calendar.SECOND, 0)
+            mCalendar.set(Calendar.MILLISECOND, 0)
+        }
     }
 
     /**
@@ -121,7 +139,9 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
      * @return Time representation.
      */
     override fun getTime(): Date {
-        return mCalendar.time
+        synchronized(mCalendar) {
+            return mCalendar.time
+        }
     }
 
     /**
@@ -134,12 +154,13 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
     }
 
     /**
-     * Helper function to validate whether or not timestamp is not valid for processing.
+     * Helper function to validate whether or not timestamp is not valid for processing. The timer
+     * owns the rule, so a timestamp rejected here is one the timer would refuse to arm.
      *
      * @return True if not valid, false otherwise.
      */
     override fun isTimestampNotValid(value: Long): Boolean {
-        return value <= System.currentTimeMillis()
+        return !mTimer.accepts(value)
     }
 
     override fun addSleepTimerListener(listener: SleepTimerListener) {
@@ -150,13 +171,20 @@ class SleepTimerModelImpl(contextRef: WeakReference<Context>) : SleepTimerModel 
         mTimerListenerExt.remove(listener)
     }
 
+    /**
+     * Fans a completion out to every registered listener. Each one is shielded from the others: the
+     * service's listener, which is the one that stops playback, must hear the completion even when
+     * a listener ahead of it fails.
+     */
     private inner class SleepTimerListenerImpl : SleepTimerListener {
 
         override fun onComplete() {
             mSleepTimerStorage.saveEnabled(false)
-            synchronized(mTimerListenerExt) {
-                for (listener in mTimerListenerExt) {
+            for (listener in mTimerListenerExt) {
+                try {
                     listener.onComplete()
+                } catch (e: Exception) {
+                    AppLogger.e("Sleep timer listener $listener failed on completion", e)
                 }
             }
         }

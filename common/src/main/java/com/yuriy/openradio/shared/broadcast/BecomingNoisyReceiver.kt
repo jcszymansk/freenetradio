@@ -32,11 +32,12 @@ import com.yuriy.openradio.shared.utils.AppLogger.i
  */
 class BecomingNoisyReceiver(private val mListener: Listener) : AbstractReceiver() {
     /**
-     *
+     * Hears that audio is about to become noisy.
      */
     interface Listener {
         /**
-         *
+         * Called when the audio output is about to switch to the device speaker, for example
+         * because headphones were unplugged or a Bluetooth device disconnected.
          */
         fun onAudioBecomingNoisy()
     }

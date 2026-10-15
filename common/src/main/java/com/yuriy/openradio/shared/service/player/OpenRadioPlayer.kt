@@ -45,6 +45,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
+import androidx.media3.session.MediaSession
 import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.media.BrowseTree
@@ -55,6 +56,8 @@ import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.PlayerUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.min
@@ -98,6 +101,13 @@ class OpenRadioPlayer(
     private val mPlaylist: MutableList<MediaItem> = arrayListOf()
 
     /**
+     * The last queue that held anything, as it stood before the latest change that could have
+     * emptied it, at the item that was current then. It outlives the queue on purpose, see
+     * [getResumption].
+     */
+    private var mLastQueue = MediaSession.MediaItemsWithStartPosition(emptyList(), 0, C.TIME_UNSET)
+
+    /**
      * Handler for the ExoPlayer to handle events.
      */
     private val mUiScope = CoroutineScope(Dispatchers.Main)
@@ -124,6 +134,14 @@ class OpenRadioPlayer(
      * meanwhile. Written and read on the main thread.
      */
     private var mIsAwaitingStream = false
+
+    /**
+     * The pending retry of a stream ExoPlayer gave up for a lost network. A network-connected
+     * event resumes such a stream too, but a phone that loses its signal in a dead zone usually
+     * keeps reporting the network it had, so that event may never come (TASK-018). Pending only
+     * while [mNetworkRecovery] awaits the network. Started and cancelled on the main thread.
+     */
+    private var mStreamRetry: Job? = null
 
     private val mExoPlayer: Player by lazy {
         AppLogger.i("Init ExoPlayer")
@@ -173,6 +191,16 @@ class OpenRadioPlayer(
         return ArrayList(mPlaylist)
     }
 
+    /**
+     * What a play request that finds the queue empty loads: the queue as it stood just before it
+     * was emptied, at the item that was current then, which is what was playing. Media3 asks only
+     * when the player has no current item, which for this player means an empty queue, so the
+     * answer is not meant for a loaded one.
+     */
+    fun getResumption(): MediaSession.MediaItemsWithStartPosition {
+        return mLastQueue
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Player interface
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,11 +220,20 @@ class OpenRadioPlayer(
     }
 
     override fun replaceMediaItem(index: Int, mediaItem: MediaItem) {
-        mPlayer.replaceMediaItem(index, mediaItem)
+        replaceMediaItems(index, index + 1, mutableListOf(mediaItem))
     }
 
     override fun replaceMediaItems(fromIndex: Int, toIndex: Int, mediaItems: MutableList<MediaItem>) {
+        rememberQueue()
         mPlayer.replaceMediaItems(fromIndex, toIndex, mediaItems)
+        // The player ignores a range that starts past the end of the queue and clamps one that runs
+        // past it, so the copy does too.
+        if (fromIndex > mPlaylist.size) {
+            return
+        }
+        val range = mPlaylist.subList(fromIndex, min(toIndex, mPlaylist.size))
+        range.clear()
+        range.addAll(mediaItems)
     }
 
     override fun release() {
@@ -231,6 +268,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size}")
+        rememberQueue()
         forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems)
         mPlaylist.clear()
@@ -239,6 +277,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size} $resetPosition")
+        rememberQueue()
         forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems, resetPosition)
         mPlaylist.clear()
@@ -247,6 +286,7 @@ class OpenRadioPlayer(
 
     override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) {
         AppLogger.d("$TAG setMediaItems ${mediaItems.size} $startIndex $startPositionMs")
+        rememberQueue()
         forgetAwaitedStream("set media items")
         mPlayer.setMediaItems(mediaItems, startIndex, startPositionMs)
         mPlaylist.clear()
@@ -316,11 +356,13 @@ class OpenRadioPlayer(
     }
 
     override fun removeMediaItem(index: Int) {
+        rememberQueue()
         mPlayer.removeMediaItem(index)
         mPlaylist.removeAt(index)
     }
 
     override fun removeMediaItems(fromIndex: Int, toIndex: Int) {
+        rememberQueue()
         mPlayer.removeMediaItems(fromIndex, toIndex)
         val removedItemsLength = toIndex - fromIndex
         for (i in removedItemsLength - 1 downTo 0) {
@@ -330,6 +372,7 @@ class OpenRadioPlayer(
 
     override fun clearMediaItems() {
         forgetAwaitedStream("clear media items")
+        rememberQueue()
         mPlayer.clearMediaItems()
         mPlaylist.clear()
     }
@@ -782,7 +825,7 @@ class OpenRadioPlayer(
     /**
      * Resets the player to its uninitialized state.
      */
-    fun reset() {
+    private fun reset() {
         AppLogger.d("$TAG reset")
         updateNetworkRecovery(mNetworkRecovery.onStopRequested(), "reset")
         forgetAwaitedStream("reset")
@@ -810,6 +853,9 @@ class OpenRadioPlayer(
             "network policy pause"
         )
         forgetAwaitedStream("network policy pause")
+        // A station that is still awaiting the network stays one to resume on a network it may
+        // use, but it must not be tried on the network it was paused for.
+        cancelStreamRetry("network policy pause")
         mPlayer.pause()
         mPlayer.stop()
     }
@@ -828,11 +874,76 @@ class OpenRadioPlayer(
     }
 
     /**
+     * Puts [mediaItem], the stream the service found for the current station after
+     * [stopForReplacementStream], in place of the one the player could not read, and tells whether
+     * to start it.
+     *
+     * The station keeps the stream either way, so playing it later does not search again. It
+     * starts only while the station is still meant to play: a pause stays a pause, whether a
+     * controller sent it or the service paused the player itself on noisy audio or a disconnected
+     * Bluetooth device, which starts no new play request and so lets the search answer
+     * (TASK-105). Losing the audio focus for good pauses the player in the same way.
+     *
+     * @return Whether the service should prepare and play the station now.
+     */
+    fun replaceAwaitedStream(mediaItem: MediaItem): Boolean {
+        replaceMediaItem(mPlayer.currentMediaItemIndex, mediaItem)
+        if (mPlayer.playWhenReady.not()) {
+            AppLogger.i("$TAG hold the replacement stream of a paused station")
+            forgetAwaitedStream("held replacement")
+            return false
+        }
+        return true
+    }
+
+    /**
      * Whether a regained network connection should start playback again, which it should only for
      * a station the network stopped while the user wanted it playing.
      */
     fun resumesOnReconnect(): Boolean {
         return mNetworkRecovery.resumesOnReconnect
+    }
+
+    /**
+     * Keeps the queue before a change that may empty it, so that [getResumption] can still offer
+     * it once the change has. An empty queue leaves the one kept earlier in place.
+     */
+    private fun rememberQueue() {
+        if (mPlaylist.isEmpty()) {
+            return
+        }
+        mLastQueue = MediaSession.MediaItemsWithStartPosition(
+            ArrayList(mPlaylist), mPlayer.currentMediaItemIndex, C.TIME_UNSET
+        )
+    }
+
+    /**
+     * Tries the stream again after [STREAM_RETRY_DELAY_MS], unless something ends the wait for the
+     * network first. A retry that fails for the network again schedules the next one, so the
+     * stream is tried for as long as the user wants it playing.
+     */
+    private fun scheduleStreamRetry() {
+        cancelStreamRetry("a new retry")
+        AppLogger.i("$TAG retry the stream in $STREAM_RETRY_DELAY_MS ms")
+        mStreamRetry = mUiScope.launch {
+            delay(STREAM_RETRY_DELAY_MS)
+            mStreamRetry = null
+            if (mNetworkRecovery != NetworkRecovery.AWAITING_NETWORK
+                || mPlayer.playbackState != Player.STATE_IDLE
+            ) {
+                AppLogger.d("$TAG stream retry not needed, recovery $mNetworkRecovery")
+                return@launch
+            }
+            AppLogger.i("$TAG retry the stream the network stopped")
+            mPlayer.prepare()
+        }
+    }
+
+    private fun cancelStreamRetry(event: String) {
+        val retry = mStreamRetry ?: return
+        AppLogger.i("$TAG cancel the stream retry on $event")
+        retry.cancel()
+        mStreamRetry = null
     }
 
     private fun forgetAwaitedStream(event: String) {
@@ -845,6 +956,9 @@ class OpenRadioPlayer(
     private fun updateNetworkRecovery(next: NetworkRecovery, event: String) {
         val previous = mNetworkRecovery
         mNetworkRecovery = next
+        if (next != NetworkRecovery.AWAITING_NETWORK) {
+            cancelStreamRetry(event)
+        }
         if (previous != next) {
             AppLogger.i("$TAG network recovery $previous -> $next on $event")
         } else {
@@ -964,6 +1078,9 @@ class OpenRadioPlayer(
                     updateNetworkRecovery(
                         mNetworkRecovery.onNetworkLost(mPlayer.playWhenReady), "network lost"
                     )
+                    if (mNetworkRecovery == NetworkRecovery.AWAITING_NETWORK) {
+                        scheduleStreamRetry()
+                    }
                     updateStreamMetadata(mContext.getString(R.string.media_stream_network_failed))
                 }
 
@@ -1043,5 +1160,13 @@ class OpenRadioPlayer(
          * String tag to use in logs.
          */
         private const val TAG = "ORP"
+
+        /**
+         * How long the player waits, once ExoPlayer has given up a stream the network stopped,
+         * before it tries the stream again. ExoPlayer has spent its own retries by then, from a
+         * few seconds for a refused connection to over a minute for one that times out, so this
+         * only spaces the attempts out.
+         */
+        const val STREAM_RETRY_DELAY_MS = 10_000L
     }
 }

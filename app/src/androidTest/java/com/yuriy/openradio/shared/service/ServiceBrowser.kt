@@ -326,6 +326,10 @@ internal class ServiceBrowser {
         return read { isPlaying }
     }
 
+    fun playWhenReady(): Boolean {
+        return read { playWhenReady }
+    }
+
     fun currentMediaId(): String? {
         return read { currentMediaItem?.mediaId }
     }

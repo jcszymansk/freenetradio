@@ -16,6 +16,7 @@
 
 package wseemann.media.jplaylistparser.parser
 
+import androidx.media3.common.MimeTypes
 import org.hamcrest.MatcherAssert
 import org.hamcrest.core.Is
 import org.junit.Assert.assertEquals
@@ -258,11 +259,6 @@ class AutoDetectParserTest {
 
         val fixtures = listOf(
             Fixture("m3u", "#EXTM3U\n#EXTINF:-1,Station\nhttps://example.com/a", "https://example.com/a"),
-            Fixture(
-                "m3u8 by its HLS tags",
-                "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10,\nsegment.ts",
-                "https://example.com/live/segment.ts"
-            ),
             Fixture("pls", "[playlist]\nFile1=https://example.com/b\nLength1=-1", "https://example.com/b"),
             Fixture("pls in upper case", "[PLAYLIST]\nFile1=https://example.com/c\n", "https://example.com/c"),
             Fixture(
@@ -465,25 +461,102 @@ class AutoDetectParserTest {
     }
 
     /**
-     * A master playlist read as the station url itself, after the player failed to recognise it,
-     * still resolves to its variants, and a variant is kept rather than read down to segments.
+     * The player reads HLS itself, and opens a station url without the `.m3u8` extension as a
+     * progressive stream, so HLS reaches the parser only after the player failed on its type.
+     * Read here, a media playlist would become its segments and the station would play one of
+     * them and stop, and a master playlist would become one variant without adaptive bitrate
+     * (TASK-097). Whatever the server declares the content to be, the answer is the station url
+     * itself, typed so that the player opens it as HLS this time.
      */
     @Test
-    fun aVariantOfAMasterPlaylistIsKeptAsAStream() {
-        val fetcher = RecordingFetcher(
-            "https://example.com/live/low/index.m3u8" to "#EXTM3U\n#EXTINF:10,\nsegment.ts"
-        )
-        val playlist = Playlist()
+    fun anHlsStationUrlIsAnsweredWithItselfTypedAsHls() {
+        data class Fixture(val name: String, val url: String, val content: String)
 
-        AutoDetectParser(fetcher).parse(
-            "https://example.com/live/master.m3u8",
+        val fixtures = listOf(
+            Fixture("media playlist", "https://example.com/live/listen", HLS_MEDIA_PLAYLIST),
+            Fixture("master playlist", "https://example.com/live/listen", HLS_MASTER_PLAYLIST),
+            Fixture(
+                "master playlist with relative variants",
+                "https://example.com/live/master?token=a.b",
+                "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\nlow/index.m3u8\n"
+            ),
+            Fixture(
+                "media playlist behind a byte order mark",
+                "https://example.com/live/listen",
+                "\uFEFF\r\n$HLS_MEDIA_PLAYLIST"
+            ),
+            Fixture("media playlist named as a playlist of another format", "https://example.com/station.pls",
+                HLS_MEDIA_PLAYLIST)
+        )
+        val mimeTypes = listOf(
             null,
-            ByteArrayInputStream("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\nlow/index.m3u8\n".toByteArray()),
-            playlist
+            "application/octet-stream",
+            "audio/x-mpegurl",
+            "application/vnd.apple.mpegurl; charset=UTF-8",
+            "audio/x-scpls"
         )
 
-        assertEquals(emptyList<String>(), fetcher.reads)
-        assertEquals(listOf("https://example.com/live/low/index.m3u8"), uris(playlist))
+        for (fixture in fixtures) {
+            for (mimeType in mimeTypes) {
+                val playlist = Playlist()
+
+                AutoDetectParser(NO_READS).parse(
+                    fixture.url, mimeType, ByteArrayInputStream(fixture.content.toByteArray()), playlist
+                )
+
+                val entry = playlist.playlistEntries.single()
+                assertEquals("${fixture.name} as $mimeType", fixture.url, entry[PlaylistEntry.URI])
+                assertEquals(
+                    "${fixture.name} as $mimeType", MimeTypes.APPLICATION_M3U8, entry[PlaylistEntry.MIME_TYPE]
+                )
+            }
+        }
+    }
+
+    /**
+     * An extended M3U without an HLS tag is an ordinary playlist, whatever extension it is served
+     * under, and its entries carry no type of their own: the player reads theirs from their urls.
+     */
+    @Test
+    fun anExtendedM3uWithoutHlsTagsIsStillReadAsAPlaylist() {
+        listOf("https://example.com/live/listen", "https://example.com/live/station.m3u8").forEach { url ->
+            val playlist = Playlist()
+
+            AutoDetectParser(NO_READS).parse(
+                url,
+                null,
+                ByteArrayInputStream("#EXTM3U\n#EXTINF:-1,Station\nhttps://example.com/stream\n".toByteArray()),
+                playlist
+            )
+
+            assertEquals(url, listOf("https://example.com/stream"), uris(playlist))
+            assertEquals(url, "", playlist.playlistEntries.single()[PlaylistEntry.MIME_TYPE])
+        }
+    }
+
+    /**
+     * An ASX `ENTRYREF` is followed whatever its extension, so an HLS address without one is read
+     * before anything knows it is HLS. What it serves is kept the same way as the station url's.
+     */
+    @Test
+    fun anHlsAddressWithoutItsExtensionThatAPlaylistRefersToIsKeptTypedAsHls() {
+        val hls = "https://example.com/live/listen"
+        listOf(HLS_MEDIA_PLAYLIST, HLS_MASTER_PLAYLIST).forEach { content ->
+            val fetcher = RecordingFetcher(hls to content)
+            val playlist = Playlist()
+
+            AutoDetectParser(fetcher).parse(
+                "https://example.com/station.asx",
+                "video/x-ms-asf",
+                ByteArrayInputStream("<ASX><ENTRYREF href=\"$hls\"/></ASX>".toByteArray()),
+                playlist
+            )
+
+            assertEquals(content, listOf(hls), fetcher.reads)
+            val entry = playlist.playlistEntries.single()
+            assertEquals(content, hls, entry[PlaylistEntry.URI])
+            assertEquals(content, MimeTypes.APPLICATION_M3U8, entry[PlaylistEntry.MIME_TYPE])
+        }
     }
 
     @Test
@@ -627,6 +700,13 @@ class AutoDetectParserTest {
          */
         const val HLS_MASTER_PLAYLIST =
             "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\nhttps://example.com/live/low/index.m3u8\n"
+
+        /**
+         * A live media playlist: its segments are what reading it as a playlist would answer.
+         */
+        const val HLS_MEDIA_PLAYLIST =
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-MEDIA-SEQUENCE:7\n" +
+                    "#EXTINF:10,\nsegment7.ts\n#EXTINF:10,\nsegment8.ts\n"
 
         fun uris(playlist: Playlist): List<String> {
             return playlist.playlistEntries.map { it[PlaylistEntry.URI] }

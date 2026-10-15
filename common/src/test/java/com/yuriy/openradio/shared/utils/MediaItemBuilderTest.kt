@@ -24,9 +24,10 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.Util
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 
 /**
- * Pins [MediaItemBuilder.withStreamUrl], which swaps the stream a playlist resolved to into the
+ * Pins [MediaItemBuilder.withStream], which swaps the stream a playlist resolved to into the
  * station's item. The content type is asked of Media3's own [Util.inferContentTypeForUriAndMimeType],
  * the call its default media source factory makes, so these tests show what the player would build.
  */
@@ -44,11 +45,27 @@ class MediaItemBuilderTest {
             "https://example.com/live/index.m3u8#start.0",
             "https://example.com/live/index.m3u8;jsessionid=a.b"
         ).forEach { url ->
-            val resolved = MediaItemBuilder.withStreamUrl(stationItem(), url)
+            val resolved = MediaItemBuilder.withStream(stationItem(), ResolvedStream.of(entry(url)))
 
             assertEquals(url, MimeTypes.APPLICATION_M3U8, resolved.localConfiguration?.mimeType)
             assertEquals(url, C.CONTENT_TYPE_HLS, contentTypeOf(resolved))
         }
+    }
+
+    /**
+     * A station url without the `.m3u8` extension that the parser found to serve HLS (TASK-097)
+     * is played as HLS, not as the progressive stream the player failed on.
+     */
+    @Test
+    fun anHlsStationUrlWithoutItsExtensionIsPlayedAsHls() {
+        val station = stationItem("https://example.com/live/listen")
+        val entry = entry("https://example.com/live/listen")
+        entry[PlaylistEntry.MIME_TYPE] = MimeTypes.APPLICATION_M3U8
+
+        val resolved = MediaItemBuilder.withStream(station, ResolvedStream.of(entry))
+
+        assertEquals(C.CONTENT_TYPE_OTHER, contentTypeOf(station))
+        assertEquals(C.CONTENT_TYPE_HLS, contentTypeOf(resolved))
     }
 
     /**
@@ -63,30 +80,22 @@ class MediaItemBuilderTest {
     }
 
     @Test
-    fun theTypeIsReadFromTheResolvedStream() {
-        data class Fixture(val url: String, val mimeType: String)
+    fun theItemTakesTheUrlAndTheTypeOfTheStream() {
+        val stream = ResolvedStream("https://example.com/stream", MimeTypes.AUDIO_AAC)
 
-        listOf(
-            Fixture("https://example.com/live/index.M3U8?token=a.b", MimeTypes.APPLICATION_M3U8),
-            Fixture("https://example.com/live/index.m3u8;jsessionid=a.b", MimeTypes.APPLICATION_M3U8),
-            Fixture("https://example.com/live/index.m3u8;jsessionid=ab?token=c;d", MimeTypes.APPLICATION_M3U8),
-            Fixture("https://example.com/stream.mp3;jsessionid=ab", MimeTypes.AUDIO_MPEG),
-            Fixture("https://example.com/stream.mp3", MimeTypes.AUDIO_MPEG),
-            Fixture("https://example.com/stream.aac?sid=1", MimeTypes.AUDIO_AAC),
-            Fixture("https://example.com/stream", MimeTypes.AUDIO_UNKNOWN)
-        ).forEach { fixture ->
-            val resolved = MediaItemBuilder.withStreamUrl(stationItem(), fixture.url)
+        val resolved = MediaItemBuilder.withStream(stationItem(), stream)
 
-            assertEquals(fixture.url, fixture.url, resolved.localConfiguration?.uri.toString())
-            assertEquals(fixture.url, fixture.mimeType, resolved.localConfiguration?.mimeType)
-        }
+        assertEquals(stream.url, resolved.localConfiguration?.uri.toString())
+        assertEquals(stream.mimeType, resolved.localConfiguration?.mimeType)
     }
 
     @Test
     fun everythingButTheStreamIsKept() {
         val station = stationItem()
 
-        val resolved = MediaItemBuilder.withStreamUrl(station, "https://example.com/stream.mp3")
+        val resolved = MediaItemBuilder.withStream(
+            station, ResolvedStream("https://example.com/stream.mp3", MimeTypes.AUDIO_MPEG)
+        )
 
         assertEquals(station.mediaId, resolved.mediaId)
         assertEquals(station.mediaMetadata, resolved.mediaMetadata)
@@ -98,14 +107,20 @@ class MediaItemBuilderTest {
          * A station whose address is a playlist, typed the way [MediaItemBuilder.buildPlayable]
          * types it.
          */
-        fun stationItem(): MediaItem {
-            val uri = Uri.parse("https://example.com/station.pls")
+        fun stationItem(url: String = "https://example.com/station.pls"): MediaItem {
+            val uri = Uri.parse(url)
             return MediaItem.Builder()
                 .setMediaId("station")
                 .setUri(uri)
                 .setMimeType(AppUtils.getMimeTypeFromUri(uri))
                 .setMediaMetadata(MediaMetadata.Builder().setTitle("Station").build())
                 .build()
+        }
+
+        fun entry(url: String): PlaylistEntry {
+            val entry = PlaylistEntry()
+            entry[PlaylistEntry.URI] = url
+            return entry
         }
 
         fun contentTypeOf(item: MediaItem): Int {
