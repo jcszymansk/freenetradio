@@ -190,7 +190,7 @@ class OpenRadioService : MediaLibraryService() {
         mStartIds = ConcurrentLinkedQueue()
         mUiScope = CoroutineScope(Dispatchers.Main)
         mScope = CoroutineScope(Dispatchers.IO)
-        mCommandScope = CoroutineScope(Dispatchers.IO)
+        mCommandScope = MediaItemCommandDependencies.newCommandScope()
     }
 
     interface ResultListener {

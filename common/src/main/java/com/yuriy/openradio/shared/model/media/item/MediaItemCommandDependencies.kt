@@ -28,9 +28,12 @@ import com.yuriy.openradio.shared.service.OpenRadioServicePresenter
 import com.yuriy.openradio.shared.utils.AppLogger
 import java.util.TreeSet
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -56,8 +59,8 @@ class MediaItemCommandDependencies(
     val isSavedInstance: Boolean,
     val options: Bundle,
     /**
-     * Where [execute] runs a command. Private, so that a command cannot start work of its own that
-     * outlives the execution and escapes the deadline.
+     * Where [execute] runs a command, built by [newCommandScope] outside tests. Private, so that a
+     * command cannot start work of its own that outlives the execution and escapes the deadline.
      */
     private val mScope: CoroutineScope,
     resultListener: ResultListener,
@@ -120,7 +123,9 @@ class MediaItemCommandDependencies(
      * around them could only fire once they returned, and a provider stuck on the network would
      * leave the request unanswered for good. The request is answered empty as well when [command]
      * returns without answering, fails, or is cancelled with [mScope], so that every execution
-     * answers exactly once. Whatever [command] delivers after that is dropped.
+     * answers exactly once. Whatever [command] delivers after that is dropped. A failure of
+     * [command] still fails the execution's coroutine, so it ends wherever [mScope] puts it, which
+     * for a scope from [newCommandScope] is the log.
      *
      * A stuck [command] keeps its thread until the presenter call returns; nothing can interrupt it
      * safely in the middle of a cache or database write.
@@ -133,7 +138,7 @@ class MediaItemCommandDependencies(
         check(mExecuted.compareAndSet(false, true)) { "$CLASS_NAME $parentId has already executed a command" }
         // Undispatched, so the try below is entered before this returns: a job cancelled before a
         // thread picked it up would otherwise never run its finally, and never answer.
-        mScope.launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {
+        mScope.launch(Dispatchers.IO + CoroutineName("$CLASS_NAME $parentId"), CoroutineStart.UNDISPATCHED) {
             val worker = launch { command.execute(playbackStateListener, this@MediaItemCommandDependencies) }
             try {
                 if (withTimeoutOrNull(mTimeoutMillis) { worker.join() } == null) {
@@ -191,6 +196,27 @@ class MediaItemCommandDependencies(
          * String tag to use in the log message.
          */
         private val CLASS_NAME = MediaItemCommandDependencies::class.java.simpleName
+
+        /**
+         * Builds the scope the service hands to every browse command it executes.
+         *
+         * A command that throws fails the coroutine [execute] runs it in. The request is answered
+         * empty all the same, but the failure has to end somewhere, and in a plain
+         * `CoroutineScope(Dispatchers.IO)` it ends badly twice: it cancels the scope's job, so every
+         * later command starts cancelled and is answered empty without asking anything, and with no
+         * handler to take it, it reaches the thread's uncaught exception handler, which on Android
+         * ends the process. A supervisor keeps the failure to the one execution, and the handler
+         * ends it in [onFailure].
+         *
+         * @param onFailure Where a failure ends, with a message naming the execution. Only tests
+         * choose anything but the error log.
+         */
+        fun newCommandScope(onFailure: (String, Throwable) -> Unit = AppLogger::e): CoroutineScope {
+            val handler = CoroutineExceptionHandler { context, failure ->
+                onFailure("Browse command failed, its request was answered empty: $context", failure)
+            }
+            return CoroutineScope(SupervisorJob() + Dispatchers.IO + handler)
+        }
     }
 }
 

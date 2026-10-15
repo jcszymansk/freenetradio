@@ -41,11 +41,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -146,7 +145,8 @@ internal fun dependencies(
     isSameCatalogue: Boolean = false,
     isSavedInstance: Boolean = false,
     options: Bundle = Bundle(),
-    timeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS
+    timeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS,
+    scope: CoroutineScope = listener.scope
 ): MediaItemCommandDependencies {
     return MediaItemCommandDependencies(
         testContext(),
@@ -156,7 +156,7 @@ internal fun dependencies(
         isSameCatalogue,
         isSavedInstance,
         options,
-        listener.scope,
+        scope,
         listener,
         timeoutMillis
     )
@@ -175,21 +175,19 @@ internal fun dependencies(
 internal class RecordingCommandListener : OpenRadioService.ResultListener {
 
     /**
-     * Failures of the coroutines launched in [scope]. Without the handler they would reach the
-     * thread's uncaught exception handler on an IO thread, where the test that caused them never
-     * sees them.
+     * Failures of the coroutines launched in [scope]. In the service they would only be logged,
+     * where the test that caused them never sees them.
      */
     private val mCoroutineFailures = ConcurrentLinkedQueue<Throwable>()
 
-    private val mScopeJob = SupervisorJob()
-
     /**
-     * The scope handed to the command through [dependencies]. A supervisor, so one failed
-     * coroutine is reported rather than silently cancelling the others.
+     * The scope handed to the command through [dependencies], built as the service builds its
+     * own, so that what one failed coroutine does to the others here is what it does there. Only
+     * the end of a failure differs: it is kept for [settle] instead of logged.
      */
-    val scope = CoroutineScope(
-        mScopeJob + Dispatchers.IO + CoroutineExceptionHandler { _, failure -> mCoroutineFailures.add(failure) }
-    )
+    val scope = MediaItemCommandDependencies.newCommandScope { _, failure -> mCoroutineFailures.add(failure) }
+
+    private val mScopeJob = scope.coroutineContext.job
 
     private val mResultLatch = CountDownLatch(1)
 
