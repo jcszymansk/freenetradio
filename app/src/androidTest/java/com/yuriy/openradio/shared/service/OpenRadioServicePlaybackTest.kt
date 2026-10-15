@@ -21,7 +21,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
@@ -214,7 +213,7 @@ class OpenRadioServicePlaybackTest {
 
         selectAndPlay(stations[0])
         mBrowser.awaitPlaying()
-        mBrowser.awaitMetadataSubtitle(liveStreamLabel())
+        mBrowser.awaitMetadataSubtitle(mAudio.liveStreamDescription())
 
         assertTrue(
             "The station's own title never reached the controller",
@@ -385,7 +384,4 @@ class OpenRadioServicePlaybackTest {
         assertEquals(id, mStorages.freshLatest().get().id)
     }
 
-    private fun liveStreamLabel(): String {
-        return mContext.getString(R.string.media_description_default)
-    }
 }

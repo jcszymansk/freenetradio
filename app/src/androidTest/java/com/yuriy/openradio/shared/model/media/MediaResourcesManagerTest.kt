@@ -31,6 +31,7 @@ import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.ServiceBrowser
 import com.yuriy.openradio.shared.service.ServiceStorages
+import com.yuriy.openradio.shared.service.assertRadioBrowserIsBound
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import kotlinx.coroutines.Dispatchers
@@ -50,29 +51,31 @@ import java.util.concurrent.TimeUnit
 @RunWith(AndroidJUnit4::class)
 class MediaResourcesManagerTest {
 
-    private lateinit var context: Context
+    private lateinit var mContext: Context
 
     /**
      * The service's own storages, because the service is what answers these browses. Clearing a
      * parallel instance would wipe the files and leave the service's cached favorites and latest
      * station in place, and a service started after that would adopt the cached station.
      */
-    private lateinit var storages: ServiceStorages
-    private lateinit var apiCache: PersistentApiCache
-    private var resourcesManager: MediaResourcesManager? = null
+    private lateinit var mStorages: ServiceStorages
+
+    private lateinit var mApiCache: PersistentApiCache
+
+    private var mResourcesManager: MediaResourcesManager? = null
 
     @Before
     fun setUp() {
-        context = InstrumentationRegistry.getInstrumentation().targetContext
-        storages = ServiceStorages(context)
-        apiCache = PersistentApiCache(context, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
+        mContext = InstrumentationRegistry.getInstrumentation().targetContext
+        mStorages = ServiceStorages(mContext)
+        mApiCache = PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME)
         clearState()
         ServiceBrowser.invalidateTheBrowseTree()
     }
 
     @After
     fun tearDown() {
-        resourcesManager?.let { manager ->
+        mResourcesManager?.let { manager ->
             InstrumentationRegistry.getInstrumentation().runOnMainSync(manager::clean)
         }
         clearState()
@@ -83,9 +86,9 @@ class MediaResourcesManagerTest {
      * fixture would otherwise keep answering for every later class that searches the same query.
      */
     private fun clearState() {
-        apiCache.clear()
+        mApiCache.clear()
         InMemoryApiCache().clear()
-        storages.clear()
+        mStorages.clear()
     }
 
     @Test
@@ -100,11 +103,11 @@ class MediaResourcesManagerTest {
         assertTrue("Initial root load must replace the spinner state", initial.replace)
         assertFalse(initial.containsLocals())
 
-        val station = RadioStation.makeDefaultInstance(storages.locals.getId())
+        val station = RadioStation.makeDefaultInstance(mStorages.locals.getId())
         station.name = "Regression station"
         station.setVariant(BIT_RATE_DEFAULT, "$UNREACHABLE_ORIGIN/stream")
         station.isLocal = true
-        storages.locals.add(station)
+        mStorages.locals.add(station)
 
         val commandSent = runBlocking(Dispatchers.Main) {
             manager.sendCommand(OpenRadioService.CMD_UPDATE_TREE, Bundle())
@@ -132,8 +135,8 @@ class MediaResourcesManagerTest {
     @Test
     fun searchingFromTheAppIsAnsweredWithTaggedStations() {
         val manager = connectedManager()
-        assertRadioBrowserIsBound(manager)
-        apiCache.put(searchUrl(SEARCH_QUERY), SEARCH_RESPONSE)
+        assertRadioBrowserIsBound(rootIds(manager))
+        mApiCache.put(searchUrl(SEARCH_QUERY), SEARCH_RESPONSE)
         val results = LinkedBlockingQueue<ChildrenResult>()
 
         manager.subscribe(
@@ -153,23 +156,12 @@ class MediaResourcesManagerTest {
     }
 
     /**
-     * The fixture is a Radio Browser payload keyed to a Radio Browser URL, so it only answers if
-     * that is the provider the service bound at process start. What was bound shows in the root
-     * menu: the two Radio Browser only nodes come from the same `Source` value that chose the URL
-     * layer, where reading the preference would pass whatever the service actually used.
+     * @return the ids [manager] is offered at the root, which show the provider the service bound.
      */
-    private fun assertRadioBrowserIsBound(manager: MediaResourcesManager) {
+    private fun rootIds(manager: MediaResourcesManager): List<String> {
         val results = LinkedBlockingQueue<ChildrenResult>()
         manager.subscribe(MediaId.MEDIA_ID_ROOT, subscription(results))
-        val root = awaitChildren(results) { it.parentId == MediaId.MEDIA_ID_ROOT }
-        val rootIds = root.children.map { it.mediaId }
-        assertTrue(
-            "The service did not bind the Radio Browser provider, so this fixture keys the wrong " +
-                "URL and would silently answer nothing. Root offered $rootIds",
-            rootIds.containsAll(
-                listOf(MediaId.MEDIA_ID_NEW_STATIONS, MediaId.MEDIA_ID_POPULAR_STATIONS)
-            )
-        )
+        return awaitChildren(results) { it.parentId == MediaId.MEDIA_ID_ROOT }.children.map { it.mediaId }
     }
 
     /**
@@ -183,7 +175,7 @@ class MediaResourcesManagerTest {
     private fun connectedManager(): MediaResourcesManager {
         val connected = CountDownLatch(1)
         val manager = MediaResourcesManager(
-            context,
+            mContext,
             javaClass.simpleName,
             object : MediaResourceManagerListener {
                 override fun onConnected() {
@@ -195,7 +187,7 @@ class MediaResourcesManagerTest {
                 override fun onMetadataChanged(metadata: MediaMetadata) = Unit
             }
         )
-        resourcesManager = manager
+        mResourcesManager = manager
         assertTrue("Media browser did not connect", connected.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
         return manager
     }

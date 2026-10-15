@@ -39,7 +39,7 @@ import java.io.ByteArrayInputStream
 class AutoDetectParserTest {
 
     @Test
-    fun testFileExtension() {
+    fun readsThePlaylistExtensionAheadOfTheQuery() {
         val parser = AutoDetectParser(NO_READS)
         var url = "http://s06.hktoolbar.com/radio-HTTP/cr2-hd.3gp/chunklist.m3u8?nimblesessionid=41472102"
         var ext = parser.getFileExtension(url)

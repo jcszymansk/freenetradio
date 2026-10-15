@@ -47,9 +47,9 @@ class MediaItemAllCategoriesTest {
         )
         assertEquals(1, presenter.categoriesRequests)
         assertEquals("Rock", listener.items[0].mediaMetadata.title)
-        assertEquals("42 $STRING_RESOURCE", listener.items[0].mediaMetadata.subtitle)
-        assertEquals("7 $STRING_RESOURCE", listener.items[1].mediaMetadata.subtitle)
-        assertEquals("7 $STRING_RESOURCE", listener.items[2].mediaMetadata.subtitle)
+        assertEquals(quantityResource(42, 42), listener.items[0].mediaMetadata.subtitle)
+        assertEquals(quantityResource(7, 7), listener.items[1].mediaMetadata.subtitle)
+        assertEquals(quantityResource(7, 7), listener.items[2].mediaMetadata.subtitle)
         for (item in listener.items) {
             assertEquals("${item.mediaId} isBrowsable", true, item.mediaMetadata.isBrowsable)
             assertEquals("${item.mediaId} isPlayable", false, item.mediaMetadata.isPlayable)

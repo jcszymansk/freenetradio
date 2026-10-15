@@ -97,8 +97,12 @@ class RSSettingsDialog : BaseDialogFragment(), MediaPresenterDependency {
         view.findView(R.id.dialog_rs_settings_sort).visibility =
             if (isSortable) View.VISIBLE else View.GONE
 
-        view.findView(R.id.dialog_rs_settings_edit_btn).tag = item
-        view.findView(R.id.dialog_rs_settings_remove_btn).tag = item
+        val editButton = view.findView(R.id.dialog_rs_settings_edit_btn)
+        editButton.tag = item
+        editButton.setOnClickListener { mMediaPresenter.handleEditRadioStationMenu(it) }
+        val removeButton = view.findView(R.id.dialog_rs_settings_remove_btn)
+        removeButton.tag = item
+        removeButton.setOnClickListener { mMediaPresenter.handleRemoveRadioStationMenu(it) }
         val name = view.findTextView(R.id.dialog_rs_settings_rs_name)
         name.text = item.mediaMetadata.title
 

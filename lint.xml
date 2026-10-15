@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Copyright 2026 The "FreeNetRadio" Project.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+-->
+<!-- Shared by every Android module through lintConfig in its build.gradle. -->
+<lint>
+    <!--
+        Media3 marks most of its surface, the service, browser and player wiring this app is
+        built on included, as UnstableApi: it may change between releases. The app accepts that
+        once for the whole project instead of at every call site, because media3Version is pinned
+        in constants.gradle and a bump that breaks an unstable API fails to compile. This is the
+        project-wide opt-in the Media3 documentation describes; it ignores no other opt-in marker.
+    -->
+    <issue id="UnsafeOptInUsageError">
+        <ignore regexp="\(markerClass = androidx\.media3\.common\.util\.UnstableApi\.class\)" />
+    </issue>
+</lint>

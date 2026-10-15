@@ -26,9 +26,10 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Turns a playback error into the decision the player acts on.
  *
- * Errors with no specific cause are tolerated while the error budget holds, because ExoPlayer
- * recovers from most of them by itself. The budget counts errors since the last time the stream
- * was ready, so [reset] belongs on every transition into a ready state.
+ * Errors with no specific cause are tolerated while the error budget holds: the stream is
+ * prepared again, because a live stream that failed once may well play the next time. The budget
+ * counts errors since the last time the stream was ready, so [reset] belongs on every transition
+ * into a ready state, and it is what keeps a stream that never plays from being prepared forever.
  */
 class PlaybackErrorClassifier {
 
@@ -95,7 +96,8 @@ class PlaybackErrorClassifier {
         )
 
         /**
-         * Number of errors tolerated before the stream is treated as broken.
+         * The last error count still within the budget. The count starts at zero, so six errors
+         * are tolerated and the seventh treats the stream as broken.
          */
         private const val MAX_ERROR_COUNT = 5
     }

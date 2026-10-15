@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.service
 
 import android.content.Context
+import com.yuriy.openradio.R
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -57,6 +58,17 @@ internal class LocalAudioFixture(private val mContext: Context) {
     }
 
     /**
+     * The same audio as [wavBytes], with a format chunk naming an encoding ExoPlayer cannot read.
+     * ExoPlayer recognizes the file as WAV and then fails to read it, which is a playback error
+     * with no specific cause: not the network, not the server, and not an unrecognized format.
+     */
+    fun unreadableWavBytes(seconds: Int = DEFAULT_SECONDS): ByteArray {
+        val bytes = silence(seconds)
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putShort(FORMAT_OFFSET, FORMAT_UNKNOWN)
+        return bytes
+    }
+
+    /**
      * The header of a WAV stream that never ends, for a server to follow with samples for as long
      * as a client keeps reading. It declares the largest data size the format can, which is how a
      * live source that cannot know its length is served as WAV.
@@ -80,6 +92,14 @@ internal class LocalAudioFixture(private val mContext: Context) {
         val frame = ByteArray(MP3_FRAME_SIZE)
         MP3_FRAME_HEADER.copyInto(frame)
         return frame
+    }
+
+    /**
+     * @return what the player writes on the description line of a stream that is open and has
+     *   told it nothing else about itself, which is every moment of the audio generated here.
+     */
+    fun liveStreamDescription(): String {
+        return mContext.getString(R.string.media_description_default)
     }
 
     /**
@@ -185,5 +205,16 @@ internal class LocalAudioFixture(private val mContext: Context) {
         private const val ENDLESS_DATA_SIZE = Int.MAX_VALUE - HEADER_SIZE
 
         private const val FORMAT_PCM: Short = 1
+
+        /**
+         * Where the format chunk's encoding field sits in the header.
+         */
+        private const val FORMAT_OFFSET = 20
+
+        /**
+         * An encoding ExoPlayer's WAV extractor does not read: it takes PCM, float, A-law, mu-law
+         * and IMA ADPCM, and refuses every other as an unsupported container feature.
+         */
+        private const val FORMAT_UNKNOWN: Short = 0x7777
     }
 }

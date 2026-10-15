@@ -17,7 +17,7 @@
 package com.yuriy.openradio.shared.utils
 
 import com.yuriy.openradio.shared.model.media.MediaId
-import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.item.localStation
 import com.yuriy.openradio.shared.model.media.item.station
 import com.yuriy.openradio.shared.model.media.item.stations
 import com.yuriy.openradio.shared.model.storage.AbstractRadioStationsStorage
@@ -229,9 +229,5 @@ class SortUtilsTest {
      */
     private fun storedSortIds(storage: AbstractRadioStationsStorage): Map<String, Int> {
         return storage.getAllFromString(storage.getAllAsString()).associate { it.id to it.sortId }
-    }
-
-    private fun localStation(id: String, sortId: Int): RadioStation {
-        return station(id, sortId = sortId).apply { isLocal = true }
     }
 }

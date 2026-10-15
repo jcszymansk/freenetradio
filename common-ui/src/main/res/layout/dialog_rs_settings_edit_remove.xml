@@ -24,15 +24,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="15dp"
-        android:text="@string/edit_station_dialog_button_label"
-        android:onClick="onEditRSClick"/>
+        android:text="@string/edit_station_dialog_button_label" />
 
     <Button
         android:id="@+id/dialog_rs_settings_remove_btn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="15dp"
-        android:text="@string/remove_station_dialog_button_label"
-        android:onClick="onRemoveRSClick"/>
+        android:text="@string/remove_station_dialog_button_label" />
 
 </LinearLayout>

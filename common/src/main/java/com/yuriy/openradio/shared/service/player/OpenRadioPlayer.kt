@@ -1093,7 +1093,8 @@ class OpenRadioPlayer(
                 }
 
                 PlaybackErrorDecision.WithinErrorBudget -> {
-                    // ExoPlayer recovers from these on its own.
+                    AppLogger.i("$TAG prepare the stream again after a tolerated error")
+                    mPlayer.prepare()
                 }
 
                 PlaybackErrorDecision.Unrecoverable -> {

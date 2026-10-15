@@ -85,4 +85,16 @@ class BundleTest {
         assertNull(bundle.getString("name"))
         assertEquals("fallback", bundle.getString("name", "fallback"))
     }
+
+    @Test
+    fun getReadsAnyValueAndNullForAMissingKey() {
+        val bundle = Bundle()
+
+        bundle.putInt("bitrate", 128)
+        bundle.putString("name", null)
+
+        assertEquals(128, bundle.get("bitrate"))
+        assertNull(bundle.get("name"))
+        assertNull(bundle.get("missing"))
+    }
 }

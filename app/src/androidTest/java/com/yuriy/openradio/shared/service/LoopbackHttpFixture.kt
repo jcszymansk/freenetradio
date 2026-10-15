@@ -55,6 +55,8 @@ internal class LoopbackHttpFixture {
 
     private val mGates = ConcurrentHashMap<String, Gate>()
 
+    private val mTurns = ConcurrentHashMap<String, Turns>()
+
     private val mRequests = CopyOnWriteArrayList<String>()
 
     private val mAccepted = AtomicInteger()
@@ -113,6 +115,16 @@ internal class LoopbackHttpFixture {
         val broadcast = Broadcast(url(path), contentType, head, body, bytesPerSecond)
         mBroadcasts[path] = broadcast
         return broadcast
+    }
+
+    /**
+     * Serves [bodies] at [path] one request at a time, in order, and the last one to every request
+     * after that. Returns the url that reaches them.
+     */
+    fun serveInTurn(path: String, contentType: String, bodies: List<ByteArray>): String {
+        require(bodies.isNotEmpty()) { "Nothing to serve in turn" }
+        mTurns[path] = Turns(bodies.map { Response(HTTP_OK, "OK", contentType, it) })
+        return url(path)
     }
 
     /**
@@ -220,7 +232,9 @@ internal class LoopbackHttpFixture {
             if (gate != null && gate.pass().not()) {
                 return
             }
-            val response = mRoutes[path] ?: Response(HTTP_NOT_FOUND, "Not Found", TEXT_PLAIN, ByteArray(0))
+            val response = mTurns[path]?.next()
+                ?: mRoutes[path]
+                ?: Response(HTTP_NOT_FOUND, "Not Found", TEXT_PLAIN, ByteArray(0))
             val head = buildString {
                 append("HTTP/1.1 ${response.status} ${response.reason}\r\n")
                 append("Content-Type: ${response.contentType}\r\n")
@@ -457,6 +471,19 @@ internal class LoopbackHttpFixture {
             } catch (exception: InterruptedException) {
                 false
             }
+        }
+    }
+
+    /**
+     * The responses [serveInTurn] hands out, each to one request, the last one to every request
+     * after it.
+     */
+    private class Turns(private val mResponses: List<Response>) {
+
+        private val mServed = AtomicInteger()
+
+        fun next(): Response {
+            return mResponses[minOf(mServed.getAndIncrement(), mResponses.size - 1)]
         }
     }
 

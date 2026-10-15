@@ -67,29 +67,7 @@ class OpenRadioServiceSearchTest {
         mBrowser.connect()
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.forgetNotifications()
-        assertRadioBrowserIsBound()
-    }
-
-    /**
-     * The fixtures here are Radio Browser payloads keyed to Radio Browser URLs, so the test is only
-     * meaningful if that is the provider the service is using.
-     *
-     * Reading `SourcePreferences` would not tell us: `DependencyRegistryCommon.init` reads the
-     * selection once, at process start, and binds both the URL layer and the root command from it,
-     * so the preference only decides what a *future* process will use. What was actually bound
-     * does show, in the root menu: the two Radio Browser only nodes are added by the same `Source`
-     * value that chose the URL layer. Asserting those is therefore a real check, where asserting
-     * the preference would pass no matter what the service bound.
-     */
-    private fun assertRadioBrowserIsBound() {
-        val rootIds = mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT)
-        assertTrue(
-            "The service did not bind the Radio Browser provider, so these fixtures key the " +
-                "wrong URLs and would silently answer nothing. Root offered $rootIds",
-            rootIds.containsAll(
-                listOf(MediaId.MEDIA_ID_NEW_STATIONS, MediaId.MEDIA_ID_POPULAR_STATIONS)
-            )
-        )
+        assertRadioBrowserIsBound(mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT))
     }
 
     @After

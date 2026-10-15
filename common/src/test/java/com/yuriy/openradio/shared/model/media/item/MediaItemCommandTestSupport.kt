@@ -69,6 +69,15 @@ internal const val FLAG_DRAWABLE_ID = 4711
  */
 internal const val STRING_RESOURCE = "string resource"
 
+/**
+ * What a quantity string resolves to here. The test R class cannot tell one plurals resource from
+ * another and there are no plural rules to pick a form by, so this answers the quantity and the
+ * format arguments it was given, which is what a caller decides.
+ */
+internal fun quantityResource(quantity: Int, vararg formatArgs: Any?): String {
+    return "$STRING_RESOURCE for $quantity of ${formatArgs.toList()}"
+}
+
 @Suppress("DEPRECATION")
 internal fun testContext(): Context {
     val resources = object : Resources(null, null, null) {
@@ -82,6 +91,10 @@ internal fun testContext(): Context {
         override fun getString(id: Int, vararg formatArgs: Any?): String = STRING_RESOURCE
 
         override fun getText(id: Int): CharSequence = STRING_RESOURCE
+
+        override fun getQuantityString(id: Int, quantity: Int, vararg formatArgs: Any?): String {
+            return quantityResource(quantity, *formatArgs)
+        }
     }
     return object : ContextWrapper(null) {
 
@@ -108,6 +121,13 @@ internal fun station(
         this.imageUrl = imageUrl
         setVariant(bitrate, "https://radio.example/$id.mp3")
     }
+}
+
+/**
+ * A station of the user's own, as the locals storage holds it.
+ */
+internal fun localStation(id: String, name: String = "Station $id", sortId: Int): RadioStation {
+    return station(id, name = name, sortId = sortId).apply { isLocal = true }
 }
 
 internal fun stations(vararg ids: String): Set<RadioStation> {

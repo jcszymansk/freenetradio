@@ -68,8 +68,9 @@ There is no "always send" option; each report requires a fresh decision.
 
 Other Applications On Your Device
 
-Station artwork is served through a content provider that other applications on your device can read. It holds
-station images downloaded from the public station directories, and any image you chose for a station of your own.
+Other applications on your device cannot read the App's station artwork, which includes any image you chose for a
+station of your own. The one exception is Android Auto: when you browse stations through it, the App lets it read
+the artwork of the stations it shows you, so that it can display them on the car's screen.
 
 
 Children's Privacy
@@ -87,4 +88,4 @@ Contact
 Questions or concerns can be raised at https://github.com/jcszymansk/freenetradio/issues.
 
 
-Last Updated: September 17, 2026
+Last Updated: October 15, 2026

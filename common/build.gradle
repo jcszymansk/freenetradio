@@ -54,6 +54,10 @@ android {
     testOptions {
         unitTests.returnDefaultValues = true
     }
+
+    lint {
+        lintConfig = rootProject.file("lint.xml")
+    }
 }
 
 dependencies {
@@ -64,7 +68,7 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation "androidx.room:room-runtime:$roomVersion"
     implementation "androidx.room:room-ktx:$roomVersion"
-    implementation "androidx.work:work-runtime-ktx:$workVersion"
+    implementation "androidx.concurrent:concurrent-futures-ktx:$concurrentFuturesVersion"
     implementation "androidx.core:core-ktx:$kotlinCoreKtx"
     implementation "androidx.activity:activity-ktx:$kotlinActivityKtx"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlinxCoroutinesAndroid"

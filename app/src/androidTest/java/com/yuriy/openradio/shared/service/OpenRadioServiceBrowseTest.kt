@@ -95,36 +95,13 @@ class OpenRadioServiceBrowseTest {
         mBrowser.connect()
         // The service caches every node but favorites and locals, and it outlives a single test.
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
-        assertRadioBrowserIsBound()
+        // Browsing the root has a second effect the seeded cases rely on. An
+        // IndexableMediaItemCommand keeps its page index on a command instance that lives as long
+        // as the process, and only resets it when the node being browsed differs from the one
+        // browsed before. Every case therefore starts with the root as the previous node, and asks
+        // its own node for page one rather than for wherever an earlier case left the counter.
+        assertRadioBrowserIsBound(mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT))
         mBrowser.forgetNotifications()
-    }
-
-    /**
-     * The fixtures are Radio Browser payloads keyed to Radio Browser URLs, so they are only
-     * meaningful if that is the provider the service bound.
-     *
-     * Reading the source preference would not tell us: `DependencyRegistryCommon.init` reads the
-     * selection once, at process start, and binds both the URL layer and the root command from it,
-     * so the preference only decides what a future process will use. What was actually bound does
-     * show in the root menu, where the two Radio Browser only nodes are added by the same `Source`
-     * value that chose the URL layer.
-     *
-     * Browsing the root here has a second effect the seeded cases rely on. An
-     * [com.yuriy.openradio.shared.model.media.item.IndexableMediaItemCommand] keeps its page index
-     * on a command instance that lives as long as the process, and only resets it when the node
-     * being browsed differs from the one browsed before. Every case therefore starts with the root
-     * as the previous node, and asks its own node for page one rather than for wherever an earlier
-     * case left the counter.
-     */
-    private fun assertRadioBrowserIsBound() {
-        val rootIds = mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT)
-        assertTrue(
-            "The service did not bind the Radio Browser provider, so these fixtures key the " +
-                "wrong URLs and would silently answer nothing. Root offered $rootIds",
-            rootIds.containsAll(
-                listOf(MediaId.MEDIA_ID_NEW_STATIONS, MediaId.MEDIA_ID_POPULAR_STATIONS)
-            )
-        )
     }
 
     @After

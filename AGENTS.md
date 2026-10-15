@@ -17,6 +17,11 @@ Read these before non-trivial work; do not duplicate their content here:
 
 ## Build and test
 
+The build needs JDK 17: Android Gradle Plugin 8.2 requires at least 17, and the Gradle 8.2 wrapper cannot
+run on 21. From the Android SDK it needs platform 34 (`compileSdkVersion` in `constants.gradle`) and the
+build tools 34.0.0 that AGP 8.2 defaults to. A fresh clone builds with nothing else: no `sign.properties`,
+`local.properties` or `google-services.json`.
+
 The Android SDK must be reachable; `local.properties` is git-ignored and usually absent, so export the SDK path:
 
 ```sh

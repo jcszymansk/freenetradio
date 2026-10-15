@@ -46,8 +46,10 @@
     <string name="storage_permission_proposed">Storage permission is optional and is needed to get access to icon associated with Radio Station</string>
     <string name="record_audio_permission_proposed">Record Audio permission is needed to perform voice search</string>
     <string name="bluetooth_permission_proposed">Bluetooth permission is needed to handle playback when device re-connected</string>
-    <string name="radio_station">radio station</string>
-    <string name="radio_stations">radio stations</string>
+    <plurals name="radio_stations_count">
+        <item quantity="one">%d radio station</item>
+        <item quantity="other">%d radio stations</item>
+    </plurals>
     <string name="clear_completed">Cache is cleared</string>
     <string name="media_description_default">Live stream</string>
     <string name="location_access_proposed">Location access is optional to display radio stations of a country.</string>

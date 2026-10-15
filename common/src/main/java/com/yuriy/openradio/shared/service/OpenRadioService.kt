@@ -56,6 +56,7 @@ import com.yuriy.openradio.shared.model.net.DownloaderLayer
 import com.yuriy.openradio.shared.model.net.NetworkMonitorListener
 import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
+import com.yuriy.openradio.shared.model.storage.images.ArtworkGrants
 import com.yuriy.openradio.shared.model.timer.SleepTimerListener
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.service.player.OpenRadioPlayer
@@ -157,6 +158,15 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     private val mExecutorService = Executors.newSingleThreadExecutor()
+
+    /**
+     * Opens the artwork of browsed items to the Android Auto browser, which reads it from another
+     * process while the artwork provider itself is not exported.
+     */
+    private val mArtworkGrants = ArtworkGrants(
+        { browser -> mSession.isAutoCompanionController(browser) },
+        { packageName, uri -> grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+    )
 
     /**
      * The button a controller shows beside the transport controls while the active station is
@@ -808,6 +818,7 @@ class OpenRadioService : MediaLibraryService() {
                 val list = mBrowseTree[parentId] ?: ImmutableList.of()
                 val sublist = list.subList(it, list.size)
                 AppLogger.d("$TAG GetChildren for $parentId page $page return ${sublist.size}|${list.size} from pos:$it")
+                mArtworkGrants.grant(browser, sublist)
                 LibraryResult.ofItemList(
                     sublist,
                     LibraryParams.Builder().build()
@@ -825,6 +836,7 @@ class OpenRadioService : MediaLibraryService() {
                 ?: return Futures.immediateFuture(
                     LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
                 )
+            mArtworkGrants.grant(browser, listOf(item))
             return Futures.immediateFuture(LibraryResult.ofItem(item, LibraryParams.Builder().build()))
         }
 
@@ -867,12 +879,12 @@ class OpenRadioService : MediaLibraryService() {
             // Maybe need to redesign?
             if (list.isEmpty()) {
                 return callWhenSearchReady(queryStr) {
-                    LibraryResult.ofItemList(
-                        mBrowseTree[queryStr] ?: mutableListOf(),
-                        LibraryParams.Builder().build()
-                    )
+                    val found = mBrowseTree[queryStr] ?: mutableListOf()
+                    mArtworkGrants.grant(browser, found)
+                    LibraryResult.ofItemList(found, LibraryParams.Builder().build())
                 }
             }
+            mArtworkGrants.grant(browser, list)
             return Futures.immediateFuture(
                 LibraryResult.ofItemList(
                     list,

@@ -40,8 +40,10 @@ sealed class PlaybackErrorDecision {
     object UnsupportedFormat : PlaybackErrorDecision()
 
     /**
-     * An error with no specific cause, raised while the error budget still holds. The stream is
-     * left alone: ExoPlayer recovers from most of these on its own.
+     * An error with no specific cause, raised while the error budget still holds. The player
+     * prepares the stream again. ExoPlayer reports only errors it has given up on: it has already
+     * retried a failing load by itself, and it has stopped the stream, so nothing else would
+     * bring the station back (TASK-039).
      */
     object WithinErrorBudget : PlaybackErrorDecision()
 

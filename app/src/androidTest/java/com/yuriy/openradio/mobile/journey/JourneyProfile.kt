@@ -25,10 +25,13 @@ import com.yuriy.openradio.shared.service.AppDataReset
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.ServiceBrowser
 import com.yuriy.openradio.shared.service.ServiceStorages
+import com.yuriy.openradio.shared.service.assertRadioBrowserIsBound
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.service.location.LocationService
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import java.util.concurrent.TimeUnit
 
 /**
  * The device state every phone journey starts from: offline, with nothing an earlier test stored
@@ -59,7 +62,10 @@ internal class JourneyProfile(private val mContext: Context) {
         // The service caches the root and outlives a single test, so whatever an earlier class
         // left in the tree has to go before this one launches an Activity against it.
         refreshTree()
-        assertRadioBrowserIsBound()
+        // The provider is the one piece of the profile clearApplicationData cannot reach. A run
+        // that trips this has emptied the stored selection on the way past, though, so the next
+        // one binds Radio Browser regardless.
+        assertRadioBrowserIsBound(browser.mediaIds(MediaId.MEDIA_ID_ROOT))
     }
 
     /**
@@ -175,32 +181,56 @@ internal class JourneyProfile(private val mContext: Context) {
     }
 
     /**
-     * The root menu these journeys expect is the Radio Browser one: New and Popular come from that
-     * provider only.
-     *
-     * The provider is the one piece of the profile [clearApplicationData] cannot reach, and no
-     * test hook can reach it either: `ImagesProvider.onCreate` calls `DependencyRegistryCommon.init`,
-     * and Android creates content providers before the Application and before the instrumentation,
-     * so the URL layer, the parser and the root command are bound before any test code has run at
-     * all. An install left on WebRadio stays on WebRadio for the whole run, so all a test can do
-     * is assert what was bound. `OpenRadioServiceBrowseTest` and `OpenRadioServiceSearchTest`
-     * carry the same guard.
-     *
-     * Clearing the app's data before the run is what avoids it, which is why `AGENTS.md` asks for
-     * that; a run that trips this has emptied the stored selection on the way past, so the next
-     * one binds Radio Browser regardless. Getting a fresh process per test is TASK-031.
+     * @return the root of a profile holding one station of the user's own: the clean install
+     *   catalogue with the locals node appended, which is what `MediaItemRoot` builds from a locals
+     *   store holding one entry.
      */
-    private fun assertRadioBrowserIsBound() {
-        val ids = browser.mediaIds(MediaId.MEDIA_ID_ROOT)
-        assertTrue(
-            "This process bound a provider other than Radio Browser. It read that from " +
-                "SourcePreferences before any test ran, and nothing here can change it, so the " +
-                "device was carrying a stored selection into the run. Clear the app's data first, " +
-                "as AGENTS.md describes. The stored selection has now been reset either way, so " +
-                "running this again binds Radio Browser. Root offered $ids",
-            ids.containsAll(
-                listOf(MediaId.MEDIA_ID_NEW_STATIONS, MediaId.MEDIA_ID_POPULAR_STATIONS)
-            )
+    fun seededRoot(): List<BrowseRow> {
+        return cleanInstallRoot() + localsRow()
+    }
+
+    /**
+     * Waits for [list] to be the [seededRoot] a seeded journey starts every case from.
+     *
+     * This is a precondition rather than a restatement of the cold launch journey. The presenter
+     * is one of the registry's singletons and its node stack outlives the Activity, so a case that
+     * left the stack inside a node would send the next case's Activity straight back there. Phase
+     * 6 asks for a suite with no order assumptions in it, so every case asserts where it starts.
+     *
+     * @return the rendered rows, for a case that has something else to say about them.
+     */
+    fun awaitSeededRoot(list: BrowseListView): List<BrowseRow> {
+        val rows = list.awaitRows("the root of the seeded profile") { it == seededRoot() }
+        assertEquals(
+            "This case did not start at the root of the seeded profile. A case that walks into a " +
+                "node leaves the presenter's stack there, and it is a registry singleton that " +
+                "outlives the Activity, so the next case launches back into that node.",
+            seededRoot(),
+            rows
+        )
+        return rows
+    }
+
+    /**
+     * Waits for the favorites store to hold exactly [expected], read through an instance that has
+     * cached no answers, because the writer answers out of a map it fills as it goes.
+     *
+     * A favorite is written from a coroutine the gesture hands it to, so the store is written some
+     * time after whatever the gesture changed on screen.
+     */
+    fun awaitFavorites(expected: List<String>) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STORE_TIMEOUT_SECONDS)
+        var stored = emptyList<String>()
+        while (System.nanoTime() < deadline) {
+            stored = storages.freshFavorites().getAll().map { it.id }
+            if (stored == expected) {
+                return
+            }
+            Thread.sleep(POLL_MILLIS)
+        }
+        throw AssertionError(
+            "The favorites store held $stored rather than $expected within " +
+                "$STORE_TIMEOUT_SECONDS seconds."
         )
     }
 
@@ -210,5 +240,13 @@ internal class JourneyProfile(private val mContext: Context) {
          * Stored only so that the wait on the asynchronous clear has something to watch go away.
          */
         const val CLEAR_PROBE_STATION_ID = "journey-clear-probe"
+
+        /**
+         * Covers the hop onto the main thread a command is sent from, the round trip to the
+         * service, and the write.
+         */
+        const val STORE_TIMEOUT_SECONDS = 20L
+
+        const val POLL_MILLIS = 50L
     }
 }

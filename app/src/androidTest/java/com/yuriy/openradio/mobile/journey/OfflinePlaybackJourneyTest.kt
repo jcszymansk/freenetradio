@@ -115,7 +115,7 @@ class OfflinePlaybackJourneyTest {
     fun aSelectedStationPlaysTheAudioItPointsAt() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
 
             selectTheStationFromTheLocalsList(scenario, list)
 
@@ -156,7 +156,7 @@ class OfflinePlaybackJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
             val nowPlaying = NowPlayingView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             assertNotEquals(
                 "The now-playing bar is already showing this station, so waiting for it proves " +
                     "nothing",
@@ -167,7 +167,7 @@ class OfflinePlaybackJourneyTest {
             selectTheStationFromTheLocalsList(scenario, list)
 
             nowPlaying.awaitTitle(mStation.name)
-            nowPlaying.awaitDescription(liveStreamDescription())
+            nowPlaying.awaitDescription(mAudio.liveStreamDescription())
             assertTrue(
                 "The now-playing bar went back down while the station was still playing. " +
                     nowPlaying.describe(),
@@ -187,7 +187,7 @@ class OfflinePlaybackJourneyTest {
     fun theNowPlayingBarComesBackUpForAnActivityThatDidNotStartPlayback() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             selectTheStationFromTheLocalsList(scenario, list)
             mProfile.browser.awaitPlaying()
             NowPlayingView(scenario).awaitTitle(mStation.name)
@@ -198,7 +198,7 @@ class OfflinePlaybackJourneyTest {
             nowPlaying.awaitTitle(mStation.name)
             assertEquals(
                 "The relaunched bar shows the station but not what the player says about it",
-                liveStreamDescription(),
+                mAudio.liveStreamDescription(),
                 nowPlaying.description()
             )
             assertTrue(
@@ -220,7 +220,7 @@ class OfflinePlaybackJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
             val nowPlaying = NowPlayingView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             selectTheStationFromTheLocalsList(scenario, list)
             mProfile.browser.awaitPlaying()
             nowPlaying.awaitTitle(mStation.name)
@@ -259,7 +259,7 @@ class OfflinePlaybackJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
             val nowPlaying = NowPlayingView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             selectTheStationFromTheLocalsList(scenario, list)
             mProfile.browser.awaitPlaying()
             nowPlaying.awaitTitle(mStation.name)
@@ -271,12 +271,12 @@ class OfflinePlaybackJourneyTest {
 
             nowPlaying.tapFavorite()
 
-            awaitFavorites(listOf(mStation.id))
+            mProfile.awaitFavorites(listOf(mStation.id))
             nowPlaying.awaitFavorite(true)
 
             nowPlaying.tapFavorite()
 
-            awaitFavorites(emptyList())
+            mProfile.awaitFavorites(emptyList())
             nowPlaying.awaitFavorite(false)
         }
     }
@@ -295,7 +295,7 @@ class OfflinePlaybackJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
             val nowPlaying = NowPlayingView(scenario)
-            awaitSeededRoot(list)
+            mProfile.awaitSeededRoot(list)
             val navigation = JourneyNavigation(scenario)
             try {
                 navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
@@ -312,27 +312,6 @@ class OfflinePlaybackJourneyTest {
                 navigation.returnToRoot()
             }
         }
-    }
-
-    /**
-     * Waits for the list to be the root of the profile every case here starts from: a cleared
-     * install holding one station of the user's own.
-     *
-     * This is a precondition rather than a restatement of the cold launch journey. The presenter
-     * is one of the registry's singletons and its node stack outlives the Activity, so a case that
-     * left the stack inside a node would send the next case's Activity straight back there. Phase
-     * 6 asks for a suite with no order assumptions in it, so every case asserts where it starts.
-     */
-    private fun awaitSeededRoot(list: BrowseListView) {
-        assertEquals(
-            "This case did not start at the root of the seeded profile. A case that walks into a " +
-                "node leaves the presenter's stack there, and it is a registry singleton that " +
-                "outlives the Activity, so the next case launches back into that node.",
-            mProfile.cleanInstallRoot() + mProfile.localsRow(),
-            list.awaitRows("the root of the seeded profile") {
-                it == mProfile.cleanInstallRoot() + mProfile.localsRow()
-            }
-        )
     }
 
     /**
@@ -386,34 +365,6 @@ class OfflinePlaybackJourneyTest {
         }
     }
 
-    /**
-     * Waits for the favorites store to hold exactly [expected], read through an instance that has
-     * cached no answers, because the writer answers out of a map it fills as it goes.
-     */
-    private fun awaitFavorites(expected: List<String>) {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STORE_TIMEOUT_SECONDS)
-        var stored = emptyList<String>()
-        while (System.nanoTime() < deadline) {
-            stored = mProfile.storages.freshFavorites().getAll().map { it.id }
-            if (stored == expected) {
-                return
-            }
-            Thread.sleep(POLL_MILLIS)
-        }
-        throw AssertionError(
-            "The favorites store held $stored rather than $expected within " +
-                "$STORE_TIMEOUT_SECONDS seconds."
-        )
-    }
-
-    /**
-     * @return what the player writes on the description line of a stream that is open and has
-     *   told it nothing else about itself, which is every moment of a generated WAV.
-     */
-    private fun liveStreamDescription(): String {
-        return mContext.getString(com.yuriy.openradio.R.string.media_description_default)
-    }
-
     private companion object {
 
         /**
@@ -425,12 +376,6 @@ class OfflinePlaybackJourneyTest {
          * How long the player and the bar are watched before "nothing started" is believed.
          */
         const val SETTLE_SECONDS = 5L
-
-        /**
-         * Covers the hop onto the main thread the command is sent from, the round trip to the
-         * service, and the write.
-         */
-        const val STORE_TIMEOUT_SECONDS = 20L
 
         const val POLL_MILLIS = 50L
     }

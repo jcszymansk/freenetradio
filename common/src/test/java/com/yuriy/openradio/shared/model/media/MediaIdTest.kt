@@ -1,3 +1,20 @@
+/*
+ * Copyright 2017-2020 The "Open Radio" Project. Author: Chernyshov Yuriy
+ * Copyright 2026 The "FreeNetRadio" Project.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.yuriy.openradio.shared.model.media
 
 import com.yuriy.openradio.shared.model.source.Source
@@ -31,8 +48,21 @@ class MediaIdTest {
         )
         assertEquals(MediaId.MEDIA_ID_COUNTRIES_LIST, MediaId.getId(MediaId.MEDIA_ID_COUNTRIES_LIST, "US"))
         assertEquals("PL", MediaId.getCountryCode(MediaId.MEDIA_ID_COUNTRIES_LIST + "pl", "US"))
+        assertEquals("US", MediaId.getCountryCode(MediaId.MEDIA_ID_COUNTRIES_LIST, "US"))
         assertEquals("US", MediaId.getCountryCode(null, "US"))
         assertEquals("US", MediaId.getCountryCode("unknown", "US"))
+    }
+
+    /**
+     * The service resolves a browsed node with no default country, which is what keeps a child
+     * category from being read as the stations of the default country.
+     */
+    @Test
+    fun aChildCategoryResolvesToTheChildCategoriesNode() {
+        assertEquals(
+            MediaId.MEDIA_ID_CHILD_CATEGORIES,
+            MediaId.getId(MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock", "")
+        )
     }
 
     /**

@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.model.storage
 
 import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.item.localStation
 import com.yuriy.openradio.shared.model.media.item.station
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -214,9 +215,5 @@ class StorageManagerLayerImplTest {
         val donor = FavoritesStorage(StrongContextReference(context))
         donor.addAll(stations.toSet())
         return donor.getAllAsString()
-    }
-
-    private fun localStation(id: String, name: String = "Station $id", sortId: Int): RadioStation {
-        return station(id, name = name, sortId = sortId).apply { isLocal = true }
     }
 }

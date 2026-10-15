@@ -155,7 +155,7 @@ class ServiceFirstStartupJourneyTest {
         assertEquals(MediaId.MEDIA_ID_ROOT, root.value?.mediaId)
         assertEquals(
             "The root served with no Activity is not the offline catalogue",
-            seededRoot().map { it.mediaId },
+            mProfile.seededRoot().map { it.mediaId },
             mProfile.browser.mediaIds(MediaId.MEDIA_ID_ROOT)
         )
         assertEquals(
@@ -193,7 +193,7 @@ class ServiceFirstStartupJourneyTest {
         mPresence.assertNone("An Activity was alive when the service answered the root.")
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val rendered = awaitSeededRoot(BrowseListView(scenario))
+            val rendered = mProfile.awaitSeededRoot(BrowseListView(scenario))
 
             assertEquals(
                 "The Activity renders a different root than the service answered before it existed",
@@ -285,7 +285,7 @@ class ServiceFirstStartupJourneyTest {
 
             assertEquals(
                 "The bar came up for the station but not for what the player says about it",
-                liveStreamDescription(),
+                mAudio.liveStreamDescription(),
                 nowPlaying.description()
             )
             assertTrue(
@@ -318,7 +318,7 @@ class ServiceFirstStartupJourneyTest {
         startTheStationThroughTheSession()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            awaitSeededRoot(BrowseListView(scenario))
+            mProfile.awaitSeededRoot(BrowseListView(scenario))
             NowPlayingView(scenario).awaitTitle(mStation.name)
         }
 
@@ -327,7 +327,7 @@ class ServiceFirstStartupJourneyTest {
         )
         assertEquals(
             "The service stopped serving the root once the Activity was closed",
-            seededRoot().map { it.mediaId },
+            mProfile.seededRoot().map { it.mediaId },
             mProfile.browser.mediaIds(MediaId.MEDIA_ID_ROOT)
         )
         assertEquals(
@@ -344,28 +344,6 @@ class ServiceFirstStartupJourneyTest {
             mStation.id,
             mProfile.browser.currentMediaId()
         )
-    }
-
-    /**
-     * Waits for the list to be the root of the profile every case here starts from: a cleared
-     * install holding one station of the user's own.
-     *
-     * This is a precondition rather than a restatement of the cold launch journey. The presenter
-     * is one of the registry's singletons and its node stack outlives the Activity, so a case that
-     * left the stack inside a node would send the next case's Activity straight back there.
-     *
-     * @return the rendered rows, for a case that has something else to say about them.
-     */
-    private fun awaitSeededRoot(list: BrowseListView): List<BrowseRow> {
-        val rows = list.awaitRows("the root of the seeded profile") { it == seededRoot() }
-        assertEquals(
-            "This case did not start at the root of the seeded profile. A case that walks into a " +
-                "node leaves the presenter's stack there, and it is a registry singleton that " +
-                "outlives the Activity, so the next case launches back into that node.",
-            seededRoot(),
-            rows
-        )
-        return rows
     }
 
     /**
@@ -452,27 +430,11 @@ class ServiceFirstStartupJourneyTest {
     }
 
     /**
-     * @return the root of this journey's profile: the offline catalogue with the seeded station's
-     *   node appended, which is what `MediaItemRoot` builds from a locals store holding one entry.
-     */
-    private fun seededRoot(): List<BrowseRow> {
-        return mProfile.cleanInstallRoot() + mProfile.localsRow()
-    }
-
-    /**
      * @return the root once the station is marked. `MediaItemRoot` puts the favorites node first
      *   and the locals node last, with the catalogue between them.
      */
     private fun markedRoot(): List<BrowseRow> {
-        return listOf(mProfile.favoritesRow()) + seededRoot()
-    }
-
-    /**
-     * @return what the player writes on the description line of a stream that is open and has told
-     *   it nothing else about itself, which is every moment of a generated WAV.
-     */
-    private fun liveStreamDescription(): String {
-        return mContext.getString(com.yuriy.openradio.R.string.media_description_default)
+        return listOf(mProfile.favoritesRow()) + mProfile.seededRoot()
     }
 
     private companion object {

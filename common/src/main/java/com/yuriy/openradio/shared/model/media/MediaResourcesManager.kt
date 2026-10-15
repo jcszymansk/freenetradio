@@ -21,6 +21,7 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import androidx.concurrent.futures.await
 import androidx.core.os.ExecutorCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -34,7 +35,6 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
-import androidx.work.await
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
