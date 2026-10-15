@@ -20,10 +20,7 @@ import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlayb
 import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Created by Yuriy Chernyshov
@@ -40,11 +37,9 @@ class MediaItemCountriesList : MediaItemCommand {
 
     override fun execute(playbackStateListener: IUpdatePlaybackState, dependencies: MediaItemCommandDependencies) {
         mJob?.cancel()
-        mJob = dependencies.mScope.launch(Dispatchers.IO) {
-            withTimeoutOrNull(MediaItemCommand.CMD_TIMEOUT_MS) {
-                // Load all countries into menu
-                loadAllCountries(playbackStateListener, dependencies)
-            } ?: dependencies.resultListener.onResult()
+        mJob = dependencies.launchWithDeadline {
+            // Load all countries into menu
+            loadAllCountries(playbackStateListener, dependencies)
         }
     }
 

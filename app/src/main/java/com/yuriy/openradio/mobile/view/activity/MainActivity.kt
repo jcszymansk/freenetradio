@@ -43,7 +43,6 @@ import com.yuriy.openradio.shared.model.media.PlaybackState
 import com.yuriy.openradio.shared.presenter.MediaPresenter
 import com.yuriy.openradio.shared.presenter.MediaPresenterListener
 import com.yuriy.openradio.shared.utils.AppLogger
-import com.yuriy.openradio.shared.utils.PlayerUtils
 import com.yuriy.openradio.shared.utils.SafeToast
 import com.yuriy.openradio.shared.utils.UiUtils
 import com.yuriy.openradio.shared.utils.findCheckBox
@@ -435,10 +434,6 @@ class MainActivity : AppCompatActivity(), MediaPresenterDependency {
                 reference.hideNoDataMessage()
             }
 
-            // No need to go on if indexed list ended with last item.
-            if (PlayerUtils.isEndOfList(children)) {
-                return
-            }
             reference.mMediaPresenter.handleChildrenLoaded(parentId, children, replace)
         }
 

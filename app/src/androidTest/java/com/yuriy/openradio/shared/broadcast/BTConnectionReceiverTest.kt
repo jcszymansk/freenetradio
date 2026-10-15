@@ -21,9 +21,12 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
+import android.os.ParcelFileDescriptor
+import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -233,6 +236,46 @@ class BTConnectionReceiverTest {
         assertEquals(0, mListener.disconnections)
     }
 
+    /**
+     * The receiver is registered exported, so any application can send it an intent that carries
+     * the same extras under another action. Such an intent must neither be reported nor be
+     * remembered as the device last seen connecting.
+     */
+    @Test
+    fun anEventWithAnotherActionIsIgnored() {
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS).setAction(FOREIGN_ACTION))
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS).setAction(FOREIGN_ACTION))
+
+        assertEquals(0, mListener.sameDeviceConnections)
+
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+
+        assertEquals(0, mListener.sameDeviceConnections)
+
+        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS).setAction(FOREIGN_ACTION))
+
+        assertEquals(0, mListener.disconnections)
+    }
+
+    /**
+     * The diagnostics report attaches the whole logcat, so a hardware address the receiver logs at
+     * any level ends up in a file the user shares.
+     */
+    @Test
+    fun noHardwareAddressIsLogged() {
+        mReceiver.onReceive(mContext, connected(LOGGED_ADDRESS))
+        mReceiver.onReceive(mContext, connected(LOGGED_ADDRESS))
+        mReceiver.onReceive(mContext, disconnected(LOGGED_ADDRESS))
+
+        val log = ownLog()
+
+        assertTrue(
+            "The receiver's own lines are not in the log, so it was not read",
+            log.contains("$TAG device connected")
+        )
+        assertFalse("The log holds a hardware address", log.contains(LOGGED_ADDRESS))
+    }
+
     @Test
     fun theIntentFilterSubscribesToTheConnectionStateActionAndNothingElse() {
         val filter = mReceiver.makeIntentFilter()
@@ -267,6 +310,16 @@ class BTConnectionReceiverTest {
         return adapter!!.getRemoteDevice(address)
     }
 
+    /**
+     * Reads what this process has logged so far. The shell reads it, because an application sees
+     * its own log only on some releases.
+     */
+    private fun ownLog(): String {
+        val command = "logcat -d --pid=${Process.myPid()}"
+        val output = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+        return ParcelFileDescriptor.AutoCloseInputStream(output).bufferedReader().use { it.readText() }
+    }
+
     private class RecordingListener : BTConnectionReceiver.Listener {
 
         private var mSameDeviceConnections = 0
@@ -295,5 +348,12 @@ class BTConnectionReceiverTest {
         const val SECOND_ADDRESS = "AA:BB:CC:DD:EE:FF"
 
         const val THIRD_ADDRESS = "12:34:56:78:9A:BC"
+
+        /** Used by no other test, so another test's events cannot put it in the log. */
+        const val LOGGED_ADDRESS = "5A:5A:5A:5A:5A:5A"
+
+        const val FOREIGN_ACTION = "com.example.FAKE_CONNECTION_STATE_CHANGED"
+
+        val TAG: String = BTConnectionReceiver::class.java.simpleName
     }
 }

@@ -42,7 +42,7 @@ class MediaItemLocalsListTest {
         listener.awaitResult().assertMediaIds("first", "second")
         assertEquals(locals, listener.radioStations)
         for (item in listener.items) {
-            assertTrue("${item.mediaId} is not playable", item.mediaMetadata.isPlayable == true)
+            assertEquals("${item.mediaId} isPlayable", true, item.mediaMetadata.isPlayable)
             assertEquals(MediaMetadata.MEDIA_TYPE_MUSIC, item.mediaMetadata.mediaType)
         }
         listener.assertNoError()

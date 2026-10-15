@@ -13,6 +13,7 @@ import com.yuriy.openradio.shared.permission.grantImageReadPermission
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.ServiceBrowser
 import com.yuriy.openradio.shared.service.ServiceStorages
+import com.yuriy.openradio.testing.withActivity
 import org.junit.After
 import org.junit.Before
 import org.junit.Assert.assertEquals
@@ -57,7 +58,7 @@ class AddStationDialogTest {
         val commander = RecordingServiceCommander()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            scenario.onActivity { activity ->
+            scenario.withActivity { activity ->
                 val dialog = AddStationDialog()
                 dialog.showNow(activity.supportFragmentManager, AddStationDialog.DIALOG_TAG)
                 dialog.configureWith(SuccessfulAddPresenter())

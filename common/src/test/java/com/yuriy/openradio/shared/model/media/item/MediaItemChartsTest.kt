@@ -44,7 +44,7 @@ class MediaItemChartsTest {
         assertEquals(1, presenter.popularStationsRequests)
         assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber)
         for (item in listener.items) {
-            assertTrue("${item.mediaId} is not playable", item.mediaMetadata.isPlayable == true)
+            assertEquals("${item.mediaId} isPlayable", true, item.mediaMetadata.isPlayable)
             assertFalse(MediaItemHelper.isFavoriteField(item.mediaMetadata))
         }
         listener.assertNoError()

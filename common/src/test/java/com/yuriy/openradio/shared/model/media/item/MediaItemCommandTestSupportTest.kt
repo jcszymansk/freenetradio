@@ -35,8 +35,8 @@ import org.junit.Test
 class MediaItemCommandTestSupportTest {
 
     /**
-     * Every browse command ends its background work with
-     * `withTimeoutOrNull(CMD_TIMEOUT_MS) { ... } ?: resultListener.onResult()`, and that fallback
+     * Every browse command runs its background work through
+     * [MediaItemCommandDependencies.launchWithDeadline], whose answer at [MediaItemCommand.CMD_TIMEOUT_MS]
      * delivers no items, the first page and no error - the same state a command that ran and found
      * nothing delivers. The await has to run out first, or a command that got nowhere satisfies
      * every test whose expectation is an empty node.
@@ -124,6 +124,10 @@ class MediaItemCommandTestSupportTest {
      * The regression the restored instance tests exist for: a command that answers inline and then
      * launches its fetch anyway. Its second answer comes from a coroutine that has not run when
      * `execute` returns, so only a listener that settles before counting can see it.
+     *
+     * [MediaItemCommandDependencies.resultListener] lets only the first answer of an execution
+     * through, so the second one is handed to the listener directly: what is under test is that the
+     * listener counts it, whichever way it arrives.
      */
     @Test
     fun theRestoredInstanceAssertionRejectsACommandThatAlsoLaunchesItsFetch() {
@@ -133,7 +137,7 @@ class MediaItemCommandTestSupportTest {
             dependencies.resultListener.onResult()
             dependencies.mScope.launch {
                 delay(LATE_MILLIS)
-                dependencies.resultListener.onResult(
+                listener.onResult(
                     radioStations = dependencies.presenter.getPopularStations()
                 )
             }

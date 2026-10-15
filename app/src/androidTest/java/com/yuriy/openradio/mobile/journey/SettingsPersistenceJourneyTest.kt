@@ -17,8 +17,6 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
-import android.widget.CheckBox
-import android.widget.EditText
 import android.widget.Spinner
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
@@ -35,15 +33,16 @@ import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.StreamBufferingDialog
+import com.yuriy.openradio.testing.withActivity
 import java.lang.ref.WeakReference
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import com.yuriy.openradio.shared.R as DialogR
@@ -73,6 +72,9 @@ import com.yuriy.openradio.shared.R as DialogR
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class SettingsPersistenceJourneyTest {
+
+    @get:Rule
+    val mStack = PresenterStackRule()
 
     private lateinit var mContext: Context
 
@@ -112,7 +114,7 @@ class SettingsPersistenceJourneyTest {
             val dialogs = JourneyDialogs(scenario)
             BrowseListView(scenario).awaitRows()
 
-            changeEverySetting(scenario, dialogs)
+            changeEverySetting(dialogs)
         }
 
         assertTheChangedSettingsAreStored()
@@ -133,7 +135,7 @@ class SettingsPersistenceJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val dialogs = JourneyDialogs(scenario)
             BrowseListView(scenario).awaitRows()
-            changeEverySetting(scenario, dialogs)
+            changeEverySetting(dialogs)
             assertTrue(
                 "A dialog was still up, so the recreate would restore its views instead of " +
                     "making the application read the stores",
@@ -145,7 +147,7 @@ class SettingsPersistenceJourneyTest {
             assertActivityWasRebuilt(scenario, before)
 
             BrowseListView(scenario).awaitRows()
-            readEverySettingBackFromTheDialogs(scenario, dialogs)
+            readEverySettingBackFromTheDialogs(dialogs)
         }
 
         assertTheChangedSettingsAreStored()
@@ -165,7 +167,7 @@ class SettingsPersistenceJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val dialogs = JourneyDialogs(scenario)
             BrowseListView(scenario).awaitRows()
-            changeEverySetting(scenario, dialogs)
+            changeEverySetting(dialogs)
         }
 
         mProfile.awaitStoredOnDisk(NETWORK_PREFERENCE_FILE, "\"IS_USE_MOBILE\" value=\"false\"")
@@ -201,7 +203,7 @@ class SettingsPersistenceJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val dialogs = JourneyDialogs(scenario)
             BrowseListView(scenario).awaitRows()
-            typeTheBufferValues(scenario, dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG))
+            typeTheBufferValues(dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG))
 
             val before = activityIdentity(scenario)
             scenario.recreate()
@@ -210,7 +212,7 @@ class SettingsPersistenceJourneyTest {
             awaitStoredBuffers()
             BrowseListView(scenario).awaitRows()
             assertTheBufferFieldsRead(
-                scenario, dialogs, dialogs.awaitDialog(BUFFERING_TAG), "after the recreate"
+                dialogs, dialogs.awaitDialog(BUFFERING_TAG), "after the recreate"
             )
         }
     }
@@ -218,38 +220,38 @@ class SettingsPersistenceJourneyTest {
     /**
      * Opens each of the three dialogs in turn, changes what it offers and leaves it again.
      */
-    private fun changeEverySetting(
-        scenario: ActivityScenario<MainActivity>,
-        dialogs: JourneyDialogs
-    ) {
+    private fun changeEverySetting(dialogs: JourneyDialogs) {
         val network = dialogs.openFromDrawer(R.id.nav_network, NETWORK_TAG)
-        scenario.onActivity {
-            val useMobile = dialogs.field<CheckBox>(network, DialogR.id.use_mobile_network_check_box)
-            assertTrue("The network dialog did not open on the stored value", useMobile.isChecked)
-            useMobile.performClick()
-        }
+        assertTrue(
+            "The network dialog did not open on the stored value",
+            dialogs.isChecked(network, DialogR.id.use_mobile_network_check_box)
+        )
+        dialogs.click(network, DialogR.id.use_mobile_network_check_box)
         dialogs.dismiss(NETWORK_TAG)
 
-        typeTheBufferValues(scenario, dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG))
+        typeTheBufferValues(dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG))
         dialogs.dismiss(BUFFERING_TAG)
         awaitStoredBuffers()
 
         val general = dialogs.openFromDrawer(R.id.nav_general, GENERAL_TAG)
-        scenario.onActivity {
-            val lastKnown = dialogs.field<CheckBox>(
+        assertTrue(
+            "The general dialog did not open on the stored value",
+            dialogs.isChecked(
                 general, DialogR.id.settings_dialog_enable_last_known_radio_station_check_view
             )
-            assertTrue("The general dialog did not open on the stored value", lastKnown.isChecked)
-            lastKnown.performClick()
+        )
+        dialogs.click(
+            general, DialogR.id.settings_dialog_enable_last_known_radio_station_check_view
+        )
 
-            val customUserAgent = dialogs.field<CheckBox>(general, DialogR.id.user_agent_check_view)
-            assertFalse("A custom user agent was already switched on", customUserAgent.isChecked)
-            customUserAgent.performClick()
-            dialogs.field<EditText>(general, DialogR.id.user_agent_input_view).setText(CUSTOM_USER_AGENT)
+        assertFalse(
+            "A custom user agent was already switched on",
+            dialogs.isChecked(general, DialogR.id.user_agent_check_view)
+        )
+        dialogs.click(general, DialogR.id.user_agent_check_view)
+        dialogs.type(general, DialogR.id.user_agent_input_view, CUSTOM_USER_AGENT)
 
-            val countries = dialogs.field<Spinner>(general, DialogR.id.default_country_spinner)
-            countries.setSelection(positionOf(countries, CHOSEN_COUNTRY_CODE))
-        }
+        chooseCountry(dialogs, general, CHOSEN_COUNTRY_CODE)
         awaitChosenCountry()
         dialogs.dismiss(GENERAL_TAG)
     }
@@ -258,99 +260,79 @@ class SettingsPersistenceJourneyTest {
      * Reads every changed setting back off the widgets of freshly opened dialogs, which is what a
      * user looking at the settings after the recreate would see.
      */
-    private fun readEverySettingBackFromTheDialogs(
-        scenario: ActivityScenario<MainActivity>,
-        dialogs: JourneyDialogs
-    ) {
+    private fun readEverySettingBackFromTheDialogs(dialogs: JourneyDialogs) {
         val network = dialogs.openFromDrawer(R.id.nav_network, NETWORK_TAG)
-        scenario.onActivity {
-            assertFalse(
-                "The network dialog offers mobile data again after the recreate",
-                dialogs.field<CheckBox>(network, DialogR.id.use_mobile_network_check_box).isChecked
-            )
-        }
+        assertFalse(
+            "The network dialog offers mobile data again after the recreate",
+            dialogs.isChecked(network, DialogR.id.use_mobile_network_check_box)
+        )
         dialogs.dismiss(NETWORK_TAG)
 
         assertTheBufferFieldsRead(
-            scenario, dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG),
-            "after the recreate"
+            dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG), "after the recreate"
         )
         dialogs.dismiss(BUFFERING_TAG)
 
         val general = dialogs.openFromDrawer(R.id.nav_general, GENERAL_TAG)
-        scenario.onActivity {
-            assertFalse(
-                "The general dialog offers the last known station again after the recreate",
-                dialogs.field<CheckBox>(
-                    general, DialogR.id.settings_dialog_enable_last_known_radio_station_check_view
-                ).isChecked
+        assertFalse(
+            "The general dialog offers the last known station again after the recreate",
+            dialogs.isChecked(
+                general, DialogR.id.settings_dialog_enable_last_known_radio_station_check_view
             )
-            assertTrue(
-                "The custom user agent is switched off again after the recreate",
-                dialogs.field<CheckBox>(general, DialogR.id.user_agent_check_view).isChecked
-            )
-            assertEquals(
-                "The general dialog shows a different user agent after the recreate",
-                CUSTOM_USER_AGENT,
-                dialogs.field<EditText>(general, DialogR.id.user_agent_input_view).text.toString()
-            )
-            val countries = dialogs.field<Spinner>(general, DialogR.id.default_country_spinner)
-            assertEquals(
-                "The general dialog shows a different country after the recreate",
-                CHOSEN_COUNTRY_CODE,
-                (countries.selectedItem as Country).code
-            )
-        }
+        )
+        assertTrue(
+            "The custom user agent is switched off again after the recreate",
+            dialogs.isChecked(general, DialogR.id.user_agent_check_view)
+        )
+        assertEquals(
+            "The general dialog shows a different user agent after the recreate",
+            CUSTOM_USER_AGENT,
+            dialogs.text(general, DialogR.id.user_agent_input_view)
+        )
+        assertEquals(
+            "The general dialog shows a different country after the recreate",
+            CHOSEN_COUNTRY_CODE,
+            dialogs.read<Spinner, String>(general, DialogR.id.default_country_spinner) { spinner ->
+                (spinner.selectedItem as Country).code
+            }
+        )
         dialogs.dismiss(GENERAL_TAG)
     }
 
-    private fun typeTheBufferValues(
-        scenario: ActivityScenario<MainActivity>,
-        dialogs: JourneyDialogs,
-        buffering: DialogFragment
-    ) {
-        scenario.onActivity {
-            dialogs.field<EditText>(buffering, DialogR.id.min_buffer_edit_view)
-                .setText(MIN_BUFFER.toString())
-            dialogs.field<EditText>(buffering, DialogR.id.max_buffer_edit_view)
-                .setText(MAX_BUFFER.toString())
-            dialogs.field<EditText>(buffering, DialogR.id.play_buffer_edit_view)
-                .setText(PLAY_BUFFER.toString())
-            dialogs.field<EditText>(buffering, DialogR.id.play_buffer_after_rebuffer_edit_view)
-                .setText(REBUFFER_BUFFER.toString())
-        }
+    private fun typeTheBufferValues(dialogs: JourneyDialogs, buffering: DialogFragment) {
+        dialogs.type(buffering, DialogR.id.min_buffer_edit_view, MIN_BUFFER.toString())
+        dialogs.type(buffering, DialogR.id.max_buffer_edit_view, MAX_BUFFER.toString())
+        dialogs.type(buffering, DialogR.id.play_buffer_edit_view, PLAY_BUFFER.toString())
+        dialogs.type(
+            buffering, DialogR.id.play_buffer_after_rebuffer_edit_view, REBUFFER_BUFFER.toString()
+        )
     }
 
     private fun assertTheBufferFieldsRead(
-        scenario: ActivityScenario<MainActivity>,
         dialogs: JourneyDialogs,
         buffering: DialogFragment,
         occasion: String
     ) {
-        scenario.onActivity {
-            assertEquals(
-                "The buffering dialog shows a different minimum buffer $occasion",
-                MIN_BUFFER.toString(),
-                dialogs.field<EditText>(buffering, DialogR.id.min_buffer_edit_view).text.toString()
-            )
-            assertEquals(
-                "The buffering dialog shows a different maximum buffer $occasion",
-                MAX_BUFFER.toString(),
-                dialogs.field<EditText>(buffering, DialogR.id.max_buffer_edit_view).text.toString()
-            )
-            assertEquals(
-                "The buffering dialog shows a different playback buffer $occasion",
-                PLAY_BUFFER.toString(),
-                dialogs.field<EditText>(buffering, DialogR.id.play_buffer_edit_view).text.toString()
-            )
-            assertEquals(
-                "The buffering dialog shows a different rebuffer buffer $occasion",
-                REBUFFER_BUFFER.toString(),
-                dialogs.field<EditText>(
-                    buffering, DialogR.id.play_buffer_after_rebuffer_edit_view
-                ).text.toString()
-            )
-        }
+        assertEquals(
+            "The buffering dialog shows a different minimum buffer $occasion",
+            MIN_BUFFER.toString(),
+            dialogs.text(buffering, DialogR.id.min_buffer_edit_view)
+        )
+        assertEquals(
+            "The buffering dialog shows a different maximum buffer $occasion",
+            MAX_BUFFER.toString(),
+            dialogs.text(buffering, DialogR.id.max_buffer_edit_view)
+        )
+        assertEquals(
+            "The buffering dialog shows a different playback buffer $occasion",
+            PLAY_BUFFER.toString(),
+            dialogs.text(buffering, DialogR.id.play_buffer_edit_view)
+        )
+        assertEquals(
+            "The buffering dialog shows a different rebuffer buffer $occasion",
+            REBUFFER_BUFFER.toString(),
+            dialogs.text(buffering, DialogR.id.play_buffer_after_rebuffer_edit_view)
+        )
     }
 
     private fun assertTheDefaultsAreInPlace() {
@@ -451,22 +433,24 @@ class SettingsPersistenceJourneyTest {
     }
 
     private fun activityIdentity(scenario: ActivityScenario<MainActivity>): Int {
-        val identity = AtomicInteger(0)
-        scenario.onActivity { identity.set(System.identityHashCode(it)) }
-        return identity.get()
+        return scenario.withActivity { System.identityHashCode(it) }
     }
 
     /**
-     * @return the position of the country [code] in the spinner the general dialog builds, which
-     *   is sorted by name and carries a "use location" entry ahead of every real country.
+     * Selects the country [code] in the general dialog's spinner, which is sorted by name and
+     * carries a "use location" entry ahead of every real country, so its position has to be
+     * looked up rather than assumed.
      */
-    private fun positionOf(spinner: Spinner, code: String): Int {
-        for (position in 0 until spinner.adapter.count) {
-            if ((spinner.adapter.getItem(position) as Country).code == code) {
-                return position
-            }
+    private fun chooseCountry(dialogs: JourneyDialogs, general: DialogFragment, code: String) {
+        val spinnerId = DialogR.id.default_country_spinner
+        val codes = dialogs.read<Spinner, List<String>>(general, spinnerId) { spinner ->
+            (0 until spinner.adapter.count).map { (spinner.adapter.getItem(it) as Country).code }
         }
-        throw AssertionError("The country spinner offers no entry for '$code'")
+        val position = codes.indexOf(code)
+        if (position < 0) {
+            throw AssertionError("The country spinner offers no entry for '$code'")
+        }
+        dialogs.read<Spinner, Unit>(general, spinnerId) { it.setSelection(position) }
     }
 
     /**

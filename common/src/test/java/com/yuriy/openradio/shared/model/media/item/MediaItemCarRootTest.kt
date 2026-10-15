@@ -21,8 +21,6 @@ import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.utils.AppUtils
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -131,8 +129,8 @@ class MediaItemCarRootTest {
             listener.items.size
         )
         for (item in listener.items) {
-            assertTrue("${item.mediaId} is not browsable", item.mediaMetadata.isBrowsable == true)
-            assertFalse("${item.mediaId} is playable", item.mediaMetadata.isPlayable == true)
+            assertEquals("${item.mediaId} isBrowsable", true, item.mediaMetadata.isBrowsable)
+            assertEquals("${item.mediaId} isPlayable", false, item.mediaMetadata.isPlayable)
             assertEquals(MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS, item.mediaMetadata.mediaType)
         }
     }

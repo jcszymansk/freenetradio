@@ -55,7 +55,6 @@ import com.yuriy.openradio.shared.model.media.PlaybackState
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
-import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.images.ImagesStore
 import com.yuriy.openradio.shared.model.timer.SleepTimerListener
@@ -89,8 +88,7 @@ class MediaPresenterImpl(
     private val mNetworkLayer: NetworkLayer,
     private val mLocationStorage: LocationStorage,
     private val mSleepTimerModel: SleepTimerModel,
-    private val mSourcesLayer: SourcesLayer,
-    private val mFavoritesStorage: FavoritesStorage
+    private val mSourcesLayer: SourcesLayer
 ) : MediaPresenter {
     /**
      * Manager object that acts as interface between Media Resources and current Activity.
@@ -431,10 +429,6 @@ class MediaPresenterImpl(
         mAdapter?.notifyItemChanged(position)
     }
 
-    override fun isFavorite(mediaId: String): Boolean {
-        return false
-    }
-
     override fun isAdapterEmpty(): Boolean {
         return mAdapter?.itemCount == 0
     }
@@ -536,14 +530,15 @@ class MediaPresenterImpl(
         children: List<MediaItem>,
         replace: Boolean
     ) {
-        // Check whether category has changed.
-        val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
-        mCurrentParentId = parentId
-
-        // No need to go on if indexed list ended with last item.
+        // An ended page changes no state at all: were mCurrentParentId to advance to a node whose
+        // rows are not shown yet, that node's first real page would count as the same catalogue
+        // and be appended to the rows of the node the user came from.
         if (PlayerUtils.isEndOfList(children)) {
             return
         }
+        // Check whether category has changed.
+        val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
+        mCurrentParentId = parentId
         mAdapter?.parentId = parentId
         mAdapter?.updateData(children, replace || isSameCatalogue.not())
         mAdapter?.notifyDataSetChanged()
@@ -612,6 +607,10 @@ class MediaPresenterImpl(
 
     override fun getCurrentCategory(): String {
         return mMediaItemsStack.last
+    }
+
+    override fun getMediaItemsStack(): List<String> {
+        return mMediaItemsStack.toList()
     }
 
     /**

@@ -22,7 +22,6 @@ import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.MediaItemHelper
 import java.util.TreeSet
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -49,8 +48,8 @@ class MediaItemCountriesListTest {
         assertEquals("Germany", listener.items[0].mediaMetadata.title)
         assertEquals("DE", listener.items[0].mediaMetadata.subtitle)
         for (item in listener.items) {
-            assertTrue("${item.mediaId} is not browsable", item.mediaMetadata.isBrowsable == true)
-            assertFalse("${item.mediaId} is playable", item.mediaMetadata.isPlayable == true)
+            assertEquals("${item.mediaId} isBrowsable", true, item.mediaMetadata.isBrowsable)
+            assertEquals("${item.mediaId} isPlayable", false, item.mediaMetadata.isPlayable)
             assertEquals(MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS, item.mediaMetadata.mediaType)
             assertEquals(FLAG_DRAWABLE_ID, MediaItemHelper.getDrawableId(item.mediaMetadata.extras))
         }

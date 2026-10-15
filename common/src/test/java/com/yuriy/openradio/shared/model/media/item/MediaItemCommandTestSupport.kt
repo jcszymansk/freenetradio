@@ -125,7 +125,8 @@ internal fun dependencies(
     countryCode: String = DEFAULT_COUNTRY_CODE,
     isSameCatalogue: Boolean = false,
     isSavedInstance: Boolean = false,
-    options: Bundle = Bundle()
+    options: Bundle = Bundle(),
+    timeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS
 ): MediaItemCommandDependencies {
     return MediaItemCommandDependencies(
         testContext(),
@@ -136,7 +137,8 @@ internal fun dependencies(
         isSavedInstance,
         options,
         listener.scope,
-        listener
+        listener,
+        timeoutMillis
     )
 }
 
@@ -252,6 +254,16 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
     }
 
     /**
+     * Waits for the first result without settling, for a provider fake that has to stay blocked
+     * until the command has answered: settling would wait for the blocked provider instead.
+     *
+     * @return Whether a result arrived within [AWAIT_MILLIS].
+     */
+    fun awaitDelivery(): Boolean {
+        return mResultLatch.await(AWAIT_MILLIS, TimeUnit.MILLISECONDS)
+    }
+
+    /**
      * Waits for the first error report, then [settle]s, so what the listener holds afterwards is
      * final.
      *
@@ -341,10 +353,11 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
      * That the result was delivered inline is the whole claim. An empty result on its own is bit
      * for bit what a command that never ran delivers, and so is one a coroutine delivers later.
      *
-     * The inline delivery is read off the thread, which cannot race: every command that does its
-     * work launches it on [Dispatchers.IO], which never runs a block on the thread that launched
-     * it, so the caller's own thread delivering the result is something only the branch that
-     * returns before the launch can produce. Call this from the thread that called `execute`.
+     * The inline delivery is read off the thread. The work itself runs on [Dispatchers.IO], which
+     * never runs a block on the thread that launched it; only the deadline guard's empty answer
+     * can arrive inline, because the guard starts undispatched. A command that reached its work
+     * and answered that way passes this check, so the caller's presenter counters, which show the
+     * work was reached, are what catch it. Call this from the thread that called `execute`.
      *
      * The scope is [settle]d before anything is counted, so a command that answers inline and then
      * launches its fetch anyway has finished that fetch by the time the single result is asserted,
@@ -394,6 +407,10 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
  * Canned answers plus a record of what the command asked for. Anything a browse command is not
  * meant to touch throws, and [RecordingCommandListener.settle] hands a throw from the command's
  * coroutine back to the test that made the call.
+ *
+ * Every call that would reach a provider runs [mBeforeAnswer] after recording the request and
+ * before answering, so a test can hold the answer back the way a provider stuck on the network
+ * does.
  */
 internal class RecordingPresenter(
     private val mCategories: Set<Category> = emptySet(),
@@ -405,7 +422,8 @@ internal class RecordingPresenter(
     private val mCategoryStations: Set<RadioStation> = emptySet(),
     private val mCountryStations: Set<RadioStation> = emptySet(),
     private val mSearchStations: Set<RadioStation> = emptySet(),
-    private val mFavoriteIds: Set<String> = emptySet()
+    private val mFavoriteIds: Set<String> = emptySet(),
+    private val mBeforeAnswer: () -> Unit = {}
 ) : OpenRadioServicePresenter {
 
     // A command asks from its IO coroutines, which may run at once, so every record is safe to
@@ -450,26 +468,31 @@ internal class RecordingPresenter(
 
     override fun getStationsInCategory(categoryId: String, pageNumber: Int): Set<RadioStation> {
         categoryRequests.add(categoryId to pageNumber)
+        mBeforeAnswer()
         return pageOf(mCategoryStations, pageNumber)
     }
 
     override fun getStationsByCountry(countryCode: String, pageNumber: Int): Set<RadioStation> {
         countryRequests.add(countryCode to pageNumber)
+        mBeforeAnswer()
         return pageOf(mCountryStations, pageNumber)
     }
 
     override fun getNewStations(): Set<RadioStation> {
         mNewStationsRequests.incrementAndGet()
+        mBeforeAnswer()
         return mNewStations
     }
 
     override fun getPopularStations(): Set<RadioStation> {
         mPopularStationsRequests.incrementAndGet()
+        mBeforeAnswer()
         return mPopularStations
     }
 
     override fun getSearchStations(query: String, mediaIdBuilder: MediaIdBuilder): Set<RadioStation> {
         searchRequests.add(query)
+        mBeforeAnswer()
         val result = TreeSet<RadioStation>()
         for (radioStation in mSearchStations) {
             val built = RadioStation.makeCopyInstance(radioStation)
@@ -481,21 +504,25 @@ internal class RecordingPresenter(
 
     override fun getAllCategories(): Set<Category> {
         mCategoriesRequests.incrementAndGet()
+        mBeforeAnswer()
         return mCategories
     }
 
     override fun getAllCountries(): Set<Country> {
         mCountriesRequests.incrementAndGet()
+        mBeforeAnswer()
         return mCountries
     }
 
     override fun getAllFavorites(): Set<RadioStation> {
         mFavoritesRequests.incrementAndGet()
+        mBeforeAnswer()
         return mFavorites
     }
 
     override fun getAllDeviceLocal(): Set<RadioStation> {
         mDeviceLocalsRequests.incrementAndGet()
+        mBeforeAnswer()
         return mDeviceLocals
     }
 

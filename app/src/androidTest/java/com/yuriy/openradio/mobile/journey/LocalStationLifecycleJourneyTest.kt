@@ -18,8 +18,6 @@ package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
 import android.view.View
-import android.widget.EditText
-import android.widget.TextView
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
@@ -38,11 +36,13 @@ import com.yuriy.openradio.shared.view.dialog.AddStationDialog
 import com.yuriy.openradio.shared.view.dialog.EditStationDialog
 import com.yuriy.openradio.shared.view.dialog.RSSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
+import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import com.yuriy.openradio.shared.R as DialogR
@@ -81,6 +81,9 @@ import com.yuriy.openradio.shared.R as DialogR
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class LocalStationLifecycleJourneyTest {
+
+    @get:Rule
+    val mStack = PresenterStackRule()
 
     private lateinit var mContext: Context
 
@@ -170,21 +173,19 @@ class LocalStationLifecycleJourneyTest {
                     scenario, settings, DialogR.id.dialog_rs_settings_edit_btn, EditStationDialog.DIALOG_TAG
                 )
 
-                scenario.onActivity {
-                    assertEquals(
-                        "The edit dialog did not load the station it was opened for",
-                        STATION_NAME,
-                        dialogs.field<EditText>(edit, DialogR.id.add_edit_station_name_edit).text.toString()
-                    )
-                    assertEquals(
-                        "The edit dialog did not load the station's stream url",
-                        url,
-                        dialogs.field<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).text.toString()
-                    )
-                    dialogs.field<EditText>(edit, DialogR.id.add_edit_station_name_edit).setText(EDITED_NAME)
-                    dialogs.field<EditText>(edit, DialogR.id.add_edit_station_stream_url_edit).setText(editedUrl)
-                    dialogs.field<View>(edit, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
-                }
+                assertEquals(
+                    "The edit dialog did not load the station it was opened for",
+                    STATION_NAME,
+                    dialogs.text(edit, DialogR.id.add_edit_station_name_edit)
+                )
+                assertEquals(
+                    "The edit dialog did not load the station's stream url",
+                    url,
+                    dialogs.text(edit, DialogR.id.add_edit_station_stream_url_edit)
+                )
+                dialogs.type(edit, DialogR.id.add_edit_station_name_edit, EDITED_NAME)
+                dialogs.type(edit, DialogR.id.add_edit_station_stream_url_edit, editedUrl)
+                dialogs.click(edit, DialogR.id.add_edit_station_dialog_add_btn_view)
                 list.awaitRows("the station's row under its new name") {
                     it == listOf(BrowseRow(station.id, EDITED_NAME))
                 }
@@ -233,14 +234,14 @@ class LocalStationLifecycleJourneyTest {
                     scenario, settings, DialogR.id.dialog_rs_settings_remove_btn, RemoveStationDialog.DIALOG_TAG
                 )
 
-                scenario.onActivity {
-                    assertEquals(
-                        "The confirmation does not say which station is about to go",
-                        mContext.getString(DialogR.string.remove_station_dialog_main_text, STATION_NAME),
-                        dialogs.field<TextView>(remove, DialogR.id.remove_station_text_view).text.toString()
-                    )
-                    dialogs.field<View>(remove, DialogR.id.remove_station_dialog_add_btn_view).performClick()
-                }
+                assertEquals(
+                    "The confirmation does not say which station is about to go",
+                    mContext.getString(
+                        DialogR.string.remove_station_dialog_main_text, STATION_NAME
+                    ),
+                    dialogs.text(remove, DialogR.id.remove_station_text_view)
+                )
+                dialogs.click(remove, DialogR.id.remove_station_dialog_add_btn_view)
                 list.awaitEmptied("the locals list without the removed station")
             } finally {
                 JourneyNavigation(scenario).returnToRoot()
@@ -298,13 +299,11 @@ class LocalStationLifecycleJourneyTest {
             list.awaitRows("the root list") { it == root }
             list.assertRowsStay(root, "A locals refresh that was in flight during the walk back replaced the root")
             assertEquals("The list renders a node other than the root", MediaId.MEDIA_ID_ROOT, list.renderedNode())
-            scenario.onActivity { activity ->
-                assertEquals(
-                    "The add-station button follows the rendered node and is hidden at the root",
-                    View.VISIBLE,
-                    activity.findViewById<View>(R.id.add_station_btn).visibility
-                )
-            }
+            assertEquals(
+                "The add-station button follows the rendered node and is hidden at the root",
+                View.VISIBLE,
+                addStationButtonVisibility(scenario)
+            )
         }
     }
 
@@ -378,19 +377,24 @@ class LocalStationLifecycleJourneyTest {
             addStationThroughTheDialog(scenario, STATION_NAME, serveStream(STATION_PATH))
             val root = list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
 
-            list.tapRow(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+            // The failure this case exists to catch is the node opening, which leaves the stack
+            // inside it.
+            val navigation = JourneyNavigation(scenario)
+            try {
+                list.tapRow(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
 
-            list.assertRowsStay(
-                root,
-                "Tapping the locals row offline opened it. TASK-049 asks for exactly that, so " +
-                    "this test is what has to change, not the fix"
-            )
-            scenario.onActivity { activity ->
+                list.assertRowsStay(
+                    root,
+                    "Tapping the locals row offline opened it. TASK-049 asks for exactly that, so " +
+                        "this test is what has to change, not the fix"
+                )
                 assertEquals(
                     "The add-station button is hidden off the root, so the list did leave it",
                     View.VISIBLE,
-                    activity.findViewById<View>(R.id.add_station_btn).visibility
+                    addStationButtonVisibility(scenario)
                 )
+            } finally {
+                navigation.returnToRoot()
             }
         }
     }
@@ -402,9 +406,9 @@ class LocalStationLifecycleJourneyTest {
      * This is a precondition rather than a restatement of the cold launch journey. The presenter
      * is one of the registry's singletons and its node stack outlives the Activity: `init` walks
      * back into whatever node the stack ends with, so a case that navigated leaves the next
-     * Activity somewhere other than the root, in the same process. Nothing here navigates, which
-     * this asserts rather than assumes, because Phase 6 asks for a suite with no order
-     * assumptions in it.
+     * Activity somewhere other than the root, in the same process. Every case here walks back out
+     * of the nodes it opens, which this asserts rather than assumes, because Phase 6 asks for a
+     * suite with no order assumptions in it.
      */
     private fun awaitCleanInstallRoot(list: BrowseListView) {
         assertEquals(
@@ -429,15 +433,13 @@ class LocalStationLifecycleJourneyTest {
         url: String
     ) {
         val dialogs = JourneyDialogs(scenario)
-        scenario.onActivity { activity ->
+        scenario.withActivity { activity ->
             activity.findViewById<View>(R.id.add_station_btn).performClick()
         }
         val dialog = dialogs.awaitDialog(AddStationDialog.DIALOG_TAG)
-        scenario.onActivity {
-            dialogs.field<EditText>(dialog, DialogR.id.add_edit_station_name_edit).setText(name)
-            dialogs.field<EditText>(dialog, DialogR.id.add_edit_station_stream_url_edit).setText(url)
-            dialogs.field<View>(dialog, DialogR.id.add_edit_station_dialog_add_btn_view).performClick()
-        }
+        dialogs.type(dialog, DialogR.id.add_edit_station_name_edit, name)
+        dialogs.type(dialog, DialogR.id.add_edit_station_stream_url_edit, url)
+        dialogs.click(dialog, DialogR.id.add_edit_station_dialog_add_btn_view)
         awaitStoredStation(name)
     }
 
@@ -463,24 +465,22 @@ class LocalStationLifecycleJourneyTest {
             listOf(BrowseRow(station.id, station.name)),
             list.awaitRows("the station's own row") { it.size == 1 }
         )
-        scenario.onActivity { activity ->
-            assertEquals(
-                "The add-station button belongs to the root and is still up inside the locals list",
-                View.GONE,
-                activity.findViewById<View>(R.id.add_station_btn).visibility
-            )
-        }
+        assertEquals(
+            "The add-station button belongs to the root and is still up inside the locals list",
+            View.GONE,
+            addStationButtonVisibility(scenario)
+        )
 
         list.tapRowSettings(station.id)
         val dialogs = JourneyDialogs(scenario)
         val settings = dialogs.awaitDialog(RSSettingsDialog.DIALOG_TAG)
-        scenario.onActivity {
-            assertEquals(
-                "The settings dialog for a station of the user's own does not offer edit and remove",
-                View.VISIBLE,
-                dialogs.field<View>(settings, DialogR.id.dialog_rs_settings_edit_remove).visibility
-            )
-        }
+        assertEquals(
+            "The settings dialog for a station of the user's own does not offer edit and remove",
+            View.VISIBLE,
+            dialogs.read<View, Int>(settings, DialogR.id.dialog_rs_settings_edit_remove) {
+                it.visibility
+            }
+        )
         return settings
     }
 
@@ -498,8 +498,14 @@ class LocalStationLifecycleJourneyTest {
         opened: String
     ): DialogFragment {
         val dialogs = JourneyDialogs(scenario)
-        scenario.onActivity { dialogs.field<View>(settings, buttonId).performClick() }
+        dialogs.click(settings, buttonId)
         return dialogs.awaitDialog(opened)
+    }
+
+    private fun addStationButtonVisibility(scenario: ActivityScenario<MainActivity>): Int {
+        return scenario.withActivity { activity ->
+            activity.findViewById<View>(R.id.add_station_btn).visibility
+        }
     }
 
     /**

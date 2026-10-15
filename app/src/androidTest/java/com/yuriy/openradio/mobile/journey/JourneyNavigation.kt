@@ -23,6 +23,7 @@ import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.presenter.MediaPresenter
+import com.yuriy.openradio.testing.withActivity
 
 /**
  * Moving between browse nodes from a journey, and getting back out afterwards.
@@ -46,8 +47,8 @@ internal class JourneyNavigation(private val mScenario: ActivityScenario<MainAct
      * Opens the node [mediaId], the way a tap on its row would once there is a connection.
      */
     fun open(mediaId: String) {
-        val presenter = presenter()
-        mScenario.onActivity { presenter.addMediaItemToStack(mediaId) }
+        val presenter = registryPresenter()
+        mScenario.withActivity { presenter.addMediaItemToStack(mediaId) }
     }
 
     /**
@@ -55,54 +56,68 @@ internal class JourneyNavigation(private val mScenario: ActivityScenario<MainAct
      *   journey that plays a station reads the parent from here rather than naming it itself.
      */
     fun currentCategory(): String {
-        return presenter().getCurrentCategory()
+        return registryPresenter().getCurrentCategory()
     }
 
     /**
-     * Walks the presenter back out of whatever node a case opened.
+     * @return the presenter's node stack, bottom first.
+     */
+    fun stack(): List<String> {
+        val presenter = registryPresenter()
+        return mScenario.withActivity { presenter.getMediaItemsStack() }
+    }
+
+    /**
+     * Walks the presenter back out of whatever node a case opened, and leaves the list showing
+     * the root.
      *
-     * Popping stops at the root: `handleBackPressed` treats the root as "leave the application"
-     * and sends `CMD_STOP_SERVICE`, which ends in `Process.killProcess` and would take the whole
-     * run with it.
+     * Back is pressed only while there is a node below the top. `handleBackPressed` on a stack of
+     * one treats that one as the root, whatever it is, and "leave the application" sends
+     * `CMD_STOP_SERVICE`, which ends in `Process.killProcess` and takes the whole run with it. A
+     * stack that is down to a single node other than the root, or to nothing, has the root shown
+     * on top of it instead and what was under it dropped, and so does a stack a press failed to
+     * shrink, so the walk ends whatever the presenter does. The stack is read again after every
+     * press, so nothing here reads the top of a stack that has emptied.
      *
      * This asserts nothing, because it is meant to be called from a `finally` and an assertion
      * there would replace whatever failure sent the case into it. A failure to get back out is
-     * caught by the case's own root-list assertion, and one that escaped the case entirely by the
-     * next case asserting the node it starts in.
+     * caught by the case's own root-list assertion, and one that escaped the case entirely by
+     * [PresenterStackRule].
      */
     fun returnToRoot() {
-        val presenter = presenter()
-        mScenario.onActivity {
-            var remaining = MAX_BROWSE_DEPTH
-            while (presenter.getCurrentCategory() != MediaId.MEDIA_ID_ROOT && remaining-- > 0) {
+        val presenter = registryPresenter()
+        mScenario.withActivity {
+            var stack = presenter.getMediaItemsStack()
+            while (stack.size > 1 && stack.last() != MediaId.MEDIA_ID_ROOT) {
                 presenter.handleBackPressed()
+                val popped = presenter.getMediaItemsStack()
+                val shrank = popped.size < stack.size
+                stack = popped
+                if (!shrank) {
+                    break
+                }
+            }
+            if (stack.lastOrNull() != MediaId.MEDIA_ID_ROOT) {
+                presenter.addMediaItemToStack(MediaId.MEDIA_ID_ROOT)
+                stack.filter { it != MediaId.MEDIA_ID_ROOT }.forEach(presenter::unsubscribeFromItem)
             }
         }
     }
+}
 
-    /**
-     * @return the registry's own presenter, the one [MainActivity] is driving, reached through the
-     *   single-method hook that is the supported way to it.
-     */
-    private fun presenter(): MediaPresenter {
-        lateinit var result: MediaPresenter
-        DependencyRegistryCommonUi.inject(
-            object : MediaPresenterDependency {
+/**
+ * @return the registry's own presenter, the one [MainActivity] is driving, reached through the
+ *   single-method hook that is the supported way to it.
+ */
+internal fun registryPresenter(): MediaPresenter {
+    lateinit var result: MediaPresenter
+    DependencyRegistryCommonUi.inject(
+        object : MediaPresenterDependency {
 
-                override fun configureWith(mediaPresenter: MediaPresenter) {
-                    result = mediaPresenter
-                }
+            override fun configureWith(mediaPresenter: MediaPresenter) {
+                result = mediaPresenter
             }
-        )
-        return result
-    }
-
-    private companion object {
-
-        /**
-         * How far a case is allowed to have walked into the browse tree, so that popping back out
-         * cannot loop for ever if the stack ever stops shrinking.
-         */
-        const val MAX_BROWSE_DEPTH = 8
-    }
+        }
+    )
+    return result
 }

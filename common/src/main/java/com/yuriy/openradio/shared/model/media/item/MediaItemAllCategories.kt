@@ -17,10 +17,7 @@ package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Created by Yuriy Chernyshov
@@ -41,11 +38,9 @@ class MediaItemAllCategories : MediaItemCommand {
             return
         }
         mJob?.cancel()
-        mJob = dependencies.mScope.launch(Dispatchers.IO) {
-            withTimeoutOrNull(MediaItemCommand.CMD_TIMEOUT_MS) {
-                // Load all categories into menu
-                loadAllCategories(playbackStateListener, dependencies)
-            } ?: dependencies.resultListener.onResult()
+        mJob = dependencies.launchWithDeadline {
+            // Load all categories into menu
+            loadAllCategories(playbackStateListener, dependencies)
         }
     }
 

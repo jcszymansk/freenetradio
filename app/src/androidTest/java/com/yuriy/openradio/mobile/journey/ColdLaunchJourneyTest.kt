@@ -27,10 +27,12 @@ import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.storage.makeStation
+import com.yuriy.openradio.testing.withActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -50,6 +52,9 @@ import org.junit.runner.RunWith
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class ColdLaunchJourneyTest {
+
+    @get:Rule
+    val mStack = PresenterStackRule()
 
     private lateinit var mContext: Context
 
@@ -88,23 +93,21 @@ class ColdLaunchJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             BrowseListView(scenario).awaitRows()
 
-            scenario.onActivity { activity ->
-                assertEquals(
-                    "The progress bar is still up after the root list arrived",
-                    View.GONE,
-                    activity.findViewById<View>(R.id.progress_bar_view).visibility
-                )
-                assertEquals(
-                    "The root list arrived and the no-data message is showing anyway",
-                    View.GONE,
-                    activity.findViewById<View>(R.id.no_data_view).visibility
-                )
-                assertEquals(
-                    "The root list hid the only way to add a station without a connection",
-                    View.VISIBLE,
-                    activity.findViewById<View>(R.id.add_station_btn).visibility
-                )
-            }
+            assertEquals(
+                "The progress bar is still up after the root list arrived",
+                View.GONE,
+                visibility(scenario, R.id.progress_bar_view)
+            )
+            assertEquals(
+                "The root list arrived and the no-data message is showing anyway",
+                View.GONE,
+                visibility(scenario, R.id.no_data_view)
+            )
+            assertEquals(
+                "The root list hid the only way to add a station without a connection",
+                View.VISIBLE,
+                visibility(scenario, R.id.add_station_btn)
+            )
         }
     }
 
@@ -135,6 +138,10 @@ class ColdLaunchJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             assertEquals(mProfile.cleanInstallRoot(), BrowseListView(scenario).awaitRows())
         }
+    }
+
+    private fun visibility(scenario: ActivityScenario<MainActivity>, viewId: Int): Int {
+        return scenario.withActivity { activity -> activity.findViewById<View>(viewId).visibility }
     }
 
     private companion object {

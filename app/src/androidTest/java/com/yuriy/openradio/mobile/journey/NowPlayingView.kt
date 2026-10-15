@@ -23,8 +23,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertTrue
 
 /**
@@ -147,9 +147,7 @@ internal class NowPlayingView(private val mScenario: ActivityScenario<MainActivi
     }
 
     private fun <T> read(reader: (MainActivity) -> T): T {
-        val result = AtomicReference<T>()
-        mScenario.onActivity { activity -> result.set(reader(activity)) }
-        return result.get()
+        return mScenario.withActivity(reader)
     }
 
     private companion object {

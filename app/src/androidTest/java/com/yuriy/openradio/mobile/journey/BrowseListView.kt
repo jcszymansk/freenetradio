@@ -26,10 +26,8 @@ import androidx.test.core.app.ActivityScenario
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.view.list.MediaItemsAdapter
+import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -144,13 +142,7 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      *   user stands in another.
      */
     fun renderedNode(): String {
-        val result = AtomicReference("")
-        mScenario.onActivity { activity ->
-            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
-            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
-            result.set(adapter.parentId)
-        }
-        return result.get()
+        return mScenario.withActivity { activity -> adapterOf(activity)?.parentId.orEmpty() }
     }
 
     /**
@@ -302,13 +294,7 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      *   An Activity without a browse list answers false, which fails any tap the same way.
      */
     private fun adapterHasListener(): Boolean {
-        val result = AtomicBoolean(false)
-        mScenario.onActivity { activity ->
-            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
-            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
-            result.set(adapter.listener != null)
-        }
-        return result.get()
+        return mScenario.withActivity { activity -> adapterOf(activity)?.listener != null }
     }
 
     /**
@@ -326,28 +312,25 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      *   difference between a control that did not react and a row the list never laid out.
      */
     private fun <T> inRow(mediaId: String, read: (View, MediaItem) -> T): T? {
-        val result = AtomicReference<T?>(null)
-        val positions = AtomicReference(emptyList<Int>())
-        mScenario.onActivity { activity ->
+        val reading = mScenario.withActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
-            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            val adapter = adapterOf(activity)
+                ?: return@withActivity RowReading<T>(emptyList(), null)
             val matching = (0 until adapter.itemCount).filter { position ->
                 adapter.getItem(position)?.mediaId == mediaId
             }
-            positions.set(matching)
-            val position = matching.singleOrNull() ?: return@onActivity
-            val item = adapter.getItem(position) ?: return@onActivity
-            val row = listView.findViewHolderForAdapterPosition(position)?.itemView
-                ?: return@onActivity
-            result.set(read(row, item))
+            val position = matching.singleOrNull()
+            val item = position?.let { adapter.getItem(it) }
+            val row = position?.let { listView.findViewHolderForAdapterPosition(it)?.itemView }
+            RowReading(matching, if (item != null && row != null) read(row, item) else null)
         }
-        if (positions.get().size > 1) {
+        if (reading.positions.size > 1) {
             fail(
-                "The adapter holds the media id $mediaId at positions ${positions.get()}, so a " +
+                "The adapter holds the media id $mediaId at positions ${reading.positions}, so a " +
                     "row for it is ambiguous. " + describe()
             )
         }
-        return result.get()
+        return reading.value
     }
 
     /**
@@ -355,10 +338,9 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      *   disagree, which is every moment the list is still being filled or measured.
      */
     fun rows(): List<BrowseRow> {
-        val result = AtomicReference(emptyList<BrowseRow>())
-        mScenario.onActivity { activity ->
+        return mScenario.withActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
-            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
+            val adapter = adapterOf(activity) ?: return@withActivity emptyList()
             val displayed = HashMap<Int, String>()
             for (index in 0 until listView.childCount) {
                 val child = listView.getChildAt(index)
@@ -369,18 +351,15 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
                 displayed[position] = child.findViewById<TextView>(R.id.name_view).text.toString()
             }
             if (adapter.itemCount == 0 || displayed.size != adapter.itemCount) {
-                return@onActivity
+                return@withActivity emptyList()
             }
-            result.set(
-                (0 until adapter.itemCount).map { position ->
-                    BrowseRow(
-                        adapter.getItem(position)?.mediaId.orEmpty(),
-                        displayed.getValue(position)
-                    )
-                }
-            )
+            (0 until adapter.itemCount).map { position ->
+                BrowseRow(
+                    adapter.getItem(position)?.mediaId.orEmpty(),
+                    displayed.getValue(position)
+                )
+            }
         }
-        return result.get()
     }
 
     /**
@@ -390,13 +369,7 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      *   first reads zero here.
      */
     private fun adapterItemCount(): Int {
-        val result = AtomicInteger(NO_ADAPTER)
-        mScenario.onActivity { activity ->
-            val listView = activity.findViewById<RecyclerView>(R.id.list_view)
-            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
-            result.set(adapter.itemCount)
-        }
-        return result.get()
+        return mScenario.withActivity { activity -> adapterOf(activity)?.itemCount ?: NO_ADAPTER }
     }
 
     /**
@@ -404,16 +377,24 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
      *   missing: children the service never sent, or rows the screen was too short to lay out.
      */
     fun describe(): String {
-        val result = AtomicReference("The Activity holds no browse list at all.")
-        mScenario.onActivity { activity ->
+        return mScenario.withActivity { activity ->
             val listView = activity.findViewById<RecyclerView>(R.id.list_view)
-            val adapter = listView.adapter as? MediaItemsAdapter ?: return@onActivity
-            result.set(
+            val adapter = adapterOf(activity)
+            if (adapter == null) {
+                "The Activity holds no browse list at all."
+            } else {
                 "The adapter holds ${adapter.itemCount} items and ${listView.childCount} rows " +
                     "are laid out."
-            )
+            }
         }
-        return result.get()
+    }
+
+    /**
+     * @return the browse list's adapter, or null while the Activity carries none. Main thread
+     *   only.
+     */
+    private fun adapterOf(activity: MainActivity): MediaItemsAdapter? {
+        return activity.findViewById<RecyclerView>(R.id.list_view).adapter as? MediaItemsAdapter
     }
 
     private companion object {
@@ -445,3 +426,9 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
  * that position puts on screen.
  */
 internal data class BrowseRow(val mediaId: String, val title: String)
+
+/**
+ * What one look at a row found: every adapter position holding the media id asked for, and what
+ * the reader made of the row when exactly one of them was laid out.
+ */
+private class RowReading<T>(val positions: List<Int>, val value: T?)

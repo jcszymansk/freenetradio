@@ -33,7 +33,7 @@ object PlayerUtils {
     fun isEndOfList(list: List<MediaItem?>?): Boolean {
         return (list == null
                 || list.size == 1
-                && (list[0] == null || list[0]?.mediaId === mMediaItemListEnded.mediaId))
+                && (list[0] == null || list[0]?.mediaId == mMediaItemListEnded.mediaId))
     }
 
     fun playerStateToString(state: Int): String {

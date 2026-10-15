@@ -92,11 +92,20 @@ class OpenRadioPlayerPolicyPauseTest {
         }
     }
 
+    /**
+     * How many connections the resume opens is the player's business. The stop keeps the
+     * position, and the WAV the broadcast sends declares a length, so the player may treat it as
+     * seekable: when the kept position is past the start, it asks for that position again over a
+     * connection of its own, then drops the one it started on (TASK-106). What the policy pause
+     * promises is that the station plays over one connection, and that the connection is new,
+     * since the old one was closed before the resume.
+     */
     @Test
     fun aStationThePolicyPausedPlaysAgainOverANewConnectionWhenResumed() {
         playTheBroadcast()
         onMain { mPlayer.pauseForNetworkPolicy() }
         awaitConnectionsClosed()
+        assertEquals(1, mBroadcast.connections())
 
         onMain {
             assertTrue("The policy pause forgot the station", mPlayer.resumesOnReconnect())
@@ -107,8 +116,10 @@ class OpenRadioPlayerPolicyPauseTest {
         }
 
         awaitPlaying()
-        assertEquals(2, mBroadcast.connections())
-        assertEquals(1, mBroadcast.openConnections())
+        await("the player to keep a single connection to the broadcast") {
+            mBroadcast.openConnections() == 1
+        }
+        assertTrue("The resume made no new connection", mBroadcast.connections() > 1)
         onMain { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 

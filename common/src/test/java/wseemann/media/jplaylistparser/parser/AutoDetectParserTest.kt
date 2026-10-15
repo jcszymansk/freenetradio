@@ -171,6 +171,36 @@ class AutoDetectParserTest {
         }
     }
 
+    /**
+     * The fixtures above all start with their format's signature, so content sniffing would find
+     * each parser even if its declared type matched nothing. Here the root element lies past the
+     * sniffed head, which leaves the declared type as the only way to reach the XSPF parser.
+     */
+    @Test
+    fun anXspfPlaylistIsDispatchedOnItsDeclaredTypeAlone() {
+        val comment = "<!-- ${"x".repeat(2048)} -->\n"
+        val content = "<?xml version=\"1.0\"?>\n$comment<playlist><trackList><track>" +
+                "<location>https://example.com/typed-xspf</location></track></trackList></playlist>"
+        val playlist = Playlist()
+
+        AutoDetectParser(NO_READS).parse(
+            "https://example.com/live/listen",
+            "application/xspf+xml",
+            ByteArrayInputStream(content.toByteArray()),
+            playlist
+        )
+
+        assertEquals(listOf("https://example.com/typed-xspf"), uris(playlist))
+        assertThrows(JPlaylistParserException::class.java) {
+            AutoDetectParser(NO_READS).parse(
+                "https://example.com/live/listen",
+                null,
+                ByteArrayInputStream(content.toByteArray()),
+                Playlist()
+            )
+        }
+    }
+
     @Test
     fun extensionsAreCaseInsensitive() {
         val playlist = Playlist()

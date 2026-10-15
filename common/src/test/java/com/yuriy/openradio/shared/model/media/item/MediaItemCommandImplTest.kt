@@ -49,7 +49,7 @@ class MediaItemCommandImplTest {
         assertFalse(MediaItemHelper.isFavoriteField(listener.items[0].mediaMetadata))
         assertTrue(MediaItemHelper.isFavoriteField(listener.items[1].mediaMetadata))
         for (item in listener.items) {
-            assertTrue("${item.mediaId} is not playable", item.mediaMetadata.isPlayable == true)
+            assertEquals("${item.mediaId} isPlayable", true, item.mediaMetadata.isPlayable)
         }
         assertEquals(loaded, listener.radioStations)
         assertEquals(PAGE, listener.pageNumber)

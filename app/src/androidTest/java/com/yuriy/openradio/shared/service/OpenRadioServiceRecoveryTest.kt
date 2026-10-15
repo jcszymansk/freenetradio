@@ -334,10 +334,12 @@ class OpenRadioServiceRecoveryTest {
 
     /**
      * Losing one station must not cost the user the rest of the list: the queue survives the
-     * failure, and the station next to it still plays.
+     * failure, and the station next to it still plays. Moving on is the user's step, taken here by
+     * selecting the second station; the service retries a station whose network went away, but it
+     * does not skip to another one on its own.
      */
     @Test
-    fun aStationRecoversByMovingToOneThatPlays() {
+    fun aFailedStationLeavesTheNextOnePlayable() {
         val stream = mServer.serve(
             "/fixture.wav", LoopbackHttpFixture.AUDIO_WAV, mAudio.wavBytes(seconds = 10)
         )

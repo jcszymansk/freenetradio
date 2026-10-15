@@ -481,6 +481,13 @@ class OpenRadioServiceCommandTest {
     }
 
     /**
+     * Only that the session takes each command is asserted here. What they do is asserted where
+     * there is something to observe: `CMD_NET_CHANGED` by
+     * `OpenRadioServiceRecoveryTest.aNetworkChangeLeavesAnAllowedStreamPlaying`,
+     * `CMD_TOGGLE_LAST_PLAYED_ITEM` by
+     * `OfflinePlaybackJourneyTest.tappingTheNowPlayingBarPausesAndResumesTheStation`, and
+     * `CMD_UPDATE_TREE` by the tests in this class that wait on [updateTreeAndAwaitRefresh].
+     *
      * `CMD_CLEAR_CACHE` is not in this loop. It answers immediately and finishes on a coroutine
      * that outlives the test, and what it goes on to empty is process-wide state other cases seed,
      * so firing it without waiting would let it reach into whatever runs next.
