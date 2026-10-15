@@ -71,8 +71,8 @@ import com.yuriy.openradio.shared.R as DialogR
  * the gate, so the locals list is rendered by the application, the station's row is a real row,
  * its settings button is the real control, and `handleItemSettings` builds the settings dialog's
  * arguments from the node the presenter is standing in. From there the path is untouched: the
- * locals-only edit and remove buttons, the media item they carry as a tag, the `android:onClick`
- * that lands in [MainActivity], and the real edit and remove dialogs it opens.
+ * locals-only edit and remove buttons, the media item they carry as a tag, the click listeners
+ * the settings dialog puts on them, and the real edit and remove dialogs they open.
  *
  * What the service answers for the locals node is `OpenRadioServiceBrowseTest`'s subject. What is
  * asserted here is what the Activity renders, and the store as a reader that has cached nothing
@@ -487,9 +487,9 @@ class LocalStationLifecycleJourneyTest {
     /**
      * Clicks one of the settings dialog's two buttons and waits for the dialog it opens.
      *
-     * The click goes through the button's `android:onClick`, which Android resolves against the
-     * Activity hosting the dialog, so this exercises [MainActivity]'s own handler and the media
-     * item the settings dialog left on the button as a tag.
+     * The click goes through the listener the settings dialog put on the button, so this
+     * exercises the presenter call it makes and the media item the dialog left on the button as
+     * a tag.
      */
     private fun openFromSettings(
         scenario: ActivityScenario<MainActivity>,
