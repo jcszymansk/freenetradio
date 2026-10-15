@@ -276,7 +276,7 @@ internal class LoopbackHttpFixture {
         private val mConnections = AtomicInteger()
 
         @Volatile
-        private var mIsOnAir = true
+        private var mSignal = Signal.ON_AIR
 
         /**
          * Bytes written to every connection so far, head included. A write the client never read
@@ -308,14 +308,24 @@ internal class LoopbackHttpFixture {
          * stays quiet until the client closes it, as one would that outlived the signal.
          */
         fun goOffAir() {
-            mIsOnAir = false
+            mSignal = Signal.OFF_AIR
+        }
+
+        /**
+         * Cuts the station off the way a network that drops the connection does: a connection
+         * that is open is reset at once, and a new one is reset as soon as it has asked for the
+         * stream. Unlike [goOffAir], the client finds out without waiting for a timeout, so a
+         * test can make the stream fail several times in seconds.
+         */
+        fun cutOff() {
+            mSignal = Signal.CUT_OFF
         }
 
         /**
          * Puts the station back on the air: a connection made from now on is answered again.
          */
         fun goOnAir() {
-            mIsOnAir = true
+            mSignal = Signal.ON_AIR
         }
 
         /**
@@ -327,8 +337,7 @@ internal class LoopbackHttpFixture {
             mConnections.incrementAndGet()
             mOpenConnections.incrementAndGet()
             try {
-                if (mIsOnAir.not()) {
-                    awaitClientClose(socket)
+                if (endsWithoutTransmitting(socket)) {
                     return
                 }
                 val output = socket.getOutputStream()
@@ -344,8 +353,7 @@ internal class LoopbackHttpFixture {
                 val chunk = ByteArray(maxOf(1, mBytesPerSecond / CHUNKS_PER_SECOND))
                 var bodyOffset = 0
                 while (Thread.currentThread().isInterrupted.not()) {
-                    if (mIsOnAir.not()) {
-                        awaitClientClose(socket)
+                    if (endsWithoutTransmitting(socket)) {
                         return
                     }
                     for (index in chunk.indices) {
@@ -364,10 +372,39 @@ internal class LoopbackHttpFixture {
             }
         }
 
+        /**
+         * Ends the connection over [socket] the way the station's signal says, unless the station
+         * is on the air.
+         *
+         * @return whether the connection is over.
+         */
+        private fun endsWithoutTransmitting(socket: Socket): Boolean {
+            return when (mSignal) {
+                Signal.ON_AIR -> false
+                Signal.OFF_AIR -> {
+                    awaitClientClose(socket)
+                    true
+                }
+                Signal.CUT_OFF -> {
+                    // A zero linger makes close() send a reset rather than end the stream, which
+                    // the client would take for the end of the broadcast instead of a failure.
+                    socket.setSoLinger(true, 0)
+                    socket.close()
+                    true
+                }
+            }
+        }
+
         private fun write(output: OutputStream, bytes: ByteArray) {
             output.write(bytes)
             output.flush()
             mBytesSent.addAndGet(bytes.size.toLong())
+        }
+
+        private enum class Signal {
+            ON_AIR,
+            OFF_AIR,
+            CUT_OFF
         }
 
         private companion object {

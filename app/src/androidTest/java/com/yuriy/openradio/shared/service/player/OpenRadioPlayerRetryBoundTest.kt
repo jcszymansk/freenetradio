@@ -18,12 +18,15 @@ package com.yuriy.openradio.shared.service.player
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.R
+import com.yuriy.openradio.shared.service.LocalAudioFixture
+import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -48,6 +51,10 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * The player gets a schedule of two short retries, so spending it takes seconds rather than the
  * minutes the service's schedule allows a dead zone.
+ *
+ * A station that comes back between outages is a [LoopbackHttpFixture.Broadcast] that is cut off
+ * rather than taken off the air, so each failure takes seconds rather than ExoPlayer's read
+ * timeouts.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
@@ -55,15 +62,39 @@ class OpenRadioPlayerRetryBoundTest {
 
     private lateinit var mContext: Context
 
+    private lateinit var mServer: LoopbackHttpFixture
+
+    private lateinit var mBroadcast: LoopbackHttpFixture.Broadcast
+
     private lateinit var mPlayer: OpenRadioPlayer
+
+    private lateinit var mUnplayableMessage: String
 
     private val mErrors = CopyOnWriteArrayList<PlaybackException>()
 
     private val mPreparations = AtomicInteger()
 
+    private val mReadies = AtomicInteger()
+
+    /**
+     * How many errors the player had reported when it first said the station cannot be played, or
+     * [NOT_GIVEN_UP].
+     */
+    private val mErrorsWhenGivenUp = AtomicInteger(NOT_GIVEN_UP)
+
     @Before
     fun setUp() {
         mContext = InstrumentationRegistry.getInstrumentation().targetContext
+        mUnplayableMessage = mContext.getString(R.string.media_stream_unplayable)
+        mServer = LoopbackHttpFixture()
+        mServer.start()
+        mBroadcast = mServer.broadcast(
+            "/live.mp3",
+            LoopbackHttpFixture.AUDIO_MPEG,
+            ByteArray(0),
+            LocalAudioFixture.MP3_BYTES_PER_SECOND,
+            LocalAudioFixture(mContext).silentMp3Frame()
+        )
         mPlayer = onMain {
             newOpenRadioPlayer(mContext, StreamRetrySchedule(RETRY_DELAYS_MS))
                 .also { it.addListener(Recorder()) }
@@ -73,6 +104,7 @@ class OpenRadioPlayerRetryBoundTest {
     @After
     fun tearDown() {
         onMain { mPlayer.release() }
+        mServer.stop()
     }
 
     @Test
@@ -84,7 +116,44 @@ class OpenRadioPlayerRetryBoundTest {
 
         assertEquals(ATTEMPTS, mPreparations.get())
         assertEquals(List(ATTEMPTS) { CONNECTION_FAILED }, mErrors.map { it.errorCode })
-        onMain { assertEquals(Player.STATE_IDLE, mPlayer.playbackState) }
+        onMain {
+            assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
+            assertEquals(
+                "Something replaced the message the user is left with",
+                mUnplayableMessage,
+                mPlayer.mediaMetadata.subtitle?.toString()
+            )
+        }
+    }
+
+    /**
+     * Every outage the station recovers from leaves the next one a full schedule. On a drive
+     * through several dead zones, retries shared between them would run out in a later one and
+     * give the station up on its first failure there, with no network-connected event to bring it
+     * back. The player's own retries do not go through [OpenRadioPlayer.prepare], so only the
+     * stream playing again can start the schedule over.
+     */
+    @Test
+    fun aStationThatPlayedAgainHasAllItsRetriesForTheNextOutage() {
+        mBroadcast.cutOff()
+        play(mBroadcast.url)
+        await("the player to give up the first attempt at the station") { mErrors.isNotEmpty() }
+        mBroadcast.goOnAir()
+        await("a retry to find the station back on the air") { mReadies.get() > 0 }
+        val errorsBeforeTheSecondOutage = mErrors.size
+        assertEquals("Given up before the second outage", NOT_GIVEN_UP, mErrorsWhenGivenUp.get())
+
+        mBroadcast.cutOff()
+
+        awaitUnplayable()
+        Thread.sleep(SETTLE_MILLIS)
+        val errorsInTheSecondOutage = mErrors.drop(errorsBeforeTheSecondOutage)
+        assertEquals(List(ATTEMPTS) { CONNECTION_FAILED }, errorsInTheSecondOutage.map { it.errorCode })
+        assertEquals(
+            "Given up before the second outage spent its retries",
+            errorsBeforeTheSecondOutage + ATTEMPTS,
+            mErrorsWhenGivenUp.get()
+        )
     }
 
     /**
@@ -100,6 +169,7 @@ class OpenRadioPlayerRetryBoundTest {
         Thread.sleep(SETTLE_MILLIS)
         onMain { assertTrue("Giving up forgot the station", mPlayer.resumesOnReconnect()) }
 
+        // What OpenRadioService.handlePlayRequestUiThread does when a network connects.
         onMain {
             mPlayer.prepare()
             mPlayer.play()
@@ -113,18 +183,17 @@ class OpenRadioPlayerRetryBoundTest {
         assertEquals(2 * ATTEMPTS, mErrors.size)
     }
 
-    private fun play() {
+    private fun play(url: String = UNREACHABLE_STREAM) {
         onMain {
-            mPlayer.setMediaItem(MediaItem.fromUri(UNREACHABLE_STREAM))
+            mPlayer.setMediaItem(MediaItem.fromUri(url))
             mPlayer.prepare()
             mPlayer.play()
         }
     }
 
     private fun awaitUnplayable() {
-        val message = mContext.getString(R.string.media_stream_unplayable)
         await("the player to say the station cannot be played") {
-            onMain { mPlayer.mediaMetadata.subtitle?.toString() } == message
+            onMain { mPlayer.mediaMetadata.subtitle?.toString() } == mUnplayableMessage
         }
     }
 
@@ -145,13 +214,20 @@ class OpenRadioPlayerRetryBoundTest {
     private inner class Recorder : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_BUFFERING) {
-                mPreparations.incrementAndGet()
+            when (playbackState) {
+                Player.STATE_BUFFERING -> mPreparations.incrementAndGet()
+                Player.STATE_READY -> mReadies.incrementAndGet()
             }
         }
 
         override fun onPlayerError(error: PlaybackException) {
             mErrors.add(error)
+        }
+
+        override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+            if (mediaMetadata.subtitle?.toString() == mUnplayableMessage) {
+                mErrorsWhenGivenUp.compareAndSet(NOT_GIVEN_UP, mErrors.size)
+            }
         }
     }
 
@@ -181,5 +257,7 @@ class OpenRadioPlayerRetryBoundTest {
         const val TIMEOUT_SECONDS = 90L
 
         const val POLL_MILLIS = 50L
+
+        const val NOT_GIVEN_UP = -1
     }
 }
