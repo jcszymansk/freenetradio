@@ -73,6 +73,8 @@ import kotlin.math.min
  *
  * @param mContext  Application context.
  * @param mListener Listener for the wrapper's events.
+ * @param mIsPlaybackBlocked Whether the mobile-network policy forbids playback now, the check every
+ * play request goes through. Asked on the main thread.
  * @param mStreamRetrySchedule When to try again a stream ExoPlayer gave up for a lost network, and
  * when to give the station up instead.
  */
@@ -82,6 +84,7 @@ class OpenRadioPlayer(
     private val mListener: Listener,
     private val mEqualizerLayer: EqualizerLayer,
     private val mBrowseTree: BrowseTree,
+    private val mIsPlaybackBlocked: () -> Boolean,
     private val mStreamRetrySchedule: StreamRetrySchedule = StreamRetrySchedule()
 ) : Player {
     /**
@@ -92,6 +95,13 @@ class OpenRadioPlayer(
         fun onHandledError(error: PlaybackException)
 
         fun onPlaybackStateChanged(mediaItem: MediaItem)
+
+        /**
+         * A retry of a stream the network stopped came due while the mobile-network policy forbids
+         * playback, so the player did not make it. The station still awaits a network it may use,
+         * and nothing tries it again until that network connects.
+         */
+        fun onStreamRetryBlocked()
     }
 
     /**
@@ -927,6 +937,11 @@ class OpenRadioPlayer(
      * Tries the stream again after [delayMs], unless something ends the wait for the network
      * first. A retry that fails for the network again takes the next one from
      * [mStreamRetrySchedule], until the schedule is spent.
+     *
+     * The retry asks the mobile-network policy when it is due, as a play request does. The
+     * service pauses the station when the network monitor reports a blocked network, but that
+     * report may come after the retry, or not at all when the default network changes without
+     * the event the monitor listens for (fnr-7shj).
      */
     private fun scheduleStreamRetry(delayMs: Long) {
         cancelStreamRetry("a new retry")
@@ -938,6 +953,11 @@ class OpenRadioPlayer(
                 || mPlayer.playbackState != Player.STATE_IDLE
             ) {
                 AppLogger.d("$TAG stream retry not needed, recovery $mNetworkRecovery")
+                return@launch
+            }
+            if (mIsPlaybackBlocked()) {
+                AppLogger.i("$TAG stream retry blocked by the mobile network policy")
+                mListener.onStreamRetryBlocked()
                 return@launch
             }
             AppLogger.i("$TAG retry the stream the network stopped")

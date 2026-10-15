@@ -27,18 +27,23 @@ import com.yuriy.openradio.shared.model.media.BrowseTree
 
 /**
  * Builds an [OpenRadioPlayer] the way the service does, minus the parts no player test is about:
- * its listener is ignored and its equalizer is never attached. Call it on the main thread.
+ * its equalizer is never attached, and unless a test passes its own, its listener is ignored and
+ * the network policy never blocks playback. Call it on the main thread.
  *
  * @param retrySchedule When the player tries again a stream the network stopped. A test that
  * spends the retries passes a short one instead of waiting out the minutes the service's takes.
+ * @param listener What the service would hear from the player.
+ * @param isPlaybackBlocked What the service's mobile-network policy answers.
  */
 @UnstableApi
 internal fun newOpenRadioPlayer(
     context: Context,
-    retrySchedule: StreamRetrySchedule = StreamRetrySchedule()
+    retrySchedule: StreamRetrySchedule = StreamRetrySchedule(),
+    listener: OpenRadioPlayer.Listener = IgnoringListener(),
+    isPlaybackBlocked: () -> Boolean = { false }
 ): OpenRadioPlayer {
     return OpenRadioPlayer(
-        context, IgnoringListener(), InertEqualizerLayer(), BrowseTree(), retrySchedule
+        context, listener, InertEqualizerLayer(), BrowseTree(), isPlaybackBlocked, retrySchedule
     )
 }
 
@@ -54,11 +59,16 @@ internal fun <T> onMain(block: () -> T): T {
     return result?.getOrThrow() ?: throw IllegalStateException("The main thread ran nothing")
 }
 
-private class IgnoringListener : OpenRadioPlayer.Listener {
+/**
+ * A listener that ignores every event. A test that listens for some extends it.
+ */
+internal open class IgnoringListener : OpenRadioPlayer.Listener {
 
     override fun onHandledError(error: PlaybackException) = Unit
 
     override fun onPlaybackStateChanged(mediaItem: MediaItem) = Unit
+
+    override fun onStreamRetryBlocked() = Unit
 }
 
 /**
