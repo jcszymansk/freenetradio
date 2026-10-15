@@ -58,7 +58,7 @@ android {
     }
 
     lint {
-        abortOnError false
+        lintConfig = rootProject.file("lint.xml")
     }
 }
 

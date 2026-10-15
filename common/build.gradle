@@ -54,6 +54,10 @@ android {
     testOptions {
         unitTests.returnDefaultValues = true
     }
+
+    lint {
+        lintConfig = rootProject.file("lint.xml")
+    }
 }
 
 dependencies {
