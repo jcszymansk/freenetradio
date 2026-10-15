@@ -119,8 +119,7 @@ class SleepTimerImplTest {
     }
 
     /**
-     * The model's validity check refuses this instant, so the timer must refuse it too: a
-     * timestamp equal to the clock is not a delay of zero, it is a moment that has arrived.
+     * A timestamp equal to the clock is not a delay of zero, it is a moment that has arrived.
      */
     @Test
     fun aTimestampEqualToNowIsRefused() {
@@ -132,13 +131,93 @@ class SleepTimerImplTest {
         assertFalse("A timestamp equal to now fired", listener.awaitCompletionDuring(SILENCE_MS))
     }
 
+    /**
+     * The answer of [SleepTimer.handle] is what the model clears its stored flag on and what the
+     * settings dialog reports a failure on, so it has to say no for exactly the timestamps that
+     * are refused.
+     */
     @Test
-    fun onlyATimestampAfterNowIsAccepted() {
+    fun handleSaysWhetherItTookTheTimestamp() {
         val timer = SleepTimerImpl(RecordingListener()) { NOW }
 
-        assertFalse(timer.accepts(NOW - 1))
-        assertFalse(timer.accepts(NOW))
-        assertTrue(timer.accepts(NOW + 1))
+        assertFalse(timer.handle(NOW - 1, true))
+        assertFalse(timer.handle(NOW, true))
+        assertTrue(timer.handle(NOW + SILENCE_MS, true))
+        assertTrue(timer.handle(NOW - 1, false))
+    }
+
+    /**
+     * A refused timestamp changes nothing. The timer that was armed before it is the one the
+     * stored alarm still describes, so dropping it would leave the stored alarm on with nothing
+     * counting down.
+     */
+    @Test
+    fun aRefusedTimestampKeepsTheTimerThatIsArmed() {
+        val listener = RecordingListener()
+        val timer = SleepTimerImpl(listener)
+
+        timer.handle(System.currentTimeMillis() + DELAY_MS, true)
+        timer.handle(System.currentTimeMillis() - DELAY_MS, true)
+
+        assertTrue("The armed timer did not survive a refused timestamp", listener.awaitCompletion())
+        assertEquals(1, listener.completions)
+    }
+
+    @Test
+    fun aTimerIsArmedFromHandleUntilItCompletes() {
+        val listener = RecordingListener()
+        val timer = SleepTimerImpl(listener)
+        assertFalse("A new timer is armed", timer.isArmed())
+
+        timer.handle(System.currentTimeMillis() + DELAY_MS, true)
+        assertTrue("A handled timer is not armed", timer.isArmed())
+
+        assertTrue("The timer never completed", listener.awaitCompletion())
+        assertTrue("The timer is still armed after it completed", awaitDisarmed(timer))
+    }
+
+    @Test
+    fun aCancelledTimerIsNotArmed() {
+        val timer = SleepTimerImpl(RecordingListener())
+        timer.handle(System.currentTimeMillis() + SILENCE_MS, true)
+
+        timer.cancel()
+
+        assertFalse(timer.isArmed())
+    }
+
+    @Test
+    fun aDisabledTimerIsNotArmed() {
+        val timer = SleepTimerImpl(RecordingListener())
+        timer.handle(System.currentTimeMillis() + SILENCE_MS, true)
+
+        timer.handle(System.currentTimeMillis() + SILENCE_MS, false)
+
+        assertFalse(timer.isArmed())
+    }
+
+    @Test
+    fun aRefusedTimestampArmsNothing() {
+        val timer = SleepTimerImpl(RecordingListener()) { NOW }
+
+        timer.handle(NOW, true)
+
+        assertFalse(timer.isArmed())
+    }
+
+    /**
+     * The listener hears the completion from inside the timer's own run, which ends a moment
+     * later, so the end of that run is waited for rather than assumed.
+     */
+    private fun awaitDisarmed(timer: SleepTimer): Boolean {
+        val deadline = System.currentTimeMillis() + COMPLETION_TIMEOUT_MS
+        while (timer.isArmed()) {
+            if (System.currentTimeMillis() > deadline) {
+                return false
+            }
+            Thread.sleep(POLL_MS)
+        }
+        return true
     }
 
     /**
@@ -223,7 +302,7 @@ class SleepTimerImplTest {
 
     /**
      * Arms the timer on one thread and runs [disable] on another while the arming call is between
-     * its own cancel and its start, then checks that no timer is left armed.
+     * its read of the clock and its start, then checks that no timer is left armed.
      *
      * The clock is read inside that window, so the clock is where the arming thread parks: it lets
      * the other thread go and waits for it to finish. A timer whose calls are not atomic lets the
@@ -339,6 +418,8 @@ class SleepTimerImplTest {
         const val COMPLETION_TIMEOUT_MS = 5_000L
 
         const val SILENCE_MS = 1_000L
+
+        const val POLL_MS = 10L
 
         const val RACING_THREADS = 16
 

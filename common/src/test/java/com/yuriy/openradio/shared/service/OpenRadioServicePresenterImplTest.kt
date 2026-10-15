@@ -648,7 +648,7 @@ class OpenRadioServicePresenterImplTest {
 
         override fun updateTime(enabled: Boolean) = Unit
 
-        override fun updateTimer(time: Long, enabled: Boolean) = Unit
+        override fun updateTimer(time: Long, enabled: Boolean) = true
 
         override fun setDate(year: Int, month: Int, day: Int) = Unit
 
@@ -657,8 +657,6 @@ class OpenRadioServicePresenterImplTest {
         override fun getTime() = Date(0)
 
         override fun getTimestamp() = 0L
-
-        override fun isTimestampNotValid(value: Long) = true
 
         override fun addSleepTimerListener(listener: SleepTimerListener) = Unit
 

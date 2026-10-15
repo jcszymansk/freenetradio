@@ -60,6 +60,15 @@ class CoroutineTimerTask internal constructor(private val mName: String, private
     }
 
     /**
+     * Whether a run is scheduled and has not finished or been cancelled. A run whose action is
+     * under way still counts.
+     */
+    @Synchronized
+    fun isPending(): Boolean {
+        return mJob?.isActive == true
+    }
+
+    /**
      * Immediately stops the timer task, even if the job is currently running,
      * by cancelling the underlying Job.
      */

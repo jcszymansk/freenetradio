@@ -50,11 +50,14 @@ class SleepTimerModelImpl(
     private val mCalendar = Calendar.getInstance()
 
     /**
-     * Arms the stored alarm, if it is enabled, without writing anything back: an unset date reads
-     * as the current time, and storing that would turn it into an alarm nobody set.
+     * Arms the stored alarm, if it is enabled, without storing a date: an unset date reads as the
+     * current time, and storing that would turn it into an alarm nobody set. An enabled alarm whose
+     * time has passed is turned off instead, since nothing will ever count down to it.
      */
     override fun init() {
-        mTimer.handle(mSleepTimerStorage.loadDate().time, isEnabled())
+        if (!mTimer.handle(mSleepTimerStorage.loadDate().time, isEnabled())) {
+            disableUnlessArmed()
+        }
     }
 
     /**
@@ -93,12 +96,23 @@ class SleepTimerModelImpl(
     }
 
     /**
-     * Updates timer logic itself. Communicates with the service and provides value of the timestamp to be triggered
-     * at if enabled, or disable the service otherwise.
+     * Arms the timer for [time] when [enabled], or cancels it otherwise, and stores [time] for the
+     * settings dialog to offer back.
+     *
+     * A [time] the timer refuses is not stored, and the timer armed before it, if any, keeps
+     * running. When none is, because the user switched the timer off and on again before picking
+     * a time that has passed, the stored timer is turned off, so storage never says on while
+     * nothing counts down.
+     *
+     * @return False when the timer refused [time], true otherwise.
      */
-    override fun updateTimer(time: Long, enabled: Boolean) {
+    override fun updateTimer(time: Long, enabled: Boolean): Boolean {
+        if (!mTimer.handle(time, enabled)) {
+            disableUnlessArmed()
+            return false
+        }
         mSleepTimerStorage.saveDate(time)
-        mTimer.handle(time, enabled)
+        return true
     }
 
     /**
@@ -154,13 +168,13 @@ class SleepTimerModelImpl(
     }
 
     /**
-     * Helper function to validate whether or not timestamp is not valid for processing. The timer
-     * owns the rule, so a timestamp rejected here is one the timer would refuse to arm.
-     *
-     * @return True if not valid, false otherwise.
+     * Brings the stored flag down after the timer refused a time, unless an earlier timer is still
+     * counting down: then the flag and the stored date still describe that one.
      */
-    override fun isTimestampNotValid(value: Long): Boolean {
-        return !mTimer.accepts(value)
+    private fun disableUnlessArmed() {
+        if (!mTimer.isArmed()) {
+            mSleepTimerStorage.saveEnabled(false)
+        }
     }
 
     override fun addSleepTimerListener(listener: SleepTimerListener) {

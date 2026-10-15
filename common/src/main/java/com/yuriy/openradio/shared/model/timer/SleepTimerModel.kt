@@ -28,7 +28,7 @@ interface SleepTimerModel {
 
     fun updateTime(enabled: Boolean)
 
-    fun updateTimer(time: Long, enabled: Boolean)
+    fun updateTimer(time: Long, enabled: Boolean): Boolean
 
     fun setDate(year: Int, month: Int, day: Int)
 
@@ -37,8 +37,6 @@ interface SleepTimerModel {
     fun getTime(): Date
 
     fun getTimestamp(): Long
-
-    fun isTimestampNotValid(value: Long): Boolean
 
     fun addSleepTimerListener(listener: SleepTimerListener)
 

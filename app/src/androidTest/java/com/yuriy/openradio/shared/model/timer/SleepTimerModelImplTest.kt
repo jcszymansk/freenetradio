@@ -228,49 +228,100 @@ class SleepTimerModelImplTest {
         failure.get()?.let { throw AssertionError("The calendar was read mid-write", it) }
     }
 
-    @Test
-    fun onlyATimestampInTheFutureIsValid() {
-        val model = newModel { CLOCK_NOW }
-
-        assertTrue(model.isTimestampNotValid(CLOCK_NOW - 1))
-        assertTrue(model.isTimestampNotValid(CLOCK_NOW))
-        assertFalse(model.isTimestampNotValid(CLOCK_NOW + 1))
-    }
-
     /**
-     * The settings dialog lets through what the model calls valid and hands it to the timer, so a
-     * timestamp the model rejects must be one the timer refuses as well, and the instant where the
-     * two used to part is the current millisecond.
+     * The settings dialog reports a failure when [SleepTimerModelImpl.updateTimer] says no, so the
+     * answer has to match what the timer did, and the instant where the two could part is the
+     * current millisecond.
      */
     @Test
-    fun theTimerRefusesTheTimestampTheModelRejects() {
+    fun updateTimerRefusesTheCurrentMillisecond() {
         val listener = RecordingListener()
         val model = newModel { CLOCK_NOW }
         model.addSleepTimerListener(listener)
 
-        assertTrue(model.isTimestampNotValid(CLOCK_NOW))
-        model.updateTimer(CLOCK_NOW, true)
+        assertFalse("A timestamp equal to now was taken", model.updateTimer(CLOCK_NOW, true))
 
         assertFalse(
-            "The timer fired for a timestamp the model rejects",
+            "The timer fired for a timestamp it refused",
             listener.awaitCompletionDuring(SILENCE_MS)
         )
     }
 
     /**
      * The other half of the agreement: the model's clock is the one the timer measures its delay
-     * from, so a timestamp the model accepts is armed rather than refused as past.
+     * from, so a timestamp after it is armed rather than refused as past.
      */
     @Test
-    fun theTimerArmsTheTimestampTheModelAccepts() {
+    fun updateTimerArmsATimestampAfterTheClock() {
         val listener = RecordingListener()
         val model = newModel { CLOCK_NOW }
         model.addSleepTimerListener(listener)
 
-        assertFalse(model.isTimestampNotValid(CLOCK_NOW + DELAY_MS))
-        model.updateTimer(CLOCK_NOW + DELAY_MS, true)
+        assertTrue("A future timestamp was refused", model.updateTimer(CLOCK_NOW + DELAY_MS, true))
 
         assertTrue("The timer never completed", listener.awaitCompletion())
+    }
+
+    /**
+     * An alarm stored on, for a time that passed while no process was running (it was killed, or
+     * the phone was off), cannot be armed any more. Left on in storage, it would open the settings
+     * dialog switched on with a past date, and fail on every close.
+     */
+    @Test
+    fun initTurnsOffAStoredAlarmThatHasPassed() {
+        mStorage.saveDate(System.currentTimeMillis() - DELAY_MS)
+        mStorage.saveEnabled(true)
+        val listener = RecordingListener()
+        val restarted = newModel()
+        restarted.addSleepTimerListener(listener)
+
+        restarted.init()
+
+        assertFalse("A passed alarm is still stored on", mStorage.loadEnabled())
+        assertFalse("A passed alarm fired", listener.awaitCompletionDuring(SILENCE_MS))
+    }
+
+    /**
+     * What the settings dialog does when the user switches an armed timer off and on again and
+     * then picks a time that has passed: switching off cancelled the armed timer, so the refused
+     * time leaves nothing counting down, and storage must not say otherwise.
+     */
+    @Test
+    fun aPastTimeAfterTurningTheTimerOffAndOnTurnsItOff() {
+        val listener = RecordingListener()
+        mModel.addSleepTimerListener(listener)
+        mModel.setEnabled(true)
+        assertTrue(mModel.updateTimer(System.currentTimeMillis() + ARMED_DELAY_MS, true))
+        mModel.setEnabled(false)
+        mModel.setEnabled(true)
+
+        assertFalse(
+            "A past time was taken", mModel.updateTimer(System.currentTimeMillis() - DELAY_MS, true)
+        )
+
+        assertFalse("Storage says on with no timer armed", mStorage.loadEnabled())
+        assertFalse("A cancelled timer completed", listener.awaitCompletionDuring(SILENCE_MS))
+    }
+
+    /**
+     * A past time picked without touching the switch is refused and changes nothing: the alarm
+     * set before keeps counting down, and storage keeps describing it.
+     */
+    @Test
+    fun aPastTimeKeepsTheAlarmThatIsArmed() {
+        val listener = RecordingListener()
+        mModel.addSleepTimerListener(listener)
+        mModel.setEnabled(true)
+        val alarm = System.currentTimeMillis() + ARMED_DELAY_MS
+        assertTrue(mModel.updateTimer(alarm, true))
+
+        assertFalse(
+            "A past time was taken", mModel.updateTimer(System.currentTimeMillis() - DELAY_MS, true)
+        )
+
+        assertTrue("The armed alarm is no longer stored on", mStorage.loadEnabled())
+        assertEquals("The stored alarm time changed", alarm, mStorage.loadDate().time)
+        assertTrue("The armed alarm did not survive", listener.awaitCompletion())
     }
 
     @Test
@@ -465,6 +516,12 @@ class SleepTimerModelImplTest {
         const val SLEEP_TIMER_FILE_NAME = "SleepTimerStorage"
 
         const val DELAY_MS = 300L
+
+        /**
+         * For a timer that has to stay armed while a test makes several calls and reads storage,
+         * yet still completes, or is shown not to, within [SILENCE_MS].
+         */
+        const val ARMED_DELAY_MS = 1_000L
 
         /**
          * The instant a fixed clock reports, years before the real one, so a timer that measured

@@ -25,9 +25,9 @@ import com.yuriy.openradio.shared.utils.AppLogger
  * @param mClock Wall clock milliseconds, the same scale as the timestamps handed to [handle]. Only
  * the delay is computed from it; the delay itself elapses in real time.
  *
- * [handle] and [cancel] hold this timer's monitor for their whole run. [handle] cancels and then
- * starts, and a call from another thread landing between the two would be overridden by the start;
- * holding the monitor makes the call that runs last the one that wins.
+ * [handle] and [cancel] hold this timer's monitor for their whole run. [handle] reads the clock and
+ * then starts, and a call from another thread landing between the two would be overridden by the
+ * start; holding the monitor makes the call that runs last the one that wins.
  */
 class SleepTimerImpl(
     private val mListener: SleepTimerListener,
@@ -40,18 +40,19 @@ class SleepTimerImpl(
     }
 
     @Synchronized
-    override fun handle(time: Long, enabled: Boolean) {
-        cancel()
+    override fun handle(time: Long, enabled: Boolean): Boolean {
         if (!enabled) {
-            return
+            cancel()
+            return true
         }
         val delay = time - mClock()
         if (delay <= 0) {
             AppLogger.e("Sleep timer can not be started for a time that is not in the future")
-            return
+            return false
         }
         mTimerTask.start(delay)
         AppLogger.i("Sleep timer started for $delay ms")
+        return true
     }
 
     @Synchronized
@@ -60,7 +61,7 @@ class SleepTimerImpl(
         AppLogger.i("Sleep timer cancelled")
     }
 
-    override fun accepts(time: Long): Boolean {
-        return time > mClock()
+    override fun isArmed(): Boolean {
+        return mTimerTask.isPending()
     }
 }
