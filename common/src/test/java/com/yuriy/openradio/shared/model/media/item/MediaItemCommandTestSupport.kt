@@ -123,6 +123,13 @@ internal fun station(
     }
 }
 
+/**
+ * A station of the user's own, as the locals storage holds it.
+ */
+internal fun localStation(id: String, name: String = "Station $id", sortId: Int): RadioStation {
+    return station(id, name = name, sortId = sortId).apply { isLocal = true }
+}
+
 internal fun stations(vararg ids: String): Set<RadioStation> {
     val result = TreeSet<RadioStation>()
     for ((index, id) in ids.withIndex()) {
