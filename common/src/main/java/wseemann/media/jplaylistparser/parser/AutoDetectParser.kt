@@ -305,7 +305,7 @@ class AutoDetectParser private constructor(
         }
 
         private fun trimHead(head: String): String {
-            return head.trimStart('﻿', ' ', '\t', '\r', '\n')
+            return head.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
         }
 
         private fun rootElementName(text: String): String? {
