@@ -16,9 +16,11 @@
 
 package com.yuriy.openradio.shared.broadcast
 
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.content.Intent
 import android.os.ParcelFileDescriptor
@@ -43,8 +45,13 @@ import org.junit.runner.RunWith
  * very first connection would mean the app takes over the speakers of a device it has never played
  * through.
  *
- * [BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED] is a protected broadcast, so the events are
- * handed to [BTConnectionReceiver.onReceive] directly rather than sent.
+ * The other decision is which disconnection pauses: only that of a device carrying audio, whatever
+ * order the devices connected in. A car stereo connects twice over, once to the adapter and once
+ * over A2DP, while a smartwatch only ever connects to the adapter. The scenarios that mix them send
+ * both broadcasts, as the platform does, so a receiver that listened to the adapter would fail them.
+ *
+ * Both broadcasts are protected, so the events are handed to [BTConnectionReceiver.onReceive]
+ * directly rather than sent.
  */
 @RunWith(AndroidJUnit4::class)
 class BTConnectionReceiverTest {
@@ -64,8 +71,8 @@ class BTConnectionReceiverTest {
 
     @Test
     fun anEventWithoutADeviceIsIgnored() {
-        val intent = Intent(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED)
-            .putExtra(BluetoothAdapter.EXTRA_CONNECTION_STATE, BluetoothAdapter.STATE_CONNECTED)
+        val intent = Intent(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+            .putExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_CONNECTED)
 
         mReceiver.onReceive(mContext, intent)
 
@@ -136,9 +143,8 @@ class BTConnectionReceiverTest {
     }
 
     /**
-     * The service pauses on every reported disconnection, so a device other than the one last seen
-     * connecting must not be reported: a smartwatch going out of range would otherwise pause the
-     * music playing through the car stereo. This is TASK-044.
+     * The service pauses on every reported disconnection, so a device that was never seen
+     * connecting must not be reported.
      */
     @Test
     fun aDisconnectionOfAnotherDeviceIsIgnored() {
@@ -151,21 +157,89 @@ class BTConnectionReceiverTest {
     }
 
     /**
-     * The newer connection displaced the first device, so the first device's disconnection no
-     * longer counts while the second one's still does.
+     * Connecting a second audio device does not make the first one stop counting: whichever of them
+     * disconnects, the audio it carried stops.
      */
     @Test
-    fun aDisconnectionOfTheDeviceConnectedBeforeTheLastOneIsIgnored() {
+    fun everyConnectedAudioDeviceIsReportedWhenItDisconnects() {
         mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
         mReceiver.onReceive(mContext, connected(SECOND_ADDRESS))
 
         mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
 
-        assertEquals(0, mListener.disconnections)
+        assertEquals(1, mListener.disconnections)
 
         mReceiver.onReceive(mContext, disconnected(SECOND_ADDRESS))
 
+        assertEquals(2, mListener.disconnections)
+    }
+
+    /**
+     * The car connects, then a smartwatch does. The watch going out of range must not pause the
+     * radio playing through the car.
+     */
+    @Test
+    fun aNonAudioDeviceConnectedAfterTheAudioDeviceDoesNotPauseWhenItDisconnects() {
+        audioDeviceConnects(CAR_ADDRESS)
+        otherDeviceConnects(WATCH_ADDRESS)
+
+        otherDeviceDisconnects(WATCH_ADDRESS)
+
+        assertEquals(0, mListener.disconnections)
+
+        audioDeviceDisconnects(CAR_ADDRESS)
+
         assertEquals(1, mListener.disconnections)
+    }
+
+    /**
+     * Same devices, the other way round: the car's disconnection pauses even though the watch was
+     * the last device to connect.
+     */
+    @Test
+    fun theAudioDevicePausesWhenItDisconnectsAfterANonAudioDeviceConnected() {
+        audioDeviceConnects(CAR_ADDRESS)
+        otherDeviceConnects(WATCH_ADDRESS)
+
+        audioDeviceDisconnects(CAR_ADDRESS)
+
+        assertEquals(1, mListener.disconnections)
+
+        otherDeviceDisconnects(WATCH_ADDRESS)
+
+        assertEquals(1, mListener.disconnections)
+    }
+
+    /**
+     * The watch connected first and the car after it: neither order lets the watch pause playback.
+     */
+    @Test
+    fun aNonAudioDeviceConnectedBeforeTheAudioDeviceDoesNotPauseWhenItDisconnects() {
+        otherDeviceConnects(WATCH_ADDRESS)
+        audioDeviceConnects(CAR_ADDRESS)
+
+        otherDeviceDisconnects(WATCH_ADDRESS)
+
+        assertEquals(0, mListener.disconnections)
+
+        audioDeviceDisconnects(CAR_ADDRESS)
+
+        assertEquals(1, mListener.disconnections)
+    }
+
+    /**
+     * A device that is not carrying audio is not the device the auto resume follows, so the car
+     * coming back after the watch connected still resumes playback.
+     */
+    @Test
+    fun aNonAudioDeviceDoesNotDisplaceTheRememberedAudioDevice() {
+        audioDeviceConnects(CAR_ADDRESS)
+        otherDeviceConnects(WATCH_ADDRESS)
+        audioDeviceDisconnects(CAR_ADDRESS)
+
+        audioDeviceConnects(CAR_ADDRESS)
+
+        assertEquals(1, mListener.sameDeviceConnections)
     }
 
     /**
@@ -186,11 +260,26 @@ class BTConnectionReceiverTest {
         assertEquals(1, mListener.sameDeviceConnections)
     }
 
+    /**
+     * A disconnected device no longer counts as connected, so a repeated disconnection does not
+     * pause a second time.
+     */
     @Test
-    fun everyDisconnectionAfterAConnectionIsReported() {
+    fun aDeviceNoLongerCountsAsConnectedOnceItDisconnects() {
         mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
 
         mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
+        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
+
+        assertEquals(1, mListener.disconnections)
+    }
+
+    @Test
+    fun aDeviceThatConnectsAgainIsReportedAgainWhenItDisconnects() {
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
+        mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
+
         mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS))
 
         assertEquals(2, mListener.disconnections)
@@ -215,7 +304,8 @@ class BTConnectionReceiverTest {
     fun anIntermediateConnectionStateIsIgnored() {
         mReceiver.onReceive(mContext, connected(FIRST_ADDRESS))
 
-        mReceiver.onReceive(mContext, withState(THIRD_ADDRESS, BluetoothAdapter.STATE_CONNECTING))
+        mReceiver.onReceive(mContext, withState(THIRD_ADDRESS, BluetoothProfile.STATE_CONNECTING))
+        mReceiver.onReceive(mContext, withState(FIRST_ADDRESS, BluetoothProfile.STATE_DISCONNECTING))
 
         assertEquals(0, mListener.sameDeviceConnections)
         assertEquals(0, mListener.disconnections)
@@ -227,7 +317,7 @@ class BTConnectionReceiverTest {
 
     @Test
     fun anEventWithoutAConnectionStateIsIgnored() {
-        val intent = Intent(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED)
+        val intent = Intent(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
             .putExtra(BluetoothDevice.EXTRA_DEVICE, remoteDevice(FIRST_ADDRESS))
 
         mReceiver.onReceive(mContext, intent)
@@ -239,7 +329,7 @@ class BTConnectionReceiverTest {
     /**
      * The intent filter already keeps other actions out, and the receiver checks the action again
      * as defence in depth. An intent that carries the same extras under another action must
-     * neither be reported nor be remembered as the device last seen connecting.
+     * neither be reported nor be remembered as the device last seen connecting or as connected.
      */
     @Test
     fun anEventWithAnotherActionIsIgnored() {
@@ -252,7 +342,12 @@ class BTConnectionReceiverTest {
 
         assertEquals(0, mListener.sameDeviceConnections)
 
-        mReceiver.onReceive(mContext, disconnected(FIRST_ADDRESS).setAction(FOREIGN_ACTION))
+        mReceiver.onReceive(mContext, disconnected(SECOND_ADDRESS).setAction(FOREIGN_ACTION))
+
+        assertEquals(0, mListener.disconnections)
+
+        mReceiver.onReceive(mContext, connected(SECOND_ADDRESS).setAction(FOREIGN_ACTION))
+        mReceiver.onReceive(mContext, disconnected(SECOND_ADDRESS))
 
         assertEquals(0, mListener.disconnections)
     }
@@ -276,23 +371,53 @@ class BTConnectionReceiverTest {
         assertFalse("The log holds a hardware address", log.contains(LOGGED_ADDRESS))
     }
 
+    /**
+     * The adapter's own connection state covers every device, whether it carries audio or not, so
+     * the receiver hears the audio profile instead.
+     */
     @Test
-    fun theIntentFilterSubscribesToTheConnectionStateActionAndNothingElse() {
+    fun theIntentFilterSubscribesToTheA2dpConnectionStateActionAndNothingElse() {
         val filter = mReceiver.makeIntentFilter()
 
         assertEquals(1, filter.countActions())
-        assertTrue(filter.hasAction(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED))
+        assertTrue(filter.hasAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED))
+    }
+
+    /** What the platform sends when a car stereo or a headset connects: both broadcasts. */
+    private fun audioDeviceConnects(address: String) {
+        mReceiver.onReceive(mContext, adapterEvent(address, BluetoothAdapter.STATE_CONNECTED))
+        mReceiver.onReceive(mContext, connected(address))
+    }
+
+    private fun audioDeviceDisconnects(address: String) {
+        mReceiver.onReceive(mContext, disconnected(address))
+        mReceiver.onReceive(mContext, adapterEvent(address, BluetoothAdapter.STATE_DISCONNECTED))
+    }
+
+    /** What the platform sends when a device without an audio profile, such as a watch, connects. */
+    private fun otherDeviceConnects(address: String) {
+        mReceiver.onReceive(mContext, adapterEvent(address, BluetoothAdapter.STATE_CONNECTED))
+    }
+
+    private fun otherDeviceDisconnects(address: String) {
+        mReceiver.onReceive(mContext, adapterEvent(address, BluetoothAdapter.STATE_DISCONNECTED))
     }
 
     private fun connected(address: String): Intent {
-        return withState(address, BluetoothAdapter.STATE_CONNECTED)
+        return withState(address, BluetoothProfile.STATE_CONNECTED)
     }
 
     private fun disconnected(address: String): Intent {
-        return withState(address, BluetoothAdapter.STATE_DISCONNECTED)
+        return withState(address, BluetoothProfile.STATE_DISCONNECTED)
     }
 
     private fun withState(address: String, state: Int): Intent {
+        return Intent(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+            .putExtra(BluetoothProfile.EXTRA_STATE, state)
+            .putExtra(BluetoothDevice.EXTRA_DEVICE, remoteDevice(address))
+    }
+
+    private fun adapterEvent(address: String, state: Int): Intent {
         return Intent(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED)
             .putExtra(BluetoothAdapter.EXTRA_CONNECTION_STATE, state)
             .putExtra(BluetoothDevice.EXTRA_DEVICE, remoteDevice(address))
@@ -348,6 +473,10 @@ class BTConnectionReceiverTest {
         const val SECOND_ADDRESS = "AA:BB:CC:DD:EE:FF"
 
         const val THIRD_ADDRESS = "12:34:56:78:9A:BC"
+
+        const val CAR_ADDRESS = "C0:C0:C0:C0:C0:C0"
+
+        const val WATCH_ADDRESS = "D0:D0:D0:D0:D0:D0"
 
         /** Used by no other test, so another test's events cannot put it in the log. */
         const val LOGGED_ADDRESS = "5A:5A:5A:5A:5A:5A"
