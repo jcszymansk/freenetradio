@@ -35,27 +35,35 @@ abstract class MediaItemCommandImpl internal constructor() : MediaItemCommand {
 
     abstract fun doLoadNoDataReceived(): Boolean
 
+    /**
+     * Answers the browse request with the stations of [set], or with nothing when [set] is empty.
+     *
+     * @param onAnswering Runs when [set] is not empty and answers the request, before the client
+     * can see it; see [MediaItemCommandDependencies.answer].
+     */
     fun handleDataLoaded(
         playbackStateListener: IUpdatePlaybackState,
         dependencies: MediaItemCommandDependencies,
         set: Set<RadioStation>,
-        pageNumber: Int = 0
+        pageNumber: Int = 0,
+        onAnswering: () -> Unit = {}
     ) {
         if (set.isEmpty()) {
             if (doLoadNoDataReceived()) {
                 dependencies.reportNoData(playbackStateListener)
             } else {
-                dependencies.resultListener.onResult(dependencies.getMediaItems(), pageNumber = pageNumber)
+                dependencies.answer(dependencies.getMediaItems(), pageNumber = pageNumber)
             }
             return
         }
-        deliverResult(dependencies, set, pageNumber)
+        deliverResult(dependencies, set, pageNumber, onAnswering)
     }
 
     fun deliverResult(
         dependencies: MediaItemCommandDependencies,
         set: Set<RadioStation> = TreeSet(),
-        pageNumber: Int = 0
+        pageNumber: Int = 0,
+        onAnswering: () -> Unit = {}
     ) {
         for (radioStation in set) {
             dependencies.addMediaItem(
@@ -64,6 +72,6 @@ abstract class MediaItemCommandImpl internal constructor() : MediaItemCommand {
                 )
             )
         }
-        dependencies.resultListener.onResult(dependencies.getMediaItems(), set, pageNumber)
+        dependencies.answer(dependencies.getMediaItems(), set, pageNumber, onAnswering)
     }
 }

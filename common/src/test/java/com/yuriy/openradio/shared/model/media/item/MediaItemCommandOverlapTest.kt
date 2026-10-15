@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.MediaId
+import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.AppUtils
 import java.util.concurrent.CountDownLatch
@@ -36,8 +37,8 @@ import org.junit.Test
  * execution has it answered empty by the deadline at that point. Once released, each request has
  * to get the data.
  *
- * The paged commands are not here: they keep the page index on the shared instance, which is a
- * separate defect (fnr-3ktp).
+ * The paged commands keep their page index on the shared instance, so for them both requests have
+ * to get the same page, and the next request the page after it rather than one past (fnr-3ktp).
  */
 class MediaItemCommandOverlapTest {
 
@@ -91,19 +92,78 @@ class MediaItemCommandOverlapTest {
         }
     }
 
+    @Test
+    fun overlappingCategoryPageRequestsBothGetThePageAndMoveItOnOnce() {
+        val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
+        val command = MediaItemChildCategories()
+        val presenter = assertBothAnswered(command, "first", parentId = parentId) { hold ->
+            RecordingPresenter(mCategoryStations = stations("first", "second"), mBeforeAnswer = hold)
+        }
+
+        assertNextPageIs(command, presenter, parentId, "second")
+        assertEquals(
+            listOf(
+                "rock" to UrlLayer.FIRST_PAGE_INDEX,
+                "rock" to UrlLayer.FIRST_PAGE_INDEX,
+                "rock" to UrlLayer.FIRST_PAGE_INDEX + 1
+            ),
+            presenter.categoryRequests
+        )
+    }
+
+    @Test
+    fun overlappingCountryPageRequestsBothGetThePageAndMoveItOnOnce() {
+        val parentId = MediaId.MEDIA_ID_COUNTRY_STATIONS
+        val command = MediaItemCountryStations()
+        val presenter = assertBothAnswered(command, "first", parentId = parentId) { hold ->
+            RecordingPresenter(
+                mCountries = setOf(Country("Poland", "PL")),
+                mCountryStations = stations("first", "second"),
+                mBeforeAnswer = hold
+            )
+        }
+
+        assertNextPageIs(command, presenter, parentId, "second")
+        assertEquals(
+            listOf(
+                DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX,
+                DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX,
+                DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX + 1
+            ),
+            presenter.countryRequests
+        )
+    }
+
+    /** Asks [command] for more of the node it has just answered, and asserts it got [expectedId]. */
+    private fun assertNextPageIs(
+        command: MediaItemCommand,
+        presenter: RecordingPresenter,
+        parentId: String,
+        expectedId: String
+    ) {
+        val listener = RecordingCommandListener()
+        dependencies(presenter, listener, parentId = parentId, isSameCatalogue = true)
+            .execute(command, listener.playbackStateListener)
+        listener.awaitResult().assertMediaIds(expectedId)
+        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, listener.pageNumber)
+        listener.assertNoError()
+    }
+
     /**
      * Runs [command] for two requests, each with its own listener and dependencies as the service
      * makes them, against one presenter that [presenterWith] builds around a hold. The hold keeps
      * every provider call waiting until both executions have made one and the test has seen that
      * neither request was answered meanwhile. Then it lets them go, and each request has to be
      * answered once, with [expectedIds].
+     *
+     * @return The presenter, holding every request the two executions made.
      */
     private fun assertBothAnswered(
         command: MediaItemCommand,
         vararg expectedIds: String,
         parentId: String = AppUtils.EMPTY_STRING,
         presenterWith: (hold: () -> Unit) -> RecordingPresenter
-    ) {
+    ): RecordingPresenter {
         val bothAsked = CountDownLatch(EXECUTIONS)
         val released = CountDownLatch(1)
         val presenter = presenterWith {
@@ -145,6 +205,7 @@ class MediaItemCommandOverlapTest {
             assertEquals("The $name request did not get the data", expectedIds.toList(), listener.mediaIds)
             listener.assertNoError()
         }
+        return presenter
     }
 
     companion object {

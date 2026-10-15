@@ -40,14 +40,11 @@ class MediaItemCountryStations : IndexableMediaItemCommand() {
         // Load all categories into menu
         val pageNumber = pageNumber
         val set = dependencies.presenter.getStationsByCountry(dependencies.countryCode, pageNumber)
-        if (set.isEmpty().not()) {
-            nextPageNumber()
-        }
         handleDataLoaded(
             playbackStateListener,
             dependencies,
             set,
             pageNumber
-        )
+        ) { advancePast(pageNumber) }
     }
 }

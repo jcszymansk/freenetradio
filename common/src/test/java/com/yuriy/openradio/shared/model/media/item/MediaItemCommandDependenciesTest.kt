@@ -19,6 +19,7 @@ package com.yuriy.openradio.shared.model.media.item
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import kotlinx.coroutines.cancel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,6 +45,48 @@ class MediaItemCommandDependenciesTest {
 
         assertEquals(1, listener.results)
         listener.assertMediaIds("first")
+    }
+
+    /**
+     * What a command keeps for the next request moves on in [MediaItemCommandDependencies.answer]'s
+     * callback, so the callback has to run for the answer and only for it, and before the client
+     * holds the answer: a client that asks again at once must find it done.
+     */
+    @Test
+    fun onlyTheAnswerRunsItsCallbackAndRunsItBeforeTheListenerHearsOfIt() {
+        val listener = RecordingCommandListener()
+        val dependencies = dependencies(RecordingPresenter(), listener)
+        val resultsSeenByCallbacks = mutableListOf<Int>()
+
+        val first = dependencies.answer(listOf(item("first"))) { resultsSeenByCallbacks.add(listener.results) }
+        val second = dependencies.answer(listOf(item("second"))) { resultsSeenByCallbacks.add(listener.results) }
+
+        assertTrue("The first answer was reported as dropped", first)
+        assertFalse("A second answer was reported as delivered", second)
+        assertEquals(
+            "The callback did not run exactly once, before the listener had the answer",
+            listOf(0),
+            resultsSeenByCallbacks
+        )
+        assertEquals(1, listener.results)
+        listener.assertMediaIds("first")
+    }
+
+    @Test
+    fun anAnswerAfterTheDeadlineIsReportedAsDropped() {
+        val listener = RecordingCommandListener()
+        val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
+        var callbackRan = false
+
+        dependencies.execute(MediaItemCommand { _, _ -> listener.awaitDelivery() }, listener.playbackStateListener)
+        listener.awaitResult()
+
+        assertFalse(
+            "An answer after the deadline was reported as delivered",
+            dependencies.answer(listOf(item("late"))) { callbackRan = true }
+        )
+        assertFalse("A dropped answer ran its callback", callbackRan)
+        assertEquals(emptyList<String>(), listener.mediaIds)
     }
 
     @Test

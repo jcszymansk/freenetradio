@@ -41,14 +41,11 @@ class MediaItemChildCategories : IndexableMediaItemCommand() {
             .replace(MediaId.MEDIA_ID_CHILD_CATEGORIES, AppUtils.EMPTY_STRING)
         val pageNumber = pageNumber
         val set = dependencies.presenter.getStationsInCategory(childMenuId, pageNumber)
-        if (set.isEmpty().not()) {
-            nextPageNumber()
-        }
         handleDataLoaded(
             playbackStateListener,
             dependencies,
             set,
             pageNumber
-        )
+        ) { advancePast(pageNumber) }
     }
 }

@@ -22,9 +22,11 @@ import androidx.media3.common.MediaItem
 import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
+import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.service.OpenRadioService.ResultListener
 import com.yuriy.openradio.shared.service.OpenRadioServicePresenter
 import com.yuriy.openradio.shared.utils.AppLogger
+import java.util.TreeSet
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -78,6 +80,25 @@ class MediaItemCommandDependencies(
     private val mMediaItems = ArrayList<MediaItem>()
 
     private val mExecuted = AtomicBoolean(false)
+
+    /**
+     * Answers the browse request, unless it has been answered already, and tells whether it did.
+     *
+     * [onAnswering] runs only when this is the answer, and before the client can see it, so that
+     * whatever a command keeps for the requests after this one, such as the page it is at, moves on
+     * exactly when the client has the answer coming and never for an answer that was dropped.
+     *
+     * @return Whether this answered the request. False when the deadline, or an earlier result,
+     * answered it first and this one was dropped.
+     */
+    fun answer(
+        items: List<MediaItem>,
+        radioStations: Set<RadioStation> = TreeSet(),
+        pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX,
+        onAnswering: () -> Unit = {}
+    ): Boolean {
+        return mResultListener.offer(items, radioStations, pageNumber, onAnswering)
+    }
 
     fun addMediaItem(item: MediaItem) {
         mMediaItems.add(item)
@@ -134,11 +155,27 @@ class MediaItemCommandDependencies(
         private val mAnswered = AtomicBoolean(false)
 
         override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
+            offer(items, radioStations, pageNumber) {}
+        }
+
+        /**
+         * Passes the result to [mDelegate] if it is the first, running [onAnswering] just before.
+         *
+         * @return Whether the result was passed on.
+         */
+        fun offer(
+            items: List<MediaItem>,
+            radioStations: Set<RadioStation>,
+            pageNumber: Int,
+            onAnswering: () -> Unit
+        ): Boolean {
             if (mAnswered.compareAndSet(false, true).not()) {
                 AppLogger.w("$CLASS_NAME dropped a result of ${items.size} items for an answered request")
-                return
+                return false
             }
+            onAnswering()
             mDelegate.onResult(items, radioStations, pageNumber)
+            return true
         }
 
         /** Answers with an empty result, unless something has answered already. */
@@ -159,7 +196,8 @@ class MediaItemCommandDependencies(
 
 /**
  * Answers the browse request with the items collected so far, then reports that the node has
- * nothing to show.
+ * nothing to show. A request the deadline has already answered gets no report either: the client
+ * has moved on, and a "no data" error arriving after its answer would describe nothing it asked.
  *
  * The result has to be delivered even when it is empty. `OpenRadioService.callWhenSourceReady`
  * completes the browse future from the result listener and from nowhere else, so a node that only
@@ -167,6 +205,7 @@ class MediaItemCommandDependencies(
  * alike, waiting on a request that is never answered.
  */
 internal fun MediaItemCommandDependencies.reportNoData(playbackStateListener: IUpdatePlaybackState) {
-    resultListener.onResult(getMediaItems())
-    playbackStateListener.updatePlaybackState(context.getString(R.string.no_data_message))
+    if (answer(getMediaItems())) {
+        playbackStateListener.updatePlaybackState(context.getString(R.string.no_data_message))
+    }
 }
