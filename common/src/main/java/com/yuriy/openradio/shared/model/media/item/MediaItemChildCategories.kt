@@ -37,20 +37,18 @@ class MediaItemChildCategories : IndexableMediaItemCommand() {
             deliverResult(dependencies)
             return
         }
-        dependencies.launchWithDeadline {
-            val childMenuId = dependencies.parentId
-                .replace(MediaId.MEDIA_ID_CHILD_CATEGORIES, AppUtils.EMPTY_STRING)
-            val pageNumber = pageNumber
-            val set = dependencies.presenter.getStationsInCategory(childMenuId, pageNumber)
-            if (set.isEmpty().not()) {
-                nextPageNumber()
-            }
-            handleDataLoaded(
-                playbackStateListener,
-                dependencies,
-                set,
-                pageNumber
-            )
+        val childMenuId = dependencies.parentId
+            .replace(MediaId.MEDIA_ID_CHILD_CATEGORIES, AppUtils.EMPTY_STRING)
+        val pageNumber = pageNumber
+        val set = dependencies.presenter.getStationsInCategory(childMenuId, pageNumber)
+        if (set.isEmpty().not()) {
+            nextPageNumber()
         }
+        handleDataLoaded(
+            playbackStateListener,
+            dependencies,
+            set,
+            pageNumber
+        )
     }
 }

@@ -17,7 +17,7 @@
 package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
-import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -25,7 +25,11 @@ import org.junit.Test
 
 /**
  * Covers the answer [MediaItemCommandDependencies] guarantees a browse request: exactly one,
- * whatever the work behind it does (TASK-072).
+ * whatever the command behind it does (TASK-072).
+ *
+ * Every command here is a plain [MediaItemCommand] that blocks and answers on its own terms, with
+ * nothing of the deadline in it, so whatever the request gets beyond that comes from
+ * [MediaItemCommandDependencies.execute], which the service runs every browse command through.
  */
 class MediaItemCommandDependenciesTest {
 
@@ -43,29 +47,35 @@ class MediaItemCommandDependenciesTest {
     }
 
     @Test
-    fun workThatAnswersInTimeIsTheAnswer() {
+    fun aCommandThatAnswersInTimeIsTheAnswer() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
 
-        dependencies.launchWithDeadline { dependencies.resultListener.onResult(listOf(item("answer"))) }
+        dependencies.execute(
+            MediaItemCommand { _, _ -> dependencies.resultListener.onResult(listOf(item("answer"))) },
+            listener.playbackStateListener
+        )
 
         listener.awaitResult().assertMediaIds("answer")
         assertEquals(1, listener.results)
     }
 
     /**
-     * The work stays blocked until the request has been answered, so the answer can only have come
-     * from the deadline, and the work's own answer arrives after it.
+     * The command stays blocked until the request has been answered, so the answer can only have
+     * come from the deadline, and the command's own answer arrives after it.
      */
     @Test
-    fun stuckWorkIsAnsweredEmptyAtTheDeadlineAndItsLateAnswerIsDropped() {
+    fun aStuckCommandIsAnsweredEmptyAtTheDeadlineAndItsLateAnswerIsDropped() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
 
-        dependencies.launchWithDeadline {
-            listener.awaitDelivery()
-            dependencies.resultListener.onResult(listOf(item("late")))
-        }
+        dependencies.execute(
+            MediaItemCommand { _, _ ->
+                listener.awaitDelivery()
+                dependencies.resultListener.onResult(listOf(item("late")))
+            },
+            listener.playbackStateListener
+        )
 
         listener.awaitResult()
         assertEquals(1, listener.results)
@@ -73,29 +83,34 @@ class MediaItemCommandDependenciesTest {
     }
 
     /**
-     * The work answers and then runs on until the deadline cancels it, which is the moment a guard
-     * that answers on its deadline regardless would send an empty result over the real one.
+     * The command answers and then runs on past the deadline, which is the moment a guard that
+     * answers on its deadline regardless would send an empty result over the real one. The deadline
+     * starts before the command does, so a command that outlives four of them has certainly
+     * outlived the first.
      */
     @Test
-    fun workThatAnswersAndOutlivesTheDeadlineKeepsItsAnswer() {
+    fun aCommandThatAnswersAndOutlivesTheDeadlineKeepsItsAnswer() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
 
-        dependencies.launchWithDeadline {
-            dependencies.resultListener.onResult(listOf(item("answer")))
-            awaitCancellation()
-        }
+        dependencies.execute(
+            MediaItemCommand { _, _ ->
+                dependencies.resultListener.onResult(listOf(item("answer")))
+                Thread.sleep(DEADLINE_MILLIS * 4)
+            },
+            listener.playbackStateListener
+        )
 
         listener.awaitResult().assertMediaIds("answer")
         assertEquals(1, listener.results)
     }
 
     @Test
-    fun workThatReturnsWithoutAnsweringIsAnsweredEmpty() {
+    fun aCommandThatReturnsWithoutAnsweringIsAnsweredEmpty() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener)
 
-        dependencies.launchWithDeadline { }
+        dependencies.execute(MediaItemCommand { _, _ -> }, listener.playbackStateListener)
 
         listener.awaitResult()
         assertEquals(1, listener.results)
@@ -103,12 +118,12 @@ class MediaItemCommandDependenciesTest {
     }
 
     @Test
-    fun failedWorkIsAnsweredEmptyAndTheFailureStillSurfaces() {
+    fun aFailedCommandIsAnsweredEmptyAndTheFailureStillSurfaces() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener)
         val failure = IllegalStateException("provider failed")
 
-        dependencies.launchWithDeadline { throw failure }
+        dependencies.execute(MediaItemCommand { _, _ -> throw failure }, listener.playbackStateListener)
 
         assertTrue("A failed execution was not answered", listener.awaitDelivery())
         val reported = assertThrows(AssertionError::class.java) { listener.settle() }
@@ -119,16 +134,16 @@ class MediaItemCommandDependenciesTest {
     }
 
     /**
-     * A command cancels the execution it is replacing, and the request that execution was serving
-     * is still waiting for its answer.
+     * The scope the execution runs in is cancelled while the command is still blocked, and the
+     * request that execution was serving is still waiting for its answer.
      */
     @Test
-    fun anAbandonedExecutionIsStillAnswered() {
+    fun anExecutionCancelledWithItsScopeIsStillAnswered() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener)
 
-        val execution = dependencies.launchWithDeadline { awaitCancellation() }
-        execution.cancel()
+        dependencies.execute(MediaItemCommand { _, _ -> listener.awaitDelivery() }, listener.playbackStateListener)
+        listener.scope.cancel()
 
         listener.awaitResult()
         assertEquals(1, listener.results)

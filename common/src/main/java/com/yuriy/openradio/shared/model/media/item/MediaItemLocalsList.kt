@@ -20,7 +20,6 @@ import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
-import kotlinx.coroutines.Job
 
 /**
  * Created by Yuriy Chernyshov
@@ -33,25 +32,20 @@ import kotlinx.coroutines.Job
  */
 class MediaItemLocalsList : MediaItemCommand {
 
-    private var mJob: Job? = null
-
     override fun execute(playbackStateListener: IUpdatePlaybackState, dependencies: MediaItemCommandDependencies) {
-        mJob?.cancel()
-        mJob = dependencies.launchWithDeadline {
-            val list = dependencies.presenter.getAllDeviceLocal()
-            for (radioStation in list) {
-                if (radioStation.isInvalid()) {
-                    AppLogger.w("Skip invalid local $radioStation")
-                    continue
-                }
-                dependencies.addMediaItem(
-                    MediaItemBuilder.buildPlayable(
-                        radioStation,
-                        dependencies.presenter.isRadioStationFavorite(radioStation)
-                    )
-                )
+        val list = dependencies.presenter.getAllDeviceLocal()
+        for (radioStation in list) {
+            if (radioStation.isInvalid()) {
+                AppLogger.w("Skip invalid local $radioStation")
+                continue
             }
-            dependencies.resultListener.onResult(dependencies.getMediaItems(), list)
+            dependencies.addMediaItem(
+                MediaItemBuilder.buildPlayable(
+                    radioStation,
+                    dependencies.presenter.isRadioStationFavorite(radioStation)
+                )
+            )
         }
+        dependencies.resultListener.onResult(dependencies.getMediaItems(), list)
     }
 }

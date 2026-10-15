@@ -28,7 +28,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Covers the deadline every browse command that asks a provider answers within (TASK-072).
+ * Covers the deadline every browse command that asks a provider answers within (TASK-072), run
+ * the way the service runs it, through [MediaItemCommandDependencies.execute].
  *
  * Providers block rather than suspend, so a timeout wrapped around them can only fire once they
  * have returned. Each case holds its provider until the command has answered, which is what a
@@ -133,10 +134,8 @@ class MediaItemCommandDeadlineTest {
             listener.awaitDelivery()
         }
 
-        command.execute(
-            listener.playbackStateListener,
-            dependencies(presenter, listener, parentId = parentId, options = options, timeoutMillis = DEADLINE_MILLIS)
-        )
+        dependencies(presenter, listener, parentId = parentId, options = options, timeoutMillis = DEADLINE_MILLIS)
+            .execute(command, listener.playbackStateListener)
 
         assertTrue(
             "The command never asked its provider, so its answer says nothing about the deadline",

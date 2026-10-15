@@ -29,7 +29,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -54,11 +53,15 @@ class MediaItemCommandDependencies(
     val isSameCatalogue: Boolean,
     val isSavedInstance: Boolean,
     val options: Bundle,
-    val mScope: CoroutineScope,
+    /**
+     * Where [execute] runs a command. Private, so that a command cannot start work of its own that
+     * outlives the execution and escapes the deadline.
+     */
+    private val mScope: CoroutineScope,
     resultListener: ResultListener,
     /**
-     * How long [launchWithDeadline] lets a command's work run before it answers the browse request
-     * without it. Only tests choose anything but [MediaItemCommand.CMD_TIMEOUT_MS].
+     * How long [execute] lets a command run before it answers the browse request without it. Only
+     * tests choose anything but [MediaItemCommand.CMD_TIMEOUT_MS].
      */
     private val mTimeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS
 ) {
@@ -67,8 +70,8 @@ class MediaItemCommandDependencies(
 
     /**
      * Where a command delivers its result. Only the first result of an execution reaches the
-     * listener these dependencies were made with, so an answer that arrives after
-     * [launchWithDeadline] has answered for it cannot leave the client with a second word.
+     * listener these dependencies were made with, so an answer that arrives after [execute] has
+     * answered for it cannot leave the client with a second word.
      */
     val resultListener: ResultListener = mResultListener
 
@@ -83,26 +86,27 @@ class MediaItemCommandDependencies(
     }
 
     /**
-     * Runs [work] on [Dispatchers.IO] and answers the browse request with an empty result unless
-     * [work] has answered it within the deadline.
+     * Runs [command] for the browse request these dependencies were made for, on [Dispatchers.IO],
+     * and answers the request with an empty result unless [command] has answered it within the
+     * deadline. Every browse command runs through here, so none of them has to remember the
+     * deadline: [MediaItemCommand.execute] only does its work and answers, blocking as long as that
+     * takes.
      *
-     * The deadline is kept beside [work] rather than wrapped around it, because the presenter
+     * The deadline is kept beside the command rather than wrapped around it, because the presenter
      * calls a command makes block instead of suspending and never notice a cancellation: a timeout
      * around them could only fire once they returned, and a provider stuck on the network would
-     * leave the request unanswered for good. The request is answered empty as well when [work]
-     * returns without answering, fails, or is cancelled with the job returned here, so that every
-     * execution answers exactly once. Whatever [work] delivers after that is dropped.
+     * leave the request unanswered for good. The request is answered empty as well when [command]
+     * returns without answering, fails, or is cancelled with [mScope], so that every execution
+     * answers exactly once. Whatever [command] delivers after that is dropped.
      *
-     * A stuck [work] keeps its thread until the presenter call returns; nothing can interrupt it
+     * A stuck [command] keeps its thread until the presenter call returns; nothing can interrupt it
      * safely in the middle of a cache or database write.
-     *
-     * @return The job of the whole execution. Cancelling it still answers the request.
      */
-    fun launchWithDeadline(work: suspend () -> Unit): Job {
+    fun execute(command: MediaItemCommand, playbackStateListener: IUpdatePlaybackState) {
         // Undispatched, so the try below is entered before this returns: a job cancelled before a
         // thread picked it up would otherwise never run its finally, and never answer.
-        return mScope.launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {
-            val worker = launch { work() }
+        mScope.launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {
+            val worker = launch { command.execute(playbackStateListener, this@MediaItemCommandDependencies) }
             try {
                 if (withTimeoutOrNull(mTimeoutMillis) { worker.join() } == null) {
                     AppLogger.w("$CLASS_NAME $parentId not loaded within $mTimeoutMillis ms, answering empty")

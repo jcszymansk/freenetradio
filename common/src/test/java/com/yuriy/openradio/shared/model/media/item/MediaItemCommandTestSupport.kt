@@ -163,12 +163,14 @@ internal fun dependencies(
 }
 
 /**
- * Records what a command delivered, and owns the scope the command launches its work in.
+ * Records what a command delivered, and owns the scope [MediaItemCommandDependencies.execute] runs
+ * the command in.
  *
- * Commands answer from a background coroutine, so every assertion is preceded by awaiting the
- * signal the command under test is expected to send and then [settle]-ing the scope. Settling is
- * what makes the counts exact: once every coroutine the command launched has finished, nothing is
- * left that could still deliver a second result, report an error or ask the presenter for more.
+ * A command run through [MediaItemCommandDependencies.execute] answers from a background
+ * coroutine, so every assertion is preceded by awaiting the signal the command under test is
+ * expected to send and then [settle]-ing the scope. Settling is what makes the counts exact: once
+ * every coroutine launched in the scope has finished, nothing is left that could still deliver a
+ * second result, report an error or ask the presenter for more.
  */
 internal class RecordingCommandListener : OpenRadioService.ResultListener {
 
@@ -225,9 +227,10 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
         private set
 
     /**
-     * The thread the result was delivered on, or null while nothing has been delivered. Every
-     * command that does its work launches it on [Dispatchers.IO], which always dispatches, so this
-     * is the caller's own thread only when the command answered inline.
+     * The thread the result was delivered on, or null while nothing has been delivered.
+     * [MediaItemCommandDependencies.execute] runs a command on [Dispatchers.IO], which always
+     * dispatches, so this is the caller's own thread only when a command called directly answered
+     * inline.
      */
     @Volatile
     var resultThread: Thread? = null
@@ -366,18 +369,17 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
     /**
      * Asserts the contract of a browse command restored onto a catalogue that is already in
      * [com.yuriy.openradio.shared.model.media.BrowseTree]: it answers inline, before `execute`
-     * returns and before it reaches its coroutine, and the empty result it leaves behind is what
+     * returns and without asking the provider, and the empty result it leaves behind is what
      * makes `OpenRadioService.callWhenSourceReady` serve the node from the tree rather than from
      * the provider.
      *
-     * That the result was delivered inline is the whole claim. An empty result on its own is bit
-     * for bit what a command that never ran delivers, and so is one a coroutine delivers later.
+     * An empty result on its own is bit for bit what a command that never ran delivers, and so is
+     * one delivered later from another thread.
      *
-     * The inline delivery is read off the thread. The work itself runs on [Dispatchers.IO], which
-     * never runs a block on the thread that launched it; only the deadline guard's empty answer
-     * can arrive inline, because the guard starts undispatched. A command that reached its work
-     * and answered that way passes this check, so the caller's presenter counters, which show the
-     * work was reached, are what catch it. Call this from the thread that called `execute`.
+     * The inline delivery is read off the thread, so call this from the thread that called the
+     * command's `execute` directly rather than through [MediaItemCommandDependencies.execute]. A
+     * command that went on to its fetch on that same thread and found nothing passes this check,
+     * so the caller's presenter counters, which show the fetch was reached, are what catch it.
      *
      * The scope is [settle]d before anything is counted, so a command that answers inline and then
      * launches its fetch anyway has finished that fetch by the time the single result is asserted,

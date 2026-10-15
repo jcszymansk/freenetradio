@@ -44,6 +44,11 @@ fun interface MediaItemCommand {
     /**
      * Common method to execute single, specific command.
      *
+     * Runs on the caller's thread and may block on the presenter for as long as it takes; the
+     * browse request is answered through [MediaItemCommandDependencies.resultListener]. Call it only
+     * through [MediaItemCommandDependencies.execute], which runs it off the main thread and answers
+     * the request on its behalf when it is late, fails or never answers.
+     *
      * @param playbackStateListener Implementation of the [IUpdatePlaybackState] interface.
      * @param dependencies Instance of the [MediaItemCommandDependencies] which holds various references needed to
      * execute command.

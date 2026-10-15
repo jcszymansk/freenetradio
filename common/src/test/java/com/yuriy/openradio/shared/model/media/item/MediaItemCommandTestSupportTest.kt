@@ -35,11 +35,10 @@ import org.junit.Test
 class MediaItemCommandTestSupportTest {
 
     /**
-     * Every browse command runs its background work through
-     * [MediaItemCommandDependencies.launchWithDeadline], whose answer at [MediaItemCommand.CMD_TIMEOUT_MS]
-     * delivers no items, the first page and no error - the same state a command that ran and found
-     * nothing delivers. The await has to run out first, or a command that got nowhere satisfies
-     * every test whose expectation is an empty node.
+     * Every browse command runs through [MediaItemCommandDependencies.execute], whose answer at
+     * [MediaItemCommand.CMD_TIMEOUT_MS] delivers no items, the first page and no error - the same
+     * state a command that ran and found nothing delivers. The await has to run out first, or a
+     * command that got nowhere satisfies every test whose expectation is an empty node.
      */
     @Test
     fun theAwaitRunsOutBeforeACommandCanFallThroughItsOwnTimeout() {
@@ -135,7 +134,7 @@ class MediaItemCommandTestSupportTest {
         val listener = RecordingCommandListener()
         val command = MediaItemCommand { _, dependencies ->
             dependencies.resultListener.onResult()
-            dependencies.mScope.launch {
+            listener.scope.launch {
                 delay(LATE_MILLIS)
                 listener.onResult(
                     radioStations = dependencies.presenter.getPopularStations()
@@ -162,7 +161,7 @@ class MediaItemCommandTestSupportTest {
         val listener = RecordingCommandListener()
         val command = MediaItemCommand { _, dependencies ->
             dependencies.resultListener.onResult()
-            dependencies.mScope.launch {
+            listener.scope.launch {
                 delay(LATE_MILLIS)
                 dependencies.presenter.getPopularStations()
             }
@@ -212,7 +211,7 @@ class MediaItemCommandTestSupportTest {
     fun settlingFailsWithWhatALaunchedCoroutineThrew() {
         val listener = RecordingCommandListener()
         val command = MediaItemCommand { _, dependencies ->
-            dependencies.mScope.launch { dependencies.presenter.getCountryCode() }
+            listener.scope.launch { dependencies.presenter.getCountryCode() }
         }
 
         command.execute(listener.playbackStateListener, dependencies(RecordingPresenter(), listener))
@@ -230,7 +229,7 @@ class MediaItemCommandTestSupportTest {
     fun awaitingTheResultFailsWhenTheCoroutineThrowsAfterAnswering() {
         val listener = RecordingCommandListener()
         val command = MediaItemCommand { _, dependencies ->
-            dependencies.mScope.launch {
+            listener.scope.launch {
                 dependencies.resultListener.onResult()
                 dependencies.presenter.getCountryCode()
             }
@@ -266,8 +265,8 @@ class MediaItemCommandTestSupportTest {
     @Test
     fun theNoErrorAssertionSeesAnErrorReportedLate() {
         val listener = RecordingCommandListener()
-        val command = MediaItemCommand { playbackStateListener, dependencies ->
-            dependencies.mScope.launch {
+        val command = MediaItemCommand { playbackStateListener, _ ->
+            listener.scope.launch {
                 delay(LATE_MILLIS)
                 playbackStateListener.updatePlaybackState(STRING_RESOURCE)
             }

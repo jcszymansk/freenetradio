@@ -1153,11 +1153,11 @@ class OpenRadioService : MediaLibraryService() {
                 }
             )
             if (command != null) {
-                command.execute(
+                dependencies.execute(
+                    command,
                     MediaItemCommand.IUpdatePlaybackState { error ->
                         AppLogger.e("$TAG update playback state error $error")
-                    },
-                    dependencies
+                    }
                 )
             } else {
                 AppLogger.w("$TAG no command for parentId: $parentId")
@@ -1190,11 +1190,11 @@ class OpenRadioService : MediaLibraryService() {
                     }
                 }
             )
-            mPresenter.getSearchCommand().execute(
+            dependencies.execute(
+                mPresenter.getSearchCommand(),
                 MediaItemCommand.IUpdatePlaybackState { error ->
                     AppLogger.e("$TAG update playback state error $error")
-                },
-                dependencies
+                }
             )
             return future
         }
