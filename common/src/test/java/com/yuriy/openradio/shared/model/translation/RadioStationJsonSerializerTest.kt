@@ -22,6 +22,7 @@ import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.media.setVariant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RadioStationJsonSerializerTest {
@@ -56,6 +57,35 @@ class RadioStationJsonSerializerTest {
         assertEquals(expected.isLocal, actual.isLocal)
         assertEquals(expected.sortId, actual.sortId)
         assertEquals(expected.imageUrl, actual.imageUrl)
+    }
+
+    /**
+     * The round trip above would still pass if a key were renamed on both sides, and every
+     * favorite and local station already stored would then read back empty. This is a station as
+     * the storage holds it, slashes escaped the way `JSONObject` writes them.
+     */
+    @Test
+    fun readsAStationInTheStoredFormat() {
+        val stored = "{\"Id\":\"d28420a4-eccf-47a2-ace1-088c7e7cb7e0\",\"Name\":\"101 SMOOTH JAZZ\"," +
+            "\"Bitrate\":128,\"Country\":\"The United States Of America\",\"CountryCode\":\"US\"," +
+            "\"Genre\":\"Smooth Jazz\",\"StreamUrl\":\"http:\\/\\/www.101smoothjazz.com\\/101-smoothjazz.m3u\"," +
+            "\"Website\":\"http:\\/\\/101smoothjazz.com\\/\",\"IsLocal\":true,\"SortId\":243," +
+            "\"ImgUrl\":\"http:\\/\\/101smoothjazz.com\\/favicon.ico\",\"Codec\":\"MP3\"}"
+
+        val actual = RadioStationJsonDeserializer().deserialize(stored)
+
+        assertEquals("d28420a4-eccf-47a2-ace1-088c7e7cb7e0", actual.id)
+        assertEquals("101 SMOOTH JAZZ", actual.name)
+        assertEquals(128, actual.getStreamBitrate())
+        assertEquals("http://www.101smoothjazz.com/101-smoothjazz.m3u", actual.getStreamUrlFixed())
+        assertEquals("The United States Of America", actual.country)
+        assertEquals("US", actual.countryCode)
+        assertEquals("Smooth Jazz", actual.genre)
+        assertEquals("http://101smoothjazz.com/", actual.homePage)
+        assertTrue(actual.isLocal)
+        assertEquals(243, actual.sortId)
+        assertEquals("http://101smoothjazz.com/favicon.ico", actual.imageUrl)
+        assertEquals("MP3", actual.codec)
     }
 
     @Test
