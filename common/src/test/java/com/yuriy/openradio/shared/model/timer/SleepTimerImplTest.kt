@@ -211,6 +211,54 @@ class SleepTimerImplTest {
         assertEquals("More than one racing call left a timer armed", 1, listener.completions)
     }
 
+    @Test
+    fun aDisableIssuedWhileATimerIsBeingArmedWins() {
+        assertADisableDuringArmingWins { timer -> timer.handle(NOW + DELAY_MS, false) }
+    }
+
+    @Test
+    fun aCancelIssuedWhileATimerIsBeingArmedWins() {
+        assertADisableDuringArmingWins { timer -> timer.cancel() }
+    }
+
+    /**
+     * Arms the timer on one thread and runs [disable] on another while the arming call is between
+     * its own cancel and its start, then checks that no timer is left armed.
+     *
+     * The clock is read inside that window, so the clock is where the arming thread parks: it lets
+     * the other thread go and waits for it to finish. A timer whose calls are not atomic lets the
+     * disable run to the end in the window, and the start that follows arms a timer the disable
+     * was meant to remove. An atomic one holds the disable back until the arming call is done, so
+     * the wait runs out, the arming call finishes, and the disable then cancels what it armed.
+     */
+    private fun assertADisableDuringArmingWins(disable: (SleepTimer) -> Unit) {
+        val listener = RecordingListener()
+        val armingInWindow = CountDownLatch(1)
+        val disableDone = CountDownLatch(1)
+        val timer = SleepTimerImpl(listener) {
+            armingInWindow.countDown()
+            disableDone.await(WINDOW_MS, TimeUnit.MILLISECONDS)
+            NOW
+        }
+
+        val arming = thread { timer.handle(NOW + DELAY_MS, true) }
+        assertTrue(
+            "The arming call never read the clock",
+            armingInWindow.await(COMPLETION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        )
+        val disabling = thread {
+            disable(timer)
+            disableDone.countDown()
+        }
+        arming.join()
+        disabling.join()
+
+        assertFalse(
+            "A timer armed before the disable survived it",
+            listener.awaitCompletionDuring(SILENCE_MS)
+        )
+    }
+
     /**
      * A listener may arm the next timer while it hears the current one complete. The timer that
      * just completed must not take the new one down with it as it finishes.
@@ -293,5 +341,12 @@ class SleepTimerImplTest {
         const val SILENCE_MS = 1_000L
 
         const val RACING_THREADS = 16
+
+        /**
+         * How long an arming call parked in the clock waits for the disable to finish. An atomic
+         * timer makes it wait the whole time, so it only has to be long enough for a disable that
+         * is not held back to run to the end.
+         */
+        const val WINDOW_MS = 500L
     }
 }
