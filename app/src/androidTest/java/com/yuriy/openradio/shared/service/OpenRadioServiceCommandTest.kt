@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.service
 
 import android.content.Context
 import android.os.Bundle
+import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
@@ -442,14 +443,14 @@ class OpenRadioServiceCommandTest {
      * A command the service refuses has to leave the favorites store as it found it, which it did
      * not while the store was written before the browse tree was asked about the station.
      *
-     * The playing station is out of the browse tree here, the state in which the old code wrote
-     * the store on its way to refusing a command about a station it had never heard of.
+     * The playing station is out of its list here, the state in which the old code wrote the store
+     * on its way to refusing a command about a station it had never heard of.
      */
     @Test
     fun aRefusedFavoriteCommandLeavesTheStoreAsItFoundIt() {
         val kept = makeStation("fav-kept", name = "Kept favorite")
         mStorages.favorites.add(kept)
-        val station = playAStationThenDropItFromTheBrowseTree()
+        val station = playAStationThenDropItFromItsList()
 
         assertEquals(
             SessionResult.RESULT_ERROR_NOT_SUPPORTED,
@@ -467,15 +468,16 @@ class OpenRadioServiceCommandTest {
     }
 
     /**
-     * The now playing station can leave the browse tree while it plays, as it does when a
-     * controller showing the favorites list unmarks it there. The favorite button still concerns
-     * it, so marking it again has to work whether the command names nothing or names the station.
+     * The now playing station can leave the list it was played from while it plays, as it does
+     * when a controller showing the favorites list unmarks it there. The favorite button still
+     * concerns it, so marking it again has to work whether the command names nothing or names the
+     * station.
      */
     @Test
-    fun aFavoriteCommandMarksThePlayingStationGoneFromTheBrowseTree() {
+    fun aFavoriteCommandMarksThePlayingStationGoneFromItsList() {
         val kept = makeStation("fav-kept", name = "Kept favorite")
         mStorages.favorites.add(kept)
-        val station = playAStationThenDropItFromTheBrowseTree()
+        val station = playAStationThenDropItFromItsList()
 
         assertEquals(
             SessionResult.RESULT_SUCCESS,
@@ -551,6 +553,69 @@ class OpenRadioServiceCommandTest {
 
         mBrowser.seekToNext()
         awaitActiveStation(second.id)
+    }
+
+    /**
+     * A selection in a list, the way Android Auto makes one, hands the player the list as its
+     * queue. Editing a local station invalidates the locals while nobody is left to browse them
+     * again, and the queued stations still have to resolve: the next one becomes the active
+     * station, and the favorite button marks it rather than the one before.
+     */
+    @Test
+    fun aQueueSelectedFromTheLocalsStaysResolvableAfterTheyAreInvalidated() {
+        val (first, second) = mStations.seed(mAudio.wav(WAV_NAME), mAudio.wav(WAV_NAME))
+        mBrowser.setMediaItem(mStations.item(first))
+
+        playTheQueueAcrossAnInvalidation(listOf(first.id, second.id))
+    }
+
+    /**
+     * The phone UI hands the player every playable item of the list it shows, rather than one
+     * selected item, and that queue has to stay resolvable just the same.
+     */
+    @Test
+    fun aQueueThePhoneHandsOverStaysResolvableAfterTheLocalsAreInvalidated() {
+        val (first, second) = mStations.seed(mAudio.wav(WAV_NAME), mAudio.wav(WAV_NAME))
+        mBrowser.setMediaItems(listOf(mStations.item(first), mStations.item(second)), 0)
+
+        playTheQueueAcrossAnInvalidation(listOf(first.id, second.id))
+    }
+
+    /**
+     * A selection the service finds in no list, the way Google Assistant can make one, plays the
+     * list browsed last, and that queue has to stay resolvable just the same.
+     */
+    @Test
+    fun aQueueForASelectionNoListHoldsStaysResolvableAfterTheLocalsAreInvalidated() {
+        val (first, second) = mStations.seed(mAudio.wav(WAV_NAME), mAudio.wav(WAV_NAME))
+        mBrowser.setMediaItem(MediaItem.Builder().setMediaId("not-listed").build())
+
+        playTheQueueAcrossAnInvalidation(listOf(first.id, second.id))
+    }
+
+    /**
+     * A station added to a queue that is already playing comes from the list it was added from,
+     * and stays resolvable after that list is invalidated.
+     */
+    @Test
+    fun aStationAddedToTheQueueStaysResolvableAfterItsListIsInvalidated() {
+        val url = mAudio.wav(WAV_NAME)
+        val favorite = makeStation("fav-before-added", name = "Favorite before added", url = url)
+        mStorages.favorites.add(favorite)
+        mBrowser.setMediaItem(mBrowser.children(MediaId.MEDIA_ID_FAVORITES_LIST).single())
+        mBrowser.prepareAndPlay()
+        mBrowser.awaitPlaying()
+        awaitActiveStation(favorite.id)
+
+        val local = mStations.seed(url).single()
+        mBrowser.addMediaItem(mStations.item(local))
+        mBrowser.awaitPlayback("the added station in the queue") {
+            mBrowser.queueMediaIds() == listOf(favorite.id, local.id)
+        }
+        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+
+        mBrowser.seekToNext()
+        awaitActiveStation(local.id)
     }
 
     @Test
@@ -780,6 +845,28 @@ class OpenRadioServiceCommandTest {
     }
 
     /**
+     * Plays the queue of [queuedIds] the player has just been handed, invalidates the locals the
+     * way editing a local station does, without browsing them again, then moves to the second
+     * station and asserts that it is the active station the favorite button marks.
+     */
+    private fun playTheQueueAcrossAnInvalidation(queuedIds: List<String>) {
+        mBrowser.prepareAndPlay()
+        mBrowser.awaitPlaying()
+        awaitActiveStation(queuedIds[0])
+        assertEquals(queuedIds, mBrowser.queueMediaIds())
+
+        mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
+
+        mBrowser.seekToNext()
+        awaitActiveStation(queuedIds[1])
+        assertEquals(
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(OpenRadioService.CMD_MARK_FAVORITE).resultCode
+        )
+        assertEquals(listOf(queuedIds[1]), mStorages.freshFavorites().getAll().map { it.id })
+    }
+
+    /**
      * Plays a station seeded for this test and waits until the service holds it as its active
      * station.
      */
@@ -793,17 +880,17 @@ class OpenRadioServiceCommandTest {
     }
 
     /**
-     * Plays a station, then removes it from the browse tree while it keeps playing, so the
-     * service still holds it as its active station but no browse tree index knows its id.
+     * Plays a station, then removes it from the list it was played from while it keeps playing,
+     * so the service still holds it as its active station and only the queue still holds it.
      */
-    private fun playAStationThenDropItFromTheBrowseTree(): RadioStation {
+    private fun playAStationThenDropItFromItsList(): RadioStation {
         val station = playAStation()
         mBrowser.subscribe(MediaId.MEDIA_ID_ROOT)
         mBrowser.subscribe(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
         mStorages.freshLocals().remove(station)
         updateTreeAndAwaitRefresh()
         assertTrue(
-            "The station is still in the browse tree",
+            "The station is still in its list",
             mBrowser.children(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST).isEmpty()
         )
         return station

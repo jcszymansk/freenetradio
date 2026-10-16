@@ -35,21 +35,16 @@ class MediaItemCountryStations : IndexableMediaItemCommand() {
             deliverResult(dependencies)
             return
         }
-        dependencies.launchWithDeadline {
-            // Call this API to make sure countries are cached.
-            dependencies.presenter.getAllCountries()
-            // Load all categories into menu
-            val pageNumber = pageNumber
-            val set = dependencies.presenter.getStationsByCountry(dependencies.countryCode, pageNumber)
-            if (set.isEmpty().not()) {
-                nextPageNumber()
-            }
-            handleDataLoaded(
-                playbackStateListener,
-                dependencies,
-                set,
-                pageNumber
-            )
-        }
+        // Call this API to make sure countries are cached.
+        dependencies.presenter.getAllCountries()
+        // Load all categories into menu
+        val pageNumber = pageNumber
+        val set = dependencies.presenter.getStationsByCountry(dependencies.countryCode, pageNumber)
+        handleDataLoaded(
+            playbackStateListener,
+            dependencies,
+            set,
+            pageNumber
+        ) { advancePast(pageNumber) }
     }
 }

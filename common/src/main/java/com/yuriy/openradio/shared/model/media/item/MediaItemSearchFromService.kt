@@ -41,20 +41,18 @@ class MediaItemSearchFromService : IndexableMediaItemCommand() {
             deliverResult(dependencies)
             return
         }
-        dependencies.launchWithDeadline {
-            handleDataLoaded(
-                playbackStateListener,
-                dependencies,
-                dependencies.presenter.getSearchStations(
-                    AppUtils.getSearchQueryFromBundle(dependencies.options),
-                    object : MediaIdBuilder {
+        handleDataLoaded(
+            playbackStateListener,
+            dependencies,
+            dependencies.presenter.getSearchStations(
+                AppUtils.getSearchQueryFromBundle(dependencies.options),
+                object : MediaIdBuilder {
 
-                        override fun build(value: String): String {
-                            return MediaId.makeSearchId(value)
-                        }
+                    override fun build(value: String): String {
+                        return MediaId.makeSearchId(value)
                     }
-                )
+                }
             )
-        }
+        )
     }
 }

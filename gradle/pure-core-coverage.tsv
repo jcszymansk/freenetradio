@@ -60,6 +60,7 @@ com/yuriy/openradio/shared/model/parser/ParserLayerWebRadioImpl	com.yuriy.openra
 com/yuriy/openradio/shared/model/ModelLayerImpl	com.yuriy.openradio.shared.model.ModelLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/MediaId	com.yuriy.openradio.shared.model.media.MediaIdTest	:common
 com/yuriy/openradio/shared/model/media/BrowseTree	com.yuriy.openradio.shared.model.media.BrowseTreeTest	:common
+com/yuriy/openradio/shared/model/media/BrowseTree$State	com.yuriy.openradio.shared.model.media.BrowseTreeTest	:common
 com/yuriy/openradio/shared/model/media/RadioStation	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
 com/yuriy/openradio/shared/model/media/MediaStream	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
 com/yuriy/openradio/shared/model/media/MediaStream$Variant	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
@@ -72,6 +73,7 @@ com/yuriy/openradio/shared/model/media/item/IndexableMediaItemCommand	com.yuriy.
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandImpl	com.yuriy.openradio.shared.model.media.item.MediaItemCommandImplTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandDependencies	com.yuriy.openradio.shared.model.media.item.MediaItemCommandDependenciesTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandDependencies$FirstResultListener	com.yuriy.openradio.shared.model.media.item.MediaItemCommandDependenciesTest	:common
+com/yuriy/openradio/shared/model/media/item/MediaItemCommandDependenciesKt	com.yuriy.openradio.shared.model.media.item.MediaItemCommandLateAnswerTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemAllCategories	com.yuriy.openradio.shared.model.media.item.MediaItemAllCategoriesTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemChildCategories	com.yuriy.openradio.shared.model.media.item.MediaItemChildCategoriesTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCountriesList	com.yuriy.openradio.shared.model.media.item.MediaItemCountriesListTest	:common

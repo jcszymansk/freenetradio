@@ -33,7 +33,7 @@ class IndexableMediaItemCommandTest {
         assertEquals(UrlLayer.FIRST_PAGE_INDEX, command.pageNumber)
         assertFalse(command.doLoadNoDataReceived())
 
-        command.nextPageNumber()
+        command.advancePast(UrlLayer.FIRST_PAGE_INDEX)
 
         assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, command.pageNumber)
         assertTrue(command.doLoadNoDataReceived())
@@ -52,5 +52,19 @@ class IndexableMediaItemCommandTest {
         assertFalse(command.doLoadNoDataReceived())
         listener.assertNoError()
         assertEquals("The page counter delivered a result of its own", 0, listener.results)
+    }
+
+    /**
+     * Two executions that fetched the same page both answer with it, and the second has to leave the
+     * index where the first one put it rather than skip the page after.
+     */
+    @Test
+    fun aPageTheIndexHasLeftDoesNotMoveItAgain() {
+        val command = object : IndexableMediaItemCommand() {}
+
+        command.advancePast(UrlLayer.FIRST_PAGE_INDEX)
+        command.advancePast(UrlLayer.FIRST_PAGE_INDEX)
+
+        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, command.pageNumber)
     }
 }

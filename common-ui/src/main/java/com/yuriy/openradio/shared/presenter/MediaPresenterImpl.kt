@@ -67,7 +67,6 @@ import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.MediaItemHelper
-import com.yuriy.openradio.shared.utils.PlayerUtils
 import com.yuriy.openradio.shared.utils.UiUtils
 import com.yuriy.openradio.shared.utils.setImageBitmap
 import com.yuriy.openradio.shared.utils.visible
@@ -522,12 +521,6 @@ class MediaPresenterImpl(
         children: List<MediaItem>,
         replace: Boolean
     ) {
-        // An ended page changes no state at all: were mCurrentParentId to advance to a node whose
-        // rows are not shown yet, that node's first real page would count as the same catalogue
-        // and be appended to the rows of the node the user came from.
-        if (PlayerUtils.isEndOfList(children)) {
-            return
-        }
         // Check whether category has changed.
         val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
         mCurrentParentId = parentId

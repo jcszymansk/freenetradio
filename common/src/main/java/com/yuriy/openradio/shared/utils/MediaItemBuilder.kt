@@ -47,19 +47,6 @@ object MediaItemBuilder {
             .build()
     }
 
-    fun buildMediaItemListEnded(): MediaItem {
-        return MediaItem.Builder()
-            .setMediaId(MediaId.MEDIA_ID_LIST_ENDED)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_RADIO_STATIONS)
-                    .setIsBrowsable(true)
-                    .setIsPlayable(false)
-                    .build()
-            )
-            .build()
-    }
-
     fun buildChildCategory(context: Context, category: Category): MediaItem {
         val bundle = Bundle()
         MediaItemHelper.setDrawableId(bundle, R.drawable.ic_child_categories)

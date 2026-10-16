@@ -17,15 +17,28 @@
 package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
-import kotlinx.coroutines.awaitCancellation
+import java.util.concurrent.ConcurrentLinkedQueue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Covers the answer [MediaItemCommandDependencies] guarantees a browse request: exactly one,
- * whatever the work behind it does (TASK-072).
+ * whatever the command behind it does (TASK-072).
+ *
+ * Every command here is a plain [MediaItemCommand] that blocks and answers on its own terms, with
+ * nothing of the deadline in it, so whatever the request gets beyond that comes from
+ * [MediaItemCommandDependencies.execute], which the service runs every browse command through.
  */
 class MediaItemCommandDependenciesTest {
 
@@ -42,30 +55,78 @@ class MediaItemCommandDependenciesTest {
         listener.assertMediaIds("first")
     }
 
+    /**
+     * What a command keeps for the next request moves on in [MediaItemCommandDependencies.answer]'s
+     * callback, so the callback has to run for the answer and only for it, and before the client
+     * holds the answer: a client that asks again at once must find it done.
+     */
     @Test
-    fun workThatAnswersInTimeIsTheAnswer() {
+    fun onlyTheAnswerRunsItsCallbackAndRunsItBeforeTheListenerHearsOfIt() {
+        val listener = RecordingCommandListener()
+        val dependencies = dependencies(RecordingPresenter(), listener)
+        val resultsSeenByCallbacks = mutableListOf<Int>()
+
+        val first = dependencies.answer(listOf(item("first"))) { resultsSeenByCallbacks.add(listener.results) }
+        val second = dependencies.answer(listOf(item("second"))) { resultsSeenByCallbacks.add(listener.results) }
+
+        assertTrue("The first answer was reported as dropped", first)
+        assertFalse("A second answer was reported as delivered", second)
+        assertEquals(
+            "The callback did not run exactly once, before the listener had the answer",
+            listOf(0),
+            resultsSeenByCallbacks
+        )
+        assertEquals(1, listener.results)
+        listener.assertMediaIds("first")
+    }
+
+    @Test
+    fun anAnswerAfterTheDeadlineIsReportedAsDropped() {
+        val listener = RecordingCommandListener()
+        val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
+        var callbackRan = false
+
+        dependencies.execute(MediaItemCommand { _, _ -> listener.awaitDelivery() }, listener.playbackStateListener)
+        listener.awaitResult()
+
+        assertFalse(
+            "An answer after the deadline was reported as delivered",
+            dependencies.answer(listOf(item("late"))) { callbackRan = true }
+        )
+        assertFalse("A dropped answer ran its callback", callbackRan)
+        assertEquals(emptyList<String>(), listener.mediaIds)
+    }
+
+    @Test
+    fun aCommandThatAnswersInTimeIsTheAnswer() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
 
-        dependencies.launchWithDeadline { dependencies.resultListener.onResult(listOf(item("answer"))) }
+        dependencies.execute(
+            MediaItemCommand { _, _ -> dependencies.resultListener.onResult(listOf(item("answer"))) },
+            listener.playbackStateListener
+        )
 
         listener.awaitResult().assertMediaIds("answer")
         assertEquals(1, listener.results)
     }
 
     /**
-     * The work stays blocked until the request has been answered, so the answer can only have come
-     * from the deadline, and the work's own answer arrives after it.
+     * The command stays blocked until the request has been answered, so the answer can only have
+     * come from the deadline, and the command's own answer arrives after it.
      */
     @Test
-    fun stuckWorkIsAnsweredEmptyAtTheDeadlineAndItsLateAnswerIsDropped() {
+    fun aStuckCommandIsAnsweredEmptyAtTheDeadlineAndItsLateAnswerIsDropped() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
 
-        dependencies.launchWithDeadline {
-            listener.awaitDelivery()
-            dependencies.resultListener.onResult(listOf(item("late")))
-        }
+        dependencies.execute(
+            MediaItemCommand { _, _ ->
+                listener.awaitDelivery()
+                dependencies.resultListener.onResult(listOf(item("late")))
+            },
+            listener.playbackStateListener
+        )
 
         listener.awaitResult()
         assertEquals(1, listener.results)
@@ -73,29 +134,34 @@ class MediaItemCommandDependenciesTest {
     }
 
     /**
-     * The work answers and then runs on until the deadline cancels it, which is the moment a guard
-     * that answers on its deadline regardless would send an empty result over the real one.
+     * The command answers and then runs on past the deadline, which is the moment a guard that
+     * answers on its deadline regardless would send an empty result over the real one. The deadline
+     * starts before the command does, so a command that outlives four of them has certainly
+     * outlived the first.
      */
     @Test
-    fun workThatAnswersAndOutlivesTheDeadlineKeepsItsAnswer() {
+    fun aCommandThatAnswersAndOutlivesTheDeadlineKeepsItsAnswer() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
 
-        dependencies.launchWithDeadline {
-            dependencies.resultListener.onResult(listOf(item("answer")))
-            awaitCancellation()
-        }
+        dependencies.execute(
+            MediaItemCommand { _, _ ->
+                dependencies.resultListener.onResult(listOf(item("answer")))
+                Thread.sleep(DEADLINE_MILLIS * 4)
+            },
+            listener.playbackStateListener
+        )
 
         listener.awaitResult().assertMediaIds("answer")
         assertEquals(1, listener.results)
     }
 
     @Test
-    fun workThatReturnsWithoutAnsweringIsAnsweredEmpty() {
+    fun aCommandThatReturnsWithoutAnsweringIsAnsweredEmpty() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener)
 
-        dependencies.launchWithDeadline { }
+        dependencies.execute(MediaItemCommand { _, _ -> }, listener.playbackStateListener)
 
         listener.awaitResult()
         assertEquals(1, listener.results)
@@ -103,12 +169,12 @@ class MediaItemCommandDependenciesTest {
     }
 
     @Test
-    fun failedWorkIsAnsweredEmptyAndTheFailureStillSurfaces() {
+    fun aFailedCommandIsAnsweredEmptyAndTheFailureStillSurfaces() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener)
         val failure = IllegalStateException("provider failed")
 
-        dependencies.launchWithDeadline { throw failure }
+        dependencies.execute(MediaItemCommand { _, _ -> throw failure }, listener.playbackStateListener)
 
         assertTrue("A failed execution was not answered", listener.awaitDelivery())
         val reported = assertThrows(AssertionError::class.java) { listener.settle() }
@@ -119,23 +185,138 @@ class MediaItemCommandDependenciesTest {
     }
 
     /**
-     * A command cancels the execution it is replacing, and the request that execution was serving
-     * is still waiting for its answer.
+     * The scope is the one the service runs every browse command in, so the command after a failed
+     * one has to run as if nothing had happened, rather than start in a cancelled scope and be
+     * answered empty without asking anything.
      */
     @Test
-    fun anAbandonedExecutionIsStillAnswered() {
+    fun aFailedCommandLeavesItsScopeRunningTheCommandsAfterIt() {
+        val failures = ConcurrentLinkedQueue<Throwable>()
+        val scope = MediaItemCommandDependencies.newCommandScope { _, failure -> failures.add(failure) }
+        try {
+            val failed = RecordingCommandListener()
+            dependencies(RecordingPresenter(), failed, scope = scope)
+                .execute(MediaItemCommand { _, _ -> throw IllegalStateException("provider failed") }, failed.playbackStateListener)
+            assertTrue("A failed execution was not answered", failed.awaitDelivery())
+            joinChildren(scope)
+            val next = RecordingCommandListener()
+            val dependencies = dependencies(RecordingPresenter(), next, scope = scope)
+
+            dependencies.execute(
+                MediaItemCommand { _, _ -> dependencies.resultListener.onResult(listOf(item("answer"))) },
+                next.playbackStateListener
+            )
+
+            assertTrue("The command after a failed one was not answered", next.awaitDelivery())
+            joinChildren(scope)
+            next.assertMediaIds("answer")
+            assertEquals(1, failed.results)
+            assertEquals(listOf("provider failed"), failures.map { it.message })
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    /**
+     * Run in the scope exactly as the service builds it, failure log and all. A failure that
+     * reaches the thread's uncaught exception handler ends the process on Android, so the request
+     * being answered is not enough: the failure must end at the scope's own handler.
+     */
+    @Test
+    fun aFailedCommandInTheServiceScopeDoesNotReachTheUncaughtExceptionHandler() {
+        val uncaught = ConcurrentLinkedQueue<Throwable>()
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, failure -> uncaught.add(failure) }
+        val scope = MediaItemCommandDependencies.newCommandScope()
+        try {
+            val listener = RecordingCommandListener()
+            dependencies(RecordingPresenter(), listener, scope = scope)
+                .execute(MediaItemCommand { _, _ -> throw IllegalStateException("provider failed") }, listener.playbackStateListener)
+
+            assertTrue("A failed execution was not answered", listener.awaitDelivery())
+            joinChildren(scope)
+
+            assertEquals(emptyList<Throwable>(), uncaught.toList())
+            assertTrue("The failure cancelled the service scope", scope.isActive)
+            assertEquals(1, listener.results)
+        } finally {
+            scope.cancel()
+            Thread.setDefaultUncaughtExceptionHandler(previous)
+        }
+    }
+
+    /**
+     * The failure is logged with the node it failed for, so a browse list that came up empty can be
+     * told apart from one that had nothing to show.
+     */
+    @Test
+    fun aFailedCommandIsLoggedWithItsNode() {
+        val logged = ConcurrentLinkedQueue<Pair<String, Throwable>>()
+        val scope = MediaItemCommandDependencies.newCommandScope { message, failure -> logged.add(message to failure) }
+        try {
+            val failure = IllegalStateException("provider failed")
+            val listener = RecordingCommandListener()
+            dependencies(RecordingPresenter(), listener, parentId = "failing node", scope = scope)
+                .execute(MediaItemCommand { _, _ -> throw failure }, listener.playbackStateListener)
+
+            assertTrue("A failed execution was not answered", listener.awaitDelivery())
+            joinChildren(scope)
+
+            val (message, reported) = logged.single()
+            assertSame(failure, reported)
+            assertTrue("The log does not name the node: $message", message.contains("failing node"))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    /**
+     * The scope the execution runs in is cancelled while the command is still blocked, and the
+     * request that execution was serving is still waiting for its answer.
+     */
+    @Test
+    fun anExecutionCancelledWithItsScopeIsStillAnswered() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener)
 
-        val execution = dependencies.launchWithDeadline { awaitCancellation() }
-        execution.cancel()
+        dependencies.execute(MediaItemCommand { _, _ -> listener.awaitDelivery() }, listener.playbackStateListener)
+        listener.scope.cancel()
 
         listener.awaitResult()
         assertEquals(1, listener.results)
         assertEquals(emptyList<String>(), listener.mediaIds)
     }
 
+    @Test
+    fun aSecondExecutionOfTheSameDependenciesIsRefused() {
+        val listener = RecordingCommandListener()
+        val dependencies = dependencies(RecordingPresenter(), listener)
+        dependencies.execute(
+            MediaItemCommand { _, _ -> dependencies.resultListener.onResult(listOf(item("first"))) },
+            listener.playbackStateListener
+        )
+        listener.awaitResult()
+
+        assertThrows(IllegalStateException::class.java) {
+            dependencies.execute(
+                MediaItemCommand { _, _ -> dependencies.resultListener.onResult(listOf(item("second"))) },
+                listener.playbackStateListener
+            )
+        }
+
+        listener.assertMediaIds("first")
+        assertEquals(1, listener.results)
+    }
+
     private fun item(id: String) = MediaItemBuilder.buildPlayable(station(id), false)
+
+    /**
+     * Waits for every execution launched in [scope]. A failed one has passed its failure to the
+     * scope's handler before it counts as finished, so what the handler did is final afterwards.
+     */
+    private fun joinChildren(scope: CoroutineScope) {
+        runBlocking { withTimeout(RecordingCommandListener.AWAIT_MILLIS) { scope.coroutineContext.job.children.toList().joinAll() } }
+    }
 
     companion object {
 

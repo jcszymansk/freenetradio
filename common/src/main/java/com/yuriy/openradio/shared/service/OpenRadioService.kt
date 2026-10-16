@@ -149,6 +149,18 @@ class OpenRadioService : MediaLibraryService() {
 
     private val mStartIds: ConcurrentLinkedQueue<Int>
     private var mCurrentParentId = AppUtils.EMPTY_STRING
+
+    /**
+     * The country the list held under [MediaId.MEDIA_ID_COUNTRY_STATIONS] was built for. That id
+     * names no country and stands for whichever one is stored, so the browse tree alone cannot tell
+     * the list of the stored country from one built before the country changed.
+     *
+     * It is written right after the list, without a lock: if two browses land out of order, the
+     * code left behind names a country other than the stored one, so the next browse rebuilds the
+     * list.
+     */
+    @Volatile
+    private var mCountryStationsCode = AppUtils.EMPTY_STRING
     private var mIsRestoreState = false
     private lateinit var mPresenter: OpenRadioServicePresenter
     private lateinit var mDownloader: DownloaderLayer
@@ -190,7 +202,7 @@ class OpenRadioService : MediaLibraryService() {
         mStartIds = ConcurrentLinkedQueue()
         mUiScope = CoroutineScope(Dispatchers.Main)
         mScope = CoroutineScope(Dispatchers.IO)
-        mCommandScope = CoroutineScope(Dispatchers.IO)
+        mCommandScope = MediaItemCommandDependencies.newCommandScope()
     }
 
     interface ResultListener {
@@ -289,9 +301,8 @@ class OpenRadioService : MediaLibraryService() {
      * phone UI, Android Auto and any other browser each move it. A notification reaches only the
      * controllers subscribed to the node it names, so naming one nobody shows sends nothing.
      *
-     * The favorites list is told without being invalidated. A browse always rebuilds it, so it
-     * needs no invalidation to be fresh, and its browse tree entry is what keeps a queue played
-     * from it resolvable while no controller is subscribed to re-browse it.
+     * The favorites list is told without being invalidated: a browse always rebuilds it, so it
+     * needs no invalidation to be fresh.
      */
     private fun notifyFavoritesChanged() {
         notifyChildrenChanged(MediaId.MEDIA_ID_ROOT)
@@ -413,8 +424,9 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     /**
-     * The url the station of [mediaId] was listed with. The browse tree forgets a station when its
-     * list is invalidated, which may happen while it plays, so the active station answers then.
+     * The url the station of [mediaId] was listed with. The browse tree holds every station of a
+     * queue built from browse items, but not the last played station the service restores at the
+     * head of its initial playlist, so the active station answers when the tree cannot.
      */
     private fun getStationUrl(mediaId: String): String {
         val station = mBrowseTree.getRadioStationByMediaId(mediaId)
@@ -484,9 +496,23 @@ class OpenRadioService : MediaLibraryService() {
         mPlayer.play()
     }
 
+    /**
+     * Clears the app data, then every browse list built from it: a page-0 browse answers from the
+     * browse tree whenever it holds the node, so a list left there would keep serving what the
+     * clear removed. The tree goes after the presenter, so a browse in between cannot fill it again
+     * from what is about to be cleared, and the subscribers of each dropped list are told after
+     * that, so whatever they browse next reaches the presenter.
+     */
     private fun handleClearCache(context: Context) {
         mScope.launch {
             mPresenter.clear()
+            val dropped = mBrowseTree.invalidateAll()
+            AppLogger.i("$TAG clear dropped browse lists $dropped")
+            mUiScope.launch {
+                for (mediaId in dropped) {
+                    mSession.notifyChildrenChanged(mediaId, Int.MAX_VALUE, null)
+                }
+            }
             SafeToast.showAnyThread(context, getString(R.string.clear_completed))
         }
     }
@@ -879,7 +905,7 @@ class OpenRadioService : MediaLibraryService() {
                 mCurrentSearchQuery = query
                 query
             }
-            val list = mBrowseTree[queryStr] ?: mutableListOf()
+            val list = mBrowseTree[queryStr] ?: emptyList()
             // TODO:
             //val fromIndex = max(page * pageSize, list.size - 1)
             //val toIndex = max(fromIndex + pageSize, list.size)
@@ -888,7 +914,7 @@ class OpenRadioService : MediaLibraryService() {
             // Maybe need to redesign?
             if (list.isEmpty()) {
                 return callWhenSearchReady(queryStr) {
-                    val found = mBrowseTree[queryStr] ?: mutableListOf()
+                    val found = mBrowseTree[queryStr] ?: emptyList()
                     mArtworkGrants.grant(browser, found)
                     LibraryResult.ofItemList(found, LibraryParams.Builder().build())
                 }
@@ -902,22 +928,23 @@ class OpenRadioService : MediaLibraryService() {
             )
         }
 
+        /**
+         * What a controller adds joins the queue, so it joins the browse tree's playlist as well
+         * and stays resolvable after the list it came from is invalidated.
+         */
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<MutableList<MediaItem>> {
             AppLogger.d("$TAG AddMediaItems ${mediaItems.size}")
-            if (mediaItems.size != 1) {
-                return Futures.immediateFuture(
-                    mediaItems.mapNotNull {
-                        mBrowseTree.getMediaItemByMediaId(it.mediaId)
-                    }.toMutableList()
-                )
+            val added = if (mediaItems.size != 1) {
+                mBrowseTree.getQueue(mediaItems.map { it.mediaId })
+            } else {
+                mBrowseTree.getSelection(mediaItems[0].mediaId, mCurrentParentId)
             }
-            return Futures.immediateFuture(
-                mBrowseTree.getMediaItemsByMediaId(mediaItems[0].mediaId, mCurrentParentId)
-            )
+            mBrowseTree.addToPlaylist(added)
+            return Futures.immediateFuture(added.children.toMutableList())
         }
 
         override fun onConnect(
@@ -951,6 +978,12 @@ class OpenRadioService : MediaLibraryService() {
                 .build()
         }
 
+        /**
+         * The queue the player is handed becomes the browse tree's playlist, which keeps its
+         * stations resolvable after the list it came from is invalidated. The answer is built
+         * here rather than by the default implementation, which would pass it through
+         * [onAddMediaItems] and add the queue to the playlist a second time.
+         */
         override fun onSetMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -964,11 +997,16 @@ class OpenRadioService : MediaLibraryService() {
             //       there is additional configuration somewhere to specify to load a whole playlist.
 
             if (mediaItems.size != 1) {
-                return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
+                val queue = mBrowseTree.getQueue(mediaItems.map { it.mediaId })
+                mBrowseTree.setPlaylist(queue)
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(queue.children, startIndex, startPositionMs)
+                )
             }
             val mediaId = mediaItems[0].mediaId
             // The selection carries no parent, and the list the client browsed last is the one it was made from.
-            var items = mBrowseTree.getMediaItemsByMediaId(mediaId, mCurrentParentId)
+            val selection = mBrowseTree.getSelection(mediaId, mCurrentParentId)
+            var items = selection.children
 
             // This is a case when Google Assistant ask to play music but nothing selected.
             if (items.isEmpty()) {
@@ -992,13 +1030,12 @@ class OpenRadioService : MediaLibraryService() {
                 }
                 items = newItems
 
-                val radioStations = TreeSet<RadioStation>()
-                // TODO: Do we need Radio Stations as well?
-//                for (i in items) {
-//                    radioStations.add(***)
-//                }
+                // The default playable is no station, so the tree finds no station for it.
+                val radioStations = mBrowseTree.getQueue(items.map { it.mediaId }).radioStations
                 mBrowseTree.setPlaylist(BrowseTree.BrowseData(items, radioStations))
                 mPlayer.setMediaItems(items, 0, C.TIME_UNSET)
+            } else {
+                mBrowseTree.setPlaylist(selection)
             }
 
             var pos = 0
@@ -1008,7 +1045,7 @@ class OpenRadioService : MediaLibraryService() {
                     break
                 }
             }
-            return super.onSetMediaItems(mediaSession, controller, items, pos, C.TIME_UNSET)
+            return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, pos, C.TIME_UNSET))
         }
 
         override fun onCustomCommand(
@@ -1103,26 +1140,37 @@ class OpenRadioService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<V>> {
             val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
             mCurrentParentId = parentId
-            var position = 0
+            // If Parent Id contains Country Code - use it in the API.
+            val countryCode = MediaId.getCountryCode(parentId, mPresenter.getCountryCode())
+            // A country stations list built for a country no longer stored is not the node's list
+            // any more, and the new country's list starts at its first page, not at the page the
+            // old one had reached.
+            val isOtherCountry =
+                parentId == MediaId.MEDIA_ID_COUNTRY_STATIONS && countryCode != mCountryStationsCode
+            if (isOtherCountry) {
+                mBrowseTree.invalidate(parentId)
+                // A later page extends the list the client holds, which is the old country's, so
+                // nothing of the new country may be appended to it.
+                if (page != 0) {
+                    return Futures.immediateFuture(action(0))
+                }
+            }
             if (page == 0
                 && mBrowseTree[parentId] != null
                 //  Do not cache these categories, always fetch fresh data.
                 && parentId != MediaId.MEDIA_ID_FAVORITES_LIST
                 && parentId != MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
             ) {
-                return Futures.immediateFuture(action(position))
+                return Futures.immediateFuture(action(0))
             }
             val id = MediaId.getId(parentId, AppUtils.EMPTY_STRING)
             val command = mPresenter.getMediaItemCommand(id)
             AppLogger.d("$TAG get source for $id by $command")
-            val defaultCountryCode = mPresenter.getCountryCode()
-            // If Parent Id contains Country Code - use it in the API.
-            val countryCode = MediaId.getCountryCode(parentId, defaultCountryCode)
             // Use this feature object to return response of the async nature in order it issued via this method.
             val future = SettableFuture.create<LibraryResult<V>>()
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, countryCode, parentId,
-                isSameCatalogue, mIsRestoreState, Bundle(), mCommandScope,
+                isSameCatalogue && !isOtherCountry, mIsRestoreState, Bundle(), mCommandScope,
                 object : ResultListener {
 
                     override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
@@ -1135,16 +1183,18 @@ class OpenRadioService : MediaLibraryService() {
                         mExecutorService.submit {
 
                             AppLogger.d("$TAG loaded [$pageNumber:${items.size}] for $parentId")
-                            if (pageNumber == 0) {
-                                mBrowseTree[parentId] =
-                                    BrowseTree.BrowseData(ArrayList(items), radioStations.toMutableSet())
+                            val position = if (pageNumber == 0) {
+                                mBrowseTree[parentId] = BrowseTree.BrowseData(items, radioStations)
+                                // Marked only once the list is in the tree: marked before, a browse
+                                // in between would take the old country's list, still held, for
+                                // the new one's.
+                                if (parentId == MediaId.MEDIA_ID_COUNTRY_STATIONS) {
+                                    mCountryStationsCode = countryCode
+                                }
                                 mUiScope.launch { maybeCreateInitialPlaylist() }
+                                0
                             } else {
-                                position = mBrowseTree[parentId]?.size ?: 0
-                                mBrowseTree.append(
-                                    parentId,
-                                    BrowseTree.BrowseData(ArrayList(items), radioStations.toMutableSet())
-                                )
+                                mBrowseTree.append(parentId, BrowseTree.BrowseData(items, radioStations))
                             }
 
                             future.set(action(position))
@@ -1153,11 +1203,11 @@ class OpenRadioService : MediaLibraryService() {
                 }
             )
             if (command != null) {
-                command.execute(
+                dependencies.execute(
+                    command,
                     MediaItemCommand.IUpdatePlaybackState { error ->
                         AppLogger.e("$TAG update playback state error $error")
-                    },
-                    dependencies
+                    }
                 )
             } else {
                 AppLogger.w("$TAG no command for parentId: $parentId")
@@ -1182,7 +1232,7 @@ class OpenRadioService : MediaLibraryService() {
 
                         mExecutorService.submit {
 
-                            mBrowseTree[query] = BrowseTree.BrowseData(ArrayList(items), radioStations.toMutableSet())
+                            mBrowseTree[query] = BrowseTree.BrowseData(items, radioStations)
                             val size = radioStations.size
                             val result = action(size)
                             future.set(result)
@@ -1190,11 +1240,11 @@ class OpenRadioService : MediaLibraryService() {
                     }
                 }
             )
-            mPresenter.getSearchCommand().execute(
+            dependencies.execute(
+                mPresenter.getSearchCommand(),
                 MediaItemCommand.IUpdatePlaybackState { error ->
                     AppLogger.e("$TAG update playback state error $error")
-                },
-                dependencies
+                }
             )
             return future
         }
@@ -1218,9 +1268,10 @@ class OpenRadioService : MediaLibraryService() {
             // name a station is about that station and no other.
             val mediaId = OpenRadioStore.extractMediaId(args).ifEmpty { mActiveRS.id }
             var rs = getRadioStationByMediaId(mediaId)
-            // The now playing station can leave the browse tree while it plays, for instance when
-            // it is unmarked from the favorites list a controller is showing. It is still the
-            // station the button concerns.
+            // The active station is not always one the browse tree holds: the last played station
+            // the service restores when it starts is held by no list, and the initial playlist
+            // built around it holds it only when it is a favorite or a new station. It is still
+            // the station the button concerns.
             if (rs.isInvalid() && mediaId == mActiveRS.id) {
                 rs = RadioStation.makeCopyInstance(mActiveRS)
             }

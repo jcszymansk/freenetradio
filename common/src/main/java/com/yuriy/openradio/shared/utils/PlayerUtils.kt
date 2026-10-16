@@ -16,25 +16,9 @@
 
 package com.yuriy.openradio.shared.utils
 
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 
 object PlayerUtils {
-
-    /**
-     * This instance is a value object to indicate end of the indexed list.
-     */
-    private val mMediaItemListEnded = MediaItemBuilder.buildMediaItemListEnded()
-
-    /**
-     * @param list
-     * @return
-     */
-    fun isEndOfList(list: List<MediaItem?>?): Boolean {
-        return (list == null
-                || list.size == 1
-                && (list[0] == null || list[0]?.mediaId == mMediaItemListEnded.mediaId))
-    }
 
     fun playerStateToString(state: Int): String {
         return when (state) {

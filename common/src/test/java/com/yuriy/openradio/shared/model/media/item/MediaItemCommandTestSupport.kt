@@ -41,11 +41,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -146,7 +145,8 @@ internal fun dependencies(
     isSameCatalogue: Boolean = false,
     isSavedInstance: Boolean = false,
     options: Bundle = Bundle(),
-    timeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS
+    timeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS,
+    scope: CoroutineScope = listener.scope
 ): MediaItemCommandDependencies {
     return MediaItemCommandDependencies(
         testContext(),
@@ -156,38 +156,38 @@ internal fun dependencies(
         isSameCatalogue,
         isSavedInstance,
         options,
-        listener.scope,
+        scope,
         listener,
         timeoutMillis
     )
 }
 
 /**
- * Records what a command delivered, and owns the scope the command launches its work in.
+ * Records what a command delivered, and owns the scope [MediaItemCommandDependencies.execute] runs
+ * the command in.
  *
- * Commands answer from a background coroutine, so every assertion is preceded by awaiting the
- * signal the command under test is expected to send and then [settle]-ing the scope. Settling is
- * what makes the counts exact: once every coroutine the command launched has finished, nothing is
- * left that could still deliver a second result, report an error or ask the presenter for more.
+ * A command run through [MediaItemCommandDependencies.execute] answers from a background
+ * coroutine, so every assertion is preceded by awaiting the signal the command under test is
+ * expected to send and then [settle]-ing the scope. Settling is what makes the counts exact: once
+ * every coroutine launched in the scope has finished, nothing is left that could still deliver a
+ * second result, report an error or ask the presenter for more.
  */
 internal class RecordingCommandListener : OpenRadioService.ResultListener {
 
     /**
-     * Failures of the coroutines launched in [scope]. Without the handler they would reach the
-     * thread's uncaught exception handler on an IO thread, where the test that caused them never
-     * sees them.
+     * Failures of the coroutines launched in [scope]. In the service they would only be logged,
+     * where the test that caused them never sees them.
      */
     private val mCoroutineFailures = ConcurrentLinkedQueue<Throwable>()
 
-    private val mScopeJob = SupervisorJob()
-
     /**
-     * The scope handed to the command through [dependencies]. A supervisor, so one failed
-     * coroutine is reported rather than silently cancelling the others.
+     * The scope handed to the command through [dependencies], built as the service builds its
+     * own, so that what one failed coroutine does to the others here is what it does there. Only
+     * the end of a failure differs: it is kept for [settle] instead of logged.
      */
-    val scope = CoroutineScope(
-        mScopeJob + Dispatchers.IO + CoroutineExceptionHandler { _, failure -> mCoroutineFailures.add(failure) }
-    )
+    val scope = MediaItemCommandDependencies.newCommandScope { _, failure -> mCoroutineFailures.add(failure) }
+
+    private val mScopeJob = scope.coroutineContext.job
 
     private val mResultLatch = CountDownLatch(1)
 
@@ -225,9 +225,10 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
         private set
 
     /**
-     * The thread the result was delivered on, or null while nothing has been delivered. Every
-     * command that does its work launches it on [Dispatchers.IO], which always dispatches, so this
-     * is the caller's own thread only when the command answered inline.
+     * The thread the result was delivered on, or null while nothing has been delivered.
+     * [MediaItemCommandDependencies.execute] runs a command on [Dispatchers.IO], which always
+     * dispatches, so this is the caller's own thread only when a command called directly answered
+     * inline.
      */
     @Volatile
     var resultThread: Thread? = null
@@ -366,18 +367,17 @@ internal class RecordingCommandListener : OpenRadioService.ResultListener {
     /**
      * Asserts the contract of a browse command restored onto a catalogue that is already in
      * [com.yuriy.openradio.shared.model.media.BrowseTree]: it answers inline, before `execute`
-     * returns and before it reaches its coroutine, and the empty result it leaves behind is what
+     * returns and without asking the provider, and the empty result it leaves behind is what
      * makes `OpenRadioService.callWhenSourceReady` serve the node from the tree rather than from
      * the provider.
      *
-     * That the result was delivered inline is the whole claim. An empty result on its own is bit
-     * for bit what a command that never ran delivers, and so is one a coroutine delivers later.
+     * An empty result on its own is bit for bit what a command that never ran delivers, and so is
+     * one delivered later from another thread.
      *
-     * The inline delivery is read off the thread. The work itself runs on [Dispatchers.IO], which
-     * never runs a block on the thread that launched it; only the deadline guard's empty answer
-     * can arrive inline, because the guard starts undispatched. A command that reached its work
-     * and answered that way passes this check, so the caller's presenter counters, which show the
-     * work was reached, are what catch it. Call this from the thread that called `execute`.
+     * The inline delivery is read off the thread, so call this from the thread that called the
+     * command's `execute` directly rather than through [MediaItemCommandDependencies.execute]. A
+     * command that went on to its fetch on that same thread and found nothing passes this check,
+     * so the caller's presenter counters, which show the fetch was reached, are what catch it.
      *
      * The scope is [settle]d before anything is counted, so a command that answers inline and then
      * launches its fetch anyway has finished that fetch by the time the single result is asserted,

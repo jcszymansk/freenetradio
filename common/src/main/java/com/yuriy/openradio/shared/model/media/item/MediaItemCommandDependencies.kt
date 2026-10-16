@@ -22,14 +22,18 @@ import androidx.media3.common.MediaItem
 import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
+import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.service.OpenRadioService.ResultListener
 import com.yuriy.openradio.shared.service.OpenRadioServicePresenter
 import com.yuriy.openradio.shared.utils.AppLogger
+import java.util.TreeSet
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -54,11 +58,15 @@ class MediaItemCommandDependencies(
     val isSameCatalogue: Boolean,
     val isSavedInstance: Boolean,
     val options: Bundle,
-    val mScope: CoroutineScope,
+    /**
+     * Where [execute] runs a command, built by [newCommandScope] outside tests. Private, so that a
+     * command cannot start work of its own that outlives the execution and escapes the deadline.
+     */
+    private val mScope: CoroutineScope,
     resultListener: ResultListener,
     /**
-     * How long [launchWithDeadline] lets a command's work run before it answers the browse request
-     * without it. Only tests choose anything but [MediaItemCommand.CMD_TIMEOUT_MS].
+     * How long [execute] lets a command run before it answers the browse request without it. Only
+     * tests choose anything but [MediaItemCommand.CMD_TIMEOUT_MS].
      */
     private val mTimeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS
 ) {
@@ -67,12 +75,33 @@ class MediaItemCommandDependencies(
 
     /**
      * Where a command delivers its result. Only the first result of an execution reaches the
-     * listener these dependencies were made with, so an answer that arrives after
-     * [launchWithDeadline] has answered for it cannot leave the client with a second word.
+     * listener these dependencies were made with, so an answer that arrives after [execute] has
+     * answered for it cannot leave the client with a second word.
      */
     val resultListener: ResultListener = mResultListener
 
     private val mMediaItems = ArrayList<MediaItem>()
+
+    private val mExecuted = AtomicBoolean(false)
+
+    /**
+     * Answers the browse request, unless it has been answered already, and tells whether it did.
+     *
+     * [onAnswering] runs only when this is the answer, and before the client can see it, so that
+     * whatever a command keeps for the requests after this one, such as the page it is at, moves on
+     * exactly when the client has the answer coming and never for an answer that was dropped.
+     *
+     * @return Whether this answered the request. False when the deadline, or an earlier result,
+     * answered it first and this one was dropped.
+     */
+    fun answer(
+        items: List<MediaItem>,
+        radioStations: Set<RadioStation> = TreeSet(),
+        pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX,
+        onAnswering: () -> Unit = {}
+    ): Boolean {
+        return mResultListener.offer(items, radioStations, pageNumber, onAnswering)
+    }
 
     fun addMediaItem(item: MediaItem) {
         mMediaItems.add(item)
@@ -83,26 +112,34 @@ class MediaItemCommandDependencies(
     }
 
     /**
-     * Runs [work] on [Dispatchers.IO] and answers the browse request with an empty result unless
-     * [work] has answered it within the deadline.
+     * Runs [command] for the browse request these dependencies were made for, on [Dispatchers.IO],
+     * and answers the request with an empty result unless [command] has answered it within the
+     * deadline. Every browse command runs through here, so none of them has to remember the
+     * deadline: [MediaItemCommand.execute] only does its work and answers, blocking as long as that
+     * takes.
      *
-     * The deadline is kept beside [work] rather than wrapped around it, because the presenter
+     * The deadline is kept beside the command rather than wrapped around it, because the presenter
      * calls a command makes block instead of suspending and never notice a cancellation: a timeout
      * around them could only fire once they returned, and a provider stuck on the network would
-     * leave the request unanswered for good. The request is answered empty as well when [work]
-     * returns without answering, fails, or is cancelled with the job returned here, so that every
-     * execution answers exactly once. Whatever [work] delivers after that is dropped.
+     * leave the request unanswered for good. The request is answered empty as well when [command]
+     * returns without answering, fails, or is cancelled with [mScope], so that every execution
+     * answers exactly once. Whatever [command] delivers after that is dropped. A failure of
+     * [command] still fails the execution's coroutine, so it ends wherever [mScope] puts it, which
+     * for a scope from [newCommandScope] is the log.
      *
-     * A stuck [work] keeps its thread until the presenter call returns; nothing can interrupt it
+     * A stuck [command] keeps its thread until the presenter call returns; nothing can interrupt it
      * safely in the middle of a cache or database write.
      *
-     * @return The job of the whole execution. Cancelling it still answers the request.
+     * Runs at most once per dependencies object: the answer gate and the collected media items
+     * belong to one browse request, so a second execution would have its answer dropped and add its
+     * items to the first one's.
      */
-    fun launchWithDeadline(work: suspend () -> Unit): Job {
+    fun execute(command: MediaItemCommand, playbackStateListener: IUpdatePlaybackState) {
+        check(mExecuted.compareAndSet(false, true)) { "$CLASS_NAME $parentId has already executed a command" }
         // Undispatched, so the try below is entered before this returns: a job cancelled before a
         // thread picked it up would otherwise never run its finally, and never answer.
-        return mScope.launch(Dispatchers.IO, CoroutineStart.UNDISPATCHED) {
-            val worker = launch { work() }
+        mScope.launch(Dispatchers.IO + CoroutineName("$CLASS_NAME $parentId"), CoroutineStart.UNDISPATCHED) {
+            val worker = launch { command.execute(playbackStateListener, this@MediaItemCommandDependencies) }
             try {
                 if (withTimeoutOrNull(mTimeoutMillis) { worker.join() } == null) {
                     AppLogger.w("$CLASS_NAME $parentId not loaded within $mTimeoutMillis ms, answering empty")
@@ -123,11 +160,27 @@ class MediaItemCommandDependencies(
         private val mAnswered = AtomicBoolean(false)
 
         override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
+            offer(items, radioStations, pageNumber) {}
+        }
+
+        /**
+         * Passes the result to [mDelegate] if it is the first, running [onAnswering] just before.
+         *
+         * @return Whether the result was passed on.
+         */
+        fun offer(
+            items: List<MediaItem>,
+            radioStations: Set<RadioStation>,
+            pageNumber: Int,
+            onAnswering: () -> Unit
+        ): Boolean {
             if (mAnswered.compareAndSet(false, true).not()) {
                 AppLogger.w("$CLASS_NAME dropped a result of ${items.size} items for an answered request")
-                return
+                return false
             }
+            onAnswering()
             mDelegate.onResult(items, radioStations, pageNumber)
+            return true
         }
 
         /** Answers with an empty result, unless something has answered already. */
@@ -143,12 +196,35 @@ class MediaItemCommandDependencies(
          * String tag to use in the log message.
          */
         private val CLASS_NAME = MediaItemCommandDependencies::class.java.simpleName
+
+        /**
+         * Builds the scope the service hands to every browse command it executes.
+         *
+         * A command that throws fails the coroutine [execute] runs it in. The request is answered
+         * empty all the same, but the failure has to end somewhere, and in a plain
+         * `CoroutineScope(Dispatchers.IO)` it ends badly twice: it cancels the scope's job, so every
+         * later command starts cancelled and is answered empty without asking anything, and with no
+         * handler to take it, it reaches the thread's uncaught exception handler, which on Android
+         * ends the process. A supervisor keeps the failure to the one execution, and the handler
+         * ends it in [onFailure].
+         *
+         * @param onFailure Where a failure ends, with a message naming the execution. Only tests
+         * choose anything but the error log.
+         */
+        fun newCommandScope(onFailure: (String, Throwable) -> Unit = AppLogger::e): CoroutineScope {
+            val handler = CoroutineExceptionHandler { context, failure ->
+                val execution = context[CoroutineName]?.name ?: context
+                onFailure("Browse command failed, its request was answered empty: $execution", failure)
+            }
+            return CoroutineScope(SupervisorJob() + Dispatchers.IO + handler)
+        }
     }
 }
 
 /**
  * Answers the browse request with the items collected so far, then reports that the node has
- * nothing to show.
+ * nothing to show. A request the deadline has already answered gets no report either: the client
+ * has moved on, and a "no data" error arriving after its answer would describe nothing it asked.
  *
  * The result has to be delivered even when it is empty. `OpenRadioService.callWhenSourceReady`
  * completes the browse future from the result listener and from nowhere else, so a node that only
@@ -156,6 +232,7 @@ class MediaItemCommandDependencies(
  * alike, waiting on a request that is never answered.
  */
 internal fun MediaItemCommandDependencies.reportNoData(playbackStateListener: IUpdatePlaybackState) {
-    resultListener.onResult(getMediaItems())
-    playbackStateListener.updatePlaybackState(context.getString(R.string.no_data_message))
+    if (answer(getMediaItems())) {
+        playbackStateListener.updatePlaybackState(context.getString(R.string.no_data_message))
+    }
 }

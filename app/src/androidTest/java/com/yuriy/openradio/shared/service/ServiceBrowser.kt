@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.service
 
 import android.content.ComponentName
 import android.os.Bundle
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -308,6 +309,18 @@ internal class ServiceBrowser {
      */
     fun setMediaItem(mediaItem: MediaItem) {
         onMain { this.setMediaItem(mediaItem) }
+    }
+
+    /**
+     * Hands the session a whole queue, which is what the phone UI does when a station is selected
+     * in a list: it sends every playable item of the list and the position of the selected one.
+     */
+    fun setMediaItems(mediaItems: List<MediaItem>, startIndex: Int) {
+        onMain { this.setMediaItems(mediaItems, startIndex, C.TIME_UNSET) }
+    }
+
+    fun addMediaItem(mediaItem: MediaItem) {
+        onMain { this.addMediaItem(mediaItem) }
     }
 
     fun prepareAndPlay() {

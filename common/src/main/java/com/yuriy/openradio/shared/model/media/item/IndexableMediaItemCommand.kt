@@ -47,7 +47,13 @@ abstract class IndexableMediaItemCommand internal constructor() : MediaItemComma
     val pageNumber: Int
         get() = mPageIndex.get()
 
-    fun nextPageNumber() {
-        mPageIndex.incrementAndGet()
+    /**
+     * Moves the index past [fetchedPage], the page an execution asked for, if the index is still
+     * there. Call it only once that page answers its request: a page the deadline dropped is then
+     * asked for again rather than skipped, and two executions that overlapped on one page move the
+     * index on once between them.
+     */
+    fun advancePast(fetchedPage: Int) {
+        mPageIndex.compareAndSet(fetchedPage, fetchedPage + 1)
     }
 }

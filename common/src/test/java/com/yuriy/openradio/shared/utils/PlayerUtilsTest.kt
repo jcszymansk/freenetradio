@@ -16,72 +16,14 @@
 
 package com.yuriy.openradio.shared.utils
 
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import com.yuriy.openradio.shared.model.media.MediaId
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotSame
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pins [PlayerUtils.isEndOfList], the check the browse clients use to tell that a page brought
- * nothing more, and [PlayerUtils.playerStateToString].
- *
- * The end of list marker is a real Media3 [MediaItem] built in the object's initializer. Media3's
- * `MediaItem` is plain Java, so the marker's id is the one [MediaItemBuilder.buildMediaItemListEnded]
- * set and not a framework default; the ordinary item case below would fail if the two were equal.
+ * Pins [PlayerUtils.playerStateToString].
  */
 class PlayerUtilsTest {
-
-    @Test
-    fun aNullListIsTheEndOfTheList() {
-        assertTrue(PlayerUtils.isEndOfList(null))
-    }
-
-    @Test
-    fun anEmptyListIsNotTheEndOfTheList() {
-        assertFalse(PlayerUtils.isEndOfList(emptyList()))
-    }
-
-    @Test
-    fun aListHoldingOnlyANullEntryIsTheEndOfTheList() {
-        assertTrue(PlayerUtils.isEndOfList(listOf(null)))
-    }
-
-    @Test
-    fun aListHoldingOnlyTheEndOfListMarkerIsTheEndOfTheList() {
-        assertTrue(PlayerUtils.isEndOfList(listOf(MediaItemBuilder.buildMediaItemListEnded())))
-    }
-
-    @Test
-    fun aListHoldingOnlyAnOrdinaryItemIsNotTheEndOfTheList() {
-        assertFalse(PlayerUtils.isEndOfList(listOf(item("station"))))
-    }
-
-    @Test
-    fun aMarkerFollowedByAnotherItemIsNotTheEndOfTheList() {
-        assertFalse(PlayerUtils.isEndOfList(listOf(MediaItemBuilder.buildMediaItemListEnded(), item("station"))))
-    }
-
-    @Test
-    fun anItemBeforeTheMarkerIsNotTheEndOfTheList() {
-        assertFalse(PlayerUtils.isEndOfList(listOf(item("station"), MediaItemBuilder.buildMediaItemListEnded())))
-    }
-
-    /**
-     * The marker is recognised by the value of its id, so one whose id is another String instance,
-     * as it is after crossing a Binder in a Bundle, still ends the list.
-     */
-    @Test
-    fun aMarkerWhoseIdIsAnEqualButDistinctStringIsRecognised() {
-        val copiedId = String(MediaId.MEDIA_ID_LIST_ENDED.toCharArray())
-        assertEquals(MediaId.MEDIA_ID_LIST_ENDED, copiedId)
-        assertNotSame(MediaId.MEDIA_ID_LIST_ENDED, copiedId)
-
-        assertTrue(PlayerUtils.isEndOfList(listOf(item(copiedId))))
-    }
 
     @Test
     fun eachMedia3PlayerStateHasItsName() {
@@ -95,9 +37,5 @@ class PlayerUtilsTest {
     fun anUnknownStateIsNamedUndefinedWithItsValue() {
         assertEquals("UNDEFINED{99}", PlayerUtils.playerStateToString(99))
         assertEquals("UNDEFINED{-1}", PlayerUtils.playerStateToString(-1))
-    }
-
-    private fun item(mediaId: String): MediaItem {
-        return MediaItem.Builder().setMediaId(mediaId).build()
     }
 }

@@ -17,7 +17,6 @@ package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
-import kotlinx.coroutines.Job
 
 /**
  * Created by Yuriy Chernyshov
@@ -30,18 +29,13 @@ import kotlinx.coroutines.Job
  */
 class MediaItemAllCategories : MediaItemCommand {
 
-    private var mJob: Job? = null
-
     override fun execute(playbackStateListener: IUpdatePlaybackState, dependencies: MediaItemCommandDependencies) {
         if (dependencies.isSavedInstance) {
             dependencies.resultListener.onResult()
             return
         }
-        mJob?.cancel()
-        mJob = dependencies.launchWithDeadline {
-            // Load all categories into menu
-            loadAllCategories(playbackStateListener, dependencies)
-        }
+        // Load all categories into menu
+        loadAllCategories(playbackStateListener, dependencies)
     }
 
     /**

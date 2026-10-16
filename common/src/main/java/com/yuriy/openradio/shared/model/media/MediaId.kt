@@ -51,7 +51,6 @@ object MediaId {
     const val MEDIA_ID_SEARCH_FROM_SERVICE = "__SEARCH_FROM_SERVICE__"
     const val MEDIA_ID_POPULAR_STATIONS = "__POPULAR_STATIONS__"
     const val MEDIA_ID_NEW_STATIONS = "__NEW_STATIONS__"
-    const val MEDIA_ID_LIST_ENDED = "MEDIA_ID_LIST_ENDED"
 
     const val MEDIA_ID_SEARCH_PREFIX = "search:"
 
@@ -70,8 +69,7 @@ object MediaId {
         MEDIA_ID_ROOT,
         MEDIA_ID_SEARCH_FROM_SERVICE,
         MEDIA_ID_POPULAR_STATIONS,
-        MEDIA_ID_NEW_STATIONS,
-        MEDIA_ID_LIST_ENDED
+        MEDIA_ID_NEW_STATIONS
     )
 
     fun normalizeFromSearchId(value: String): String {

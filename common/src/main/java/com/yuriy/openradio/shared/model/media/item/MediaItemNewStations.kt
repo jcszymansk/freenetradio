@@ -35,14 +35,12 @@ class MediaItemNewStations : MediaItemCommandImpl() {
             deliverResult(dependencies)
             return
         }
-        dependencies.launchWithDeadline {
-            // Load all categories into menu
-            handleDataLoaded(
-                playbackStateListener,
-                dependencies,
-                dependencies.presenter.getNewStations()
-            )
-        }
+        // Load all categories into menu
+        handleDataLoaded(
+            playbackStateListener,
+            dependencies,
+            dependencies.presenter.getNewStations()
+        )
     }
 
     override fun doLoadNoDataReceived(): Boolean {
