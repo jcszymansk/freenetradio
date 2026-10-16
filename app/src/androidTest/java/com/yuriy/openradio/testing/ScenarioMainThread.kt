@@ -25,18 +25,17 @@ import java.util.concurrent.atomic.AtomicReference
  * Runs [block] against the scenario's Activity on the main thread and returns what it answered,
  * or throws on the calling thread whatever it threw.
  *
- * This is what every test uses instead of [ActivityScenario.onActivity]. Called off the main
- * thread, `onActivity` hands its block to `Instrumentation.runOnMainSync`, which does not catch
- * anything, so a throw inside the block escapes on the main looper: the application process dies
- * while the test thread is still waiting, the case is reported as a process crash rather than as
- * the failure it was, and every test after it in the run is lost. Catching inside the block and
- * throwing again here turns the same throw into an ordinary failure of the test that owns it.
+ * This is what every test uses instead of [ActivityScenario.onActivity], whose block can only hand
+ * a value back through a variable the test declares outside it. Returning the value is what lets
+ * the block stay on the main thread for reading and acting on views and the test assert on its own
+ * thread.
  *
- * Assert on what this returns, not inside [block]. A throw that reaches here is still reported
- * properly, but the block is for reading and acting on views, which only the main thread may do.
- *
- * Only a throw from [block] is caught. Calling this after the Activity is destroyed still kills the
- * process, because `onActivity` then fails its own check on the main thread before the block runs.
+ * A throw inside the block reaches the caller rather than the main looper, which is what makes it
+ * fail the test that owns it instead of killing the application process and every test after it.
+ * The runner's `MonitoringInstrumentation.runOnMainSync`, which `onActivity` goes through from the
+ * test thread, already rethrows a [RuntimeException] or an [Error] on the caller. The block is
+ * caught here as well, so the contract does not depend on that override and a checked exception
+ * keeps its own type.
  */
 fun <A : Activity, T> ActivityScenario<A>.withActivity(block: (A) -> T): T {
     val outcome = AtomicReference<Result<T>?>(null)
@@ -48,11 +47,12 @@ fun <A : Activity, T> ActivityScenario<A>.withActivity(block: (A) -> T): T {
 
 /**
  * Runs [block] on the main thread and returns what it answered, or throws on the calling thread
- * whatever it threw: [withActivity] for state that outlives the Activity, such as the registry's
- * singletons between two cases, which has to be read where the application writes it.
+ * whatever it threw: [withActivity] with no Activity, for state that has to be read or changed
+ * where the application owns it, such as the registry's singletons between two cases or a Media3
+ * controller, which only accepts calls on the looper it was built on.
  *
- * `Instrumentation.runOnMainSync` catches nothing, for the reason [withActivity] gives, so the
- * block is caught where it runs.
+ * Every test helper that needs the main thread goes through this rather than calling
+ * `Instrumentation.runOnMainSync` itself, for the reasons [withActivity] gives.
  */
 fun <T> onMainThread(block: () -> T): T {
     val outcome = AtomicReference<Result<T>?>(null)
