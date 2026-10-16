@@ -549,6 +549,38 @@ class OpenRadioServiceBrowseTest {
     }
 
     /**
+     * A user who changes the country with the old country's stations on screen and scrolls on asks
+     * for a later page of the list they hold. A client appends a later page to that list, so an
+     * answer from the new country would leave one list holding two countries' stations. The new
+     * country's list is reached through its first page only.
+     */
+    @Test
+    fun aLaterPageOfTheCountryStationsEntryAddsNothingOnceTheCountryChanged() {
+        seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
+        seedCountryStations(SECOND_COUNTRY_CODE, SECOND_COUNTRY_STATIONS_RESPONSE)
+        chooseCountry(FIRST_COUNTRY_CODE)
+        assertEquals(
+            listOf("first-one", "first-two"),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        )
+
+        chooseCountry(SECOND_COUNTRY_CODE)
+        val result = mBrowser.childrenResult(MediaId.MEDIA_ID_COUNTRY_STATIONS, page = 1)
+
+        assertEquals(LibraryResult.RESULT_SUCCESS, result.resultCode)
+        assertEquals(
+            "A later page of the old country's list answered with stations of the new country",
+            emptyList<String>(),
+            result.value!!.map { it.mediaId }
+        )
+        assertEquals(
+            "The first page did not start the new country's list after a later page was refused",
+            listOf("second-one", "second-two"),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        )
+    }
+
+    /**
      * A provider node with nothing to offer still has to answer. This one fetches its children
      * rather than reading a store, so with networking off and nothing cached it comes back empty,
      * which is the ordinary offline case and not an exotic one.

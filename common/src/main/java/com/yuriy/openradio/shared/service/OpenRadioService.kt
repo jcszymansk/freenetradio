@@ -154,6 +154,10 @@ class OpenRadioService : MediaLibraryService() {
      * The country the list held under [MediaId.MEDIA_ID_COUNTRY_STATIONS] was built for. That id
      * names no country and stands for whichever one is stored, so the browse tree alone cannot tell
      * the list of the stored country from one built before the country changed.
+     *
+     * It is written right after the list, without a lock: if two browses land out of order, the
+     * code left behind names a country other than the stored one, so the next browse rebuilds the
+     * list.
      */
     @Volatile
     private var mCountryStationsCode = AppUtils.EMPTY_STRING
@@ -1145,6 +1149,11 @@ class OpenRadioService : MediaLibraryService() {
                 parentId == MediaId.MEDIA_ID_COUNTRY_STATIONS && countryCode != mCountryStationsCode
             if (isOtherCountry) {
                 mBrowseTree.invalidate(parentId)
+                // A later page extends the list the client holds, which is the old country's, so
+                // nothing of the new country may be appended to it.
+                if (page != 0) {
+                    return Futures.immediateFuture(action(0))
+                }
             }
             if (page == 0
                 && mBrowseTree[parentId] != null
