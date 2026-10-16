@@ -24,10 +24,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Covers [MediaPresenterImpl.getMediaItemsStack], the read the instrumented journeys use to put
- * the presenter's node stack back the way they found it. A journey decides from this list whether
- * pressing back is safe, so the list has to be the stack as it stands, bottom first, and must not
- * change under the caller while it decides.
+ * Covers [MediaPresenterImpl.getMediaItemsStack], the test-only read the instrumented journeys use
+ * to put the presenter's node stack back the way they found it. A journey decides from this list
+ * whether pressing back is safe, so the list has to be the stack as it stands, bottom first, and
+ * must not change under the caller while it decides.
  */
 class MediaPresenterStackTest {
 

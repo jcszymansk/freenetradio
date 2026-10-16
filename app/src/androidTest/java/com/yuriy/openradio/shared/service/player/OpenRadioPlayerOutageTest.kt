@@ -29,6 +29,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import com.yuriy.openradio.testing.onMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -96,14 +97,14 @@ class OpenRadioPlayerOutageTest {
             LocalAudioFixture.MP3_BYTES_PER_SECOND,
             LocalAudioFixture(mContext).silentMp3Frame()
         )
-        mPlayer = onMain {
+        mPlayer = onMainThread {
             newOpenRadioPlayer(mContext).also { it.addListener(EventRecorder()) }
         }
     }
 
     @After
     fun tearDown() {
-        onMain { mPlayer.release() }
+        onMainThread { mPlayer.release() }
         mServer.stop()
     }
 
@@ -128,7 +129,7 @@ class OpenRadioPlayerOutageTest {
         assertEquals(
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT, error.errorCode
         )
-        onMain {
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertTrue("The player took the outage for a broken stream", mPlayer.resumesOnReconnect())
         }
@@ -144,7 +145,7 @@ class OpenRadioPlayerOutageTest {
         await("the station to be ready again", RESUME_SECONDS) {
             eventsSince(mark).contains(Event.State(Player.STATE_READY))
         }
-        onMain {
+        onMainThread {
             assertTrue("The play request did not survive the outage", mPlayer.playWhenReady)
             assertEquals(mBroadcast.url, mPlayer.currentMediaItem?.localConfiguration?.uri.toString())
             assertFalse(mPlayer.resumesOnReconnect())
@@ -164,19 +165,19 @@ class OpenRadioPlayerOutageTest {
         await("the player to prepare the station again", RETRY_SECONDS) {
             eventsSince(mark).contains(Event.State(Player.STATE_BUFFERING))
         }
-        onMain { assertTrue(mPlayer.playWhenReady) }
+        onMainThread { assertTrue(mPlayer.playWhenReady) }
     }
 
     @Test
     fun aStationTheUserPausesAfterTheNetworkStoppedItIsNotTriedAgain() {
         failForALostNetwork()
 
-        onMain { mPlayer.pause() }
+        onMainThread { mPlayer.pause() }
         val mark = mEvents.size
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(RETRY_SECONDS))
         assertEquals(emptyList<Event>(), eventsSince(mark))
-        onMain {
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertFalse(mPlayer.resumesOnReconnect())
         }
@@ -186,12 +187,12 @@ class OpenRadioPlayerOutageTest {
     fun aStationTheUserStopsAfterTheNetworkStoppedItIsNotTriedAgain() {
         failForALostNetwork()
 
-        onMain { mPlayer.stop() }
+        onMainThread { mPlayer.stop() }
         val mark = mEvents.size
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(RETRY_SECONDS))
         assertEquals(emptyList<Event>(), eventsSince(mark))
-        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 
     /**
@@ -203,12 +204,12 @@ class OpenRadioPlayerOutageTest {
     fun aPolicyPauseOfAStationTheNetworkStoppedHoldsItsRetry() {
         failForALostNetwork()
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
         val mark = mEvents.size
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(RETRY_SECONDS))
         assertEquals(emptyList<Event>(), eventsSince(mark))
-        onMain {
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertTrue("The policy pause forgot the station", mPlayer.resumesOnReconnect())
         }
@@ -219,21 +220,21 @@ class OpenRadioPlayerOutageTest {
      * network.
      */
     private fun failForALostNetwork() {
-        onMain {
+        onMainThread {
             mPlayer.setMediaItem(MediaItem.fromUri(UNREACHABLE_STREAM))
             mPlayer.prepare()
             mPlayer.play()
         }
         val error = awaitError(GIVE_UP_SECONDS)
         assertEquals(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED, error.errorCode)
-        onMain {
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertTrue(mPlayer.resumesOnReconnect())
         }
     }
 
     private fun playTheBroadcast() {
-        onMain {
+        onMainThread {
             mPlayer.setMediaItem(MediaItem.fromUri(mBroadcast.url))
             mPlayer.prepare()
             mPlayer.play()
@@ -241,7 +242,7 @@ class OpenRadioPlayerOutageTest {
         await("the broadcast to be ready", GIVE_UP_SECONDS) {
             mEvents.contains(Event.State(Player.STATE_READY))
         }
-        onMain { assertTrue(mPlayer.playWhenReady) }
+        onMainThread { assertTrue(mPlayer.playWhenReady) }
         mEvents.clear()
     }
 
@@ -268,7 +269,7 @@ class OpenRadioPlayerOutageTest {
     }
 
     private fun describe(): String {
-        val state = onMain {
+        val state = onMainThread {
             "playbackState=${mPlayer.playbackState} playWhenReady=${mPlayer.playWhenReady} " +
                 "suppression=${mPlayer.playbackSuppressionReason} isPlaying=${mPlayer.isPlaying} " +
                 "resumesOnReconnect=${mPlayer.resumesOnReconnect()}"

@@ -17,6 +17,7 @@
 package com.yuriy.openradio.shared.utils
 
 import android.net.Uri
+import androidx.media3.common.MimeTypes
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 
 /**
@@ -26,6 +27,13 @@ import wseemann.media.jplaylistparser.playlist.PlaylistEntry
  * with the url from the playlist to the player instead of being guessed again from the url alone.
  */
 data class ResolvedStream(val url: String, val mimeType: String) {
+
+    /**
+     * Whether neither the playlist nor the url said what the stream is, so that the player can
+     * only guess it is a progressive stream.
+     */
+    val hasUnknownType: Boolean
+        get() = mimeType == MimeTypes.AUDIO_UNKNOWN
 
     companion object {
 

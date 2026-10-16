@@ -115,14 +115,25 @@ class FavoritesStorageTest {
     }
 
     @Test
-    fun addStripsTheSearchPrefixFromTheMediaId() {
+    fun addStoresTheStationWithoutTheSearchPrefix() {
         val station = makeStation(MediaId.makeSearchId("42"))
 
         mStorage.add(station)
 
-        assertEquals("42", station.id)
+        assertEquals(MediaId.makeSearchId("42"), station.id)
         assertEquals(setOf("42"), mStorage.getAll().map { it.id }.toSet())
         assertTrue(newStorage().isFavorite(makeStation("42")))
+        assertTrue(newStorage().isFavorite(makeStation(MediaId.makeSearchId("42"))))
+    }
+
+    @Test
+    fun aStationIsRemovedUnderItsSearchId() {
+        mStorage.add(makeStation("42"))
+
+        mStorage.remove(makeStation(MediaId.makeSearchId("42")))
+
+        assertFalse(mStorage.isFavorite(makeStation("42")))
+        assertTrue(newStorage().getAll().isEmpty())
     }
 
     @Test

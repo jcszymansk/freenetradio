@@ -16,11 +16,10 @@
 
 package com.yuriy.openradio.shared.service
 
-import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
+import com.yuriy.openradio.testing.onMainThread
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertTrue
 
 /**
@@ -37,27 +36,21 @@ import org.junit.Assert.assertTrue
  */
 internal class ActivityPresence {
 
-    private val mInstrumentation = InstrumentationRegistry.getInstrumentation()
-
     /**
      * @return one entry per Activity that is alive, naming it and the stage it is in, so a
      *   failure says what is holding the process rather than only that something is.
      */
     fun alive(): List<String> {
         val monitor = ActivityLifecycleMonitorRegistry.getInstance()
-        val result = AtomicReference(emptyList<String>())
         // The lifecycle monitor is main thread state, so it is read there.
-        mInstrumentation.runOnMainSync {
-            result.set(
-                Stage.values()
-                    .filter { it != Stage.DESTROYED }
-                    .flatMap { stage ->
-                        monitor.getActivitiesInStage(stage)
-                            .map { "${it.javaClass.simpleName} in $stage" }
-                    }
-            )
+        return onMainThread {
+            Stage.values()
+                .filter { it != Stage.DESTROYED }
+                .flatMap { stage ->
+                    monitor.getActivitiesInStage(stage)
+                        .map { "${it.javaClass.simpleName} in $stage" }
+                }
         }
-        return result.get()
     }
 
     fun assertNone(reason: String) {

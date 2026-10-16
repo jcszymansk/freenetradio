@@ -42,13 +42,13 @@ class FavoritesStorage(contextRef: WeakReference<Context>) : AbstractRadioStatio
      */
     @Synchronized
     fun add(radioStation: RadioStation) {
-        normalizeMediaId(radioStation)
         val key = createKeyForRadioStation(radioStation)
         mSet[key] = true
         if (radioStation.sortId == DependencyRegistryCommon.UNKNOWN_ID) {
             radioStation.sortId = mSet.size
         }
-        super.add(radioStation, createKeyForRadioStation(radioStation))
+        // The caller's station keeps its own id: a search result is indexed by its search id.
+        super.add(RadioStation.makeCopyInstance(radioStation).apply { id = key }, key)
     }
 
     /**
@@ -77,7 +77,7 @@ class FavoritesStorage(contextRef: WeakReference<Context>) : AbstractRadioStatio
         }
         val list = getAll()
         for (station in list) {
-            if (station.id == radioStation.id) {
+            if (station.id == key) {
                 mSet[key] = true
                 return true
             }
@@ -86,14 +86,18 @@ class FavoritesStorage(contextRef: WeakReference<Context>) : AbstractRadioStatio
         return false
     }
 
+    /**
+     * A station is a favorite under its own id, whichever list names it. A search result names
+     * it under a search id, so the key drops the search prefix.
+     */
+    override fun createKeyForRadioStation(radioStation: RadioStation): String {
+        return MediaId.normalizeFromSearchId(radioStation.id)
+    }
+
     companion object {
         /**
          * Name of the file for the Favorite Preferences.
          */
         private const val FILE_NAME = "FavoritesPreferences"
-
-        private fun normalizeMediaId(radioStation: RadioStation) {
-            radioStation.id = MediaId.normalizeFromSearchId(radioStation.id)
-        }
     }
 }

@@ -169,7 +169,7 @@ abstract class AbstractRadioStationsStorage(contextRef: WeakReference<Context>, 
      * @param radioStation [RadioStation] to create key for.
      * @return Key associated with Radio Station.
      */
-    fun createKeyForRadioStation(radioStation: RadioStation): String {
+    open fun createKeyForRadioStation(radioStation: RadioStation): String {
         return radioStation.id
     }
 

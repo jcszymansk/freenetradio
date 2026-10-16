@@ -201,10 +201,6 @@ class OpenRadioPlayer(
         mEqualizerLayer.init((mExoPlayer as ExoPlayer).audioSessionId)
     }
 
-    fun getPlaylist() : List<MediaItem> {
-        return ArrayList(mPlaylist)
-    }
-
     /**
      * What a play request that finds the queue empty loads: the queue as it stood just before it
      * was emptied, at the item that was current then, which is what was playing. Media3 asks only
@@ -373,18 +369,15 @@ class OpenRadioPlayer(
     }
 
     override fun removeMediaItem(index: Int) {
-        rememberQueue()
-        mPlayer.removeMediaItem(index)
-        mPlaylist.removeAt(index)
+        removeMediaItems(index, index + 1)
     }
 
     override fun removeMediaItems(fromIndex: Int, toIndex: Int) {
         rememberQueue()
         mPlayer.removeMediaItems(fromIndex, toIndex)
-        val removedItemsLength = toIndex - fromIndex
-        for (i in removedItemsLength - 1 downTo 0) {
-            mPlaylist.removeAt(fromIndex + i)
-        }
+        // The player ignores a range that starts past the end of the queue and clamps one that runs
+        // past it, so the copy does too.
+        mPlaylist.subList(min(fromIndex, mPlaylist.size), min(toIndex, mPlaylist.size)).clear()
     }
 
     override fun clearMediaItems() {

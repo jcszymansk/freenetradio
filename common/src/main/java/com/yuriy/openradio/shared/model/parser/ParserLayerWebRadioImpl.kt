@@ -30,6 +30,7 @@ import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.JsonUtils
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.util.TreeMap
 import java.util.TreeSet
@@ -182,9 +183,13 @@ class ParserLayerWebRadioImpl(private val mCountriesCache:Set<Country>) : Parser
         radioStation.imageUrl = IMG_URL_PREFIX + JsonUtils.getStringValue(jsonObject, KEY_IMAGE)
         radioStation.codec = JsonUtils.getStringValue(jsonObject, KEY_CODEC)
         radioStation.description = JsonUtils.getStringValue(jsonObject, KEY_DESCRIPTION)
-        var bitrate = MediaStream.BIT_RATE_DEFAULT
-        if (jsonObject.has(KEY_BIT_RATE)) {
-            bitrate = jsonObject.getInt(KEY_BIT_RATE)
+        // The stream url alone makes the station playable and the bitrate is only shown, so an
+        // unreadable bitrate is read as a missing one rather than dropping the station.
+        val bitrate = try {
+            if (jsonObject.has(KEY_BIT_RATE)) jsonObject.getInt(KEY_BIT_RATE) else MediaStream.BIT_RATE_DEFAULT
+        } catch (e: JSONException) {
+            AppLogger.w("$TAG station $uuid with unreadable bitrate read as default: ${e.message}")
+            MediaStream.BIT_RATE_DEFAULT
         }
         radioStation.setVariant(bitrate, streamUrl)
         return radioStation

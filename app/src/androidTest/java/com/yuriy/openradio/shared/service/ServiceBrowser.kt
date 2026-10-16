@@ -36,9 +36,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
+import com.yuriy.openradio.testing.onMainThread
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Drives a real [MediaBrowser] against the real [OpenRadioService].
@@ -105,20 +105,7 @@ internal class ServiceBrowser {
      * [isConnected] sees nothing to undo and the refusal stays the failure that is reported.
      */
     fun connect() {
-        val context = mInstrumentation.targetContext
-        val holder = AtomicReference<ListenableFuture<MediaBrowser>>()
-        mInstrumentation.runOnMainSync {
-            holder.set(
-                MediaBrowser.Builder(
-                    context,
-                    SessionToken(context, ComponentName(context, OpenRadioService::class.java))
-                )
-                    .setListener(mListener)
-                    .buildAsync()
-            )
-        }
-        mBrowser = holder.get().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        onMain { addListener(mPlayerEvents) }
+        connectUnchecked()
         if (canABrowseStartPlayback()) {
             val activeStationId = activeStationId()
             release()
@@ -130,6 +117,26 @@ internal class ServiceBrowser {
                     "for that failure first."
             )
         }
+    }
+
+    /**
+     * Connects without the [connect] precondition, for a test whose subject is the state it
+     * refuses: a service that holds an active station and an empty queue, as one created after a
+     * station was played does. Such a test seeds favorites before it browses page 0, so that the
+     * playlist the browse builds comes out of storage rather than from the provider.
+     */
+    fun connectUnchecked() {
+        val context = mInstrumentation.targetContext
+        val connecting = onMainThread {
+            MediaBrowser.Builder(
+                context,
+                SessionToken(context, ComponentName(context, OpenRadioService::class.java))
+            )
+                .setListener(mListener)
+                .buildAsync()
+        }
+        mBrowser = connecting.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        onMain { addListener(mPlayerEvents) }
     }
 
     /**
@@ -156,7 +163,7 @@ internal class ServiceBrowser {
     fun release() {
         val browser = mBrowser ?: return
         mBrowser = null
-        mInstrumentation.runOnMainSync {
+        onMainThread {
             browser.removeListener(mPlayerEvents)
             browser.release()
         }
@@ -236,9 +243,7 @@ internal class ServiceBrowser {
     }
 
     fun availableSessionCommands(): SessionCommands {
-        val holder = AtomicReference<SessionCommands>()
-        mInstrumentation.runOnMainSync { holder.set(browser().availableSessionCommands) }
-        return holder.get()
+        return read { availableSessionCommands }
     }
 
     /**
@@ -453,22 +458,18 @@ internal class ServiceBrowser {
     }
 
     private fun onMain(call: MediaBrowser.() -> Unit) {
-        mInstrumentation.runOnMainSync { browser().call() }
+        onMainThread { browser().call() }
     }
 
     private fun <T> read(call: MediaBrowser.() -> T): T {
-        val holder = AtomicReference<T>()
-        mInstrumentation.runOnMainSync { holder.set(browser().call()) }
-        return holder.get()
+        return onMainThread { browser().call() }
     }
 
     private fun <T> await(
         timeoutSeconds: Long = TIMEOUT_SECONDS,
         call: MediaBrowser.() -> ListenableFuture<T>
     ): T {
-        val holder = AtomicReference<ListenableFuture<T>>()
-        mInstrumentation.runOnMainSync { holder.set(browser().call()) }
-        return holder.get().get(timeoutSeconds, TimeUnit.SECONDS)
+        return onMainThread { browser().call() }.get(timeoutSeconds, TimeUnit.SECONDS)
     }
 
     private fun browser(): MediaBrowser {

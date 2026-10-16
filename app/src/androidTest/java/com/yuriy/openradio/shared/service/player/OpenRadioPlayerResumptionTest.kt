@@ -22,6 +22,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import com.yuriy.openradio.testing.onMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -44,12 +45,12 @@ class OpenRadioPlayerResumptionTest {
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        mPlayer = onMain { newOpenRadioPlayer(context) }
+        mPlayer = onMainThread { newOpenRadioPlayer(context) }
     }
 
     @After
     fun tearDown() {
-        onMain { mPlayer.release() }
+        onMainThread { mPlayer.release() }
     }
 
     @Test
@@ -61,7 +62,7 @@ class OpenRadioPlayerResumptionTest {
     fun aClearedQueueResumesAtTheItemThatWasCurrent() {
         load(STATIONS, current = 2)
 
-        onMain { mPlayer.clearMediaItems() }
+        onMainThread { mPlayer.clearMediaItems() }
 
         assertEmptyQueue()
         assertResumption(STATIONS, 2)
@@ -71,7 +72,7 @@ class OpenRadioPlayerResumptionTest {
     fun aQueueReplacedByNothingResumesAtTheItemThatWasCurrent() {
         load(STATIONS, current = 1)
 
-        onMain { mPlayer.setMediaItems(mutableListOf()) }
+        onMainThread { mPlayer.setMediaItems(mutableListOf()) }
 
         assertEmptyQueue()
         assertResumption(STATIONS, 1)
@@ -81,7 +82,7 @@ class OpenRadioPlayerResumptionTest {
     fun aQueueReplacedByNothingFromAPositionResumesAtTheItemThatWasCurrent() {
         load(STATIONS, current = 1)
 
-        onMain { mPlayer.setMediaItems(mutableListOf(), 0, C.TIME_UNSET) }
+        onMainThread { mPlayer.setMediaItems(mutableListOf(), 0, C.TIME_UNSET) }
 
         assertEmptyQueue()
         assertResumption(STATIONS, 1)
@@ -91,7 +92,7 @@ class OpenRadioPlayerResumptionTest {
     fun aQueueReplacedByNothingWithAResetResumesAtTheItemThatWasCurrent() {
         load(STATIONS, current = 1)
 
-        onMain { mPlayer.setMediaItems(mutableListOf(), true) }
+        onMainThread { mPlayer.setMediaItems(mutableListOf(), true) }
 
         assertEmptyQueue()
         assertResumption(STATIONS, 1)
@@ -101,7 +102,7 @@ class OpenRadioPlayerResumptionTest {
     fun aQueueRemovedAsARangeResumesAtTheItemThatWasCurrent() {
         load(STATIONS, current = 4)
 
-        onMain { mPlayer.removeMediaItems(0, STATIONS.size) }
+        onMainThread { mPlayer.removeMediaItems(0, STATIONS.size) }
 
         assertEmptyQueue()
         assertResumption(STATIONS, 4)
@@ -111,7 +112,7 @@ class OpenRadioPlayerResumptionTest {
     fun aQueueReplacedByNothingAsARangeResumesAtTheItemThatWasCurrent() {
         load(STATIONS, current = 3)
 
-        onMain { mPlayer.replaceMediaItems(0, STATIONS.size, mutableListOf()) }
+        onMainThread { mPlayer.replaceMediaItems(0, STATIONS.size, mutableListOf()) }
 
         assertEmptyQueue()
         assertResumption(STATIONS, 3)
@@ -121,7 +122,7 @@ class OpenRadioPlayerResumptionTest {
     fun aQueueWhoseLastItemIsRemovedResumesThatItem() {
         load(listOf("a"), current = 0)
 
-        onMain { mPlayer.removeMediaItem(0) }
+        onMainThread { mPlayer.removeMediaItem(0) }
 
         assertEmptyQueue()
         assertResumption(listOf("a"), 0)
@@ -134,28 +135,28 @@ class OpenRadioPlayerResumptionTest {
     @Test
     fun theQueueEmptiedLastIsTheOneThatResumes() {
         load(STATIONS, current = 2)
-        onMain { mPlayer.clearMediaItems() }
+        onMainThread { mPlayer.clearMediaItems() }
         load(listOf("x", "y"), current = 1)
 
-        onMain { mPlayer.clearMediaItems() }
+        onMainThread { mPlayer.clearMediaItems() }
 
         assertResumption(listOf("x", "y"), 1)
     }
 
     private fun load(ids: List<String>, current: Int) {
-        onMain {
+        onMainThread {
             mPlayer.setMediaItems(ids.map(::station).toMutableList())
             mPlayer.seekTo(current, C.TIME_UNSET)
         }
-        assertEquals("The current item", current, onMain { mPlayer.currentMediaItemIndex })
+        assertEquals("The current item", current, onMainThread { mPlayer.currentMediaItemIndex })
     }
 
     private fun assertEmptyQueue() {
-        assertEquals("Items left in the queue", 0, onMain { mPlayer.mediaItemCount })
+        assertEquals("Items left in the queue", 0, onMainThread { mPlayer.mediaItemCount })
     }
 
     private fun assertResumption(expected: List<String>, startIndex: Int) {
-        val resumption = onMain { mPlayer.getResumption() }
+        val resumption = onMainThread { mPlayer.getResumption() }
         assertEquals("The resumed queue", expected, resumption.mediaItems.map { it.mediaId })
         assertEquals("The resumed item", startIndex, resumption.startIndex)
         assertEquals("The resumed position", C.TIME_UNSET, resumption.startPositionMs)

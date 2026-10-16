@@ -104,7 +104,10 @@ class AutoDetectParser private constructor(
 
     /**
      * @return Whether an entry naming [url] is read as a playlist rather than kept as a stream:
-     * its extension is one this class dispatches on, and it is not HLS, see [isHlsUrl].
+     * its extension is one this class dispatches on, and it is not HLS, see [isHlsUrl]. An entry
+     * with no such extension is nearly always a plain stream, so it is not read here; the service
+     * reads it only once the player has failed to recognise it, see
+     * [com.yuriy.openradio.shared.service.PlaylistFallback].
      */
     internal fun isFollowedEntryUrl(url: String): Boolean {
         val extension = getFileExtension(url)
