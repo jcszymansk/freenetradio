@@ -192,12 +192,20 @@ class OpenRadioPlayerQueueTest {
         assertQueues(STATIONS)
     }
 
+    /**
+     * Reading the wrapper's copy item by item only covers the indices the wrapped player has, so a
+     * copy that kept surplus items at its tail would pass. Appending a sentinel to both queues and
+     * reading it back at the end of the expected queue catches that: a copy with a stale tail
+     * publishes a stale station there instead. The sentinel changes the queue, so it comes last.
+     */
     private fun assertQueues(expected: List<String>) {
         val played = onMainThread {
             (0 until mPlayer.mediaItemCount).map { mPlayer.getMediaItemAt(it).mediaId }
         }
         assertEquals("The wrapped player's queue", expected, played)
         assertEquals("The wrapper's queue", expected, expected.indices.map(::publishedTitleAt))
+        onMainThread { mPlayer.addMediaItem(station(SENTINEL)) }
+        assertEquals("The end of the wrapper's queue", SENTINEL, publishedTitleAt(expected.size))
     }
 
     /**
@@ -224,6 +232,8 @@ class OpenRadioPlayerQueueTest {
     private companion object {
 
         val STATIONS = listOf("a", "b", "c", "d", "e")
+
+        const val SENTINEL = "end"
 
         fun station(id: String): MediaItem {
             return MediaItem.Builder()
