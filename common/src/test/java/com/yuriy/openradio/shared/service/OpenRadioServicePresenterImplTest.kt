@@ -125,9 +125,8 @@ class OpenRadioServicePresenterImplTest {
     }
 
     /**
-     * A search from the service pages through the command the presenter holds for
-     * [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE]: the page index lives on that instance, so a second
-     * copy would restart every search at its first page.
+     * A search from the service runs the command the presenter holds for
+     * [MediaId.MEDIA_ID_SEARCH_FROM_SERVICE], the one a browse of that node runs.
      */
     @Test
     fun theSearchCommandIsTheInstanceRegisteredForTheServiceSearch() {

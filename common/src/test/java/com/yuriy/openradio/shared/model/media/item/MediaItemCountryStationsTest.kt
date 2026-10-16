@@ -46,39 +46,27 @@ class MediaItemCountryStationsTest {
     }
 
     @Test
-    fun scrollingTheSameCountryAsksForTheNextPage() {
+    fun aRequestForALaterPageAsksForThatPage() {
         val presenter = RecordingPresenter(
             mCountries = setOf(Country("Poland", "PL")),
             mCountryStations = stations("first", "second")
         )
-        val command = MediaItemCountryStations()
+        val listener = RecordingCommandListener()
 
-        val first = RecordingCommandListener()
-        command.execute(
-            first.playbackStateListener,
-            dependencies(presenter, first, parentId = MediaId.MEDIA_ID_COUNTRY_STATIONS)
-        )
-        first.awaitResult()
-
-        val second = RecordingCommandListener()
-        command.execute(
-            second.playbackStateListener,
+        MediaItemCountryStations().execute(
+            listener.playbackStateListener,
             dependencies(
                 presenter,
-                second,
+                listener,
                 parentId = MediaId.MEDIA_ID_COUNTRY_STATIONS,
-                isSameCatalogue = true
+                pageNumber = UrlLayer.FIRST_PAGE_INDEX + 1
             )
         )
 
-        second.awaitResult().assertMediaIds("second")
-        assertEquals(
-            listOf(
-                DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX,
-                DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX + 1
-            ),
-            presenter.countryRequests
-        )
+        listener.awaitResult().assertMediaIds("second")
+        assertEquals(listOf(DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX + 1), presenter.countryRequests)
+        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, listener.pageNumber)
+        listener.assertNoError()
     }
 
     @Test

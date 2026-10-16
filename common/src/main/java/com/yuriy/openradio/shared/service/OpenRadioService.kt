@@ -46,6 +46,7 @@ import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.extentions.isEnded
 import com.yuriy.openradio.shared.extentions.isPlayEnabled
 import com.yuriy.openradio.shared.model.media.BrowseTree
+import com.yuriy.openradio.shared.model.media.ClientPages
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
@@ -169,6 +170,9 @@ class OpenRadioService : MediaLibraryService() {
     private val mBrowseTree: BrowseTree by lazy {
         BrowseTree()
     }
+
+    /** How much of each paged list in [mBrowseTree] every controller has been answered with. */
+    private val mClientPages = ClientPages()
 
     private val mExecutorService = Executors.newSingleThreadExecutor()
 
@@ -866,7 +870,7 @@ class OpenRadioService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             AppLogger.d("$TAG [$browser] GetChildren for $parentId page $page pageSize $pageSize")
-            return callWhenSourceReady(parentId, page) { children ->
+            return callWhenSourceReady(browser, parentId, page) { children ->
                 AppLogger.d("$TAG GetChildren for $parentId page $page return ${children.size}")
                 mArtworkGrants.grant(browser, children)
                 LibraryResult.ofItemList(
@@ -991,6 +995,11 @@ class OpenRadioService : MediaLibraryService() {
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(sessionCommands)
                 .build()
+        }
+
+        override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) {
+            AppLogger.d("$TAG Disconnect $controller")
+            mClientPages.forget(controller)
         }
 
         /**
@@ -1141,47 +1150,55 @@ class OpenRadioService : MediaLibraryService() {
         }
 
         /**
-         * Runs [action] on the children that answer [page] of [parentId] once they are available,
-         * through a future that the result listener completes.
+         * Runs [action] on the children that answer [page] of [parentId] for [client] once they
+         * are available, through a future that the result listener completes.
          *
-         * The children are taken from what the page stored, not read from the tree afterwards: the
-         * main thread may invalidate the node between the two, and a read then would find no list
-         * to answer from (fnr-1bz3d).
+         * The first page is the whole list the tree holds, or a list fetched anew. A later page is
+         * the part of the list [client] has not been answered with, and only a client that has
+         * the whole list has the page after it fetched: the clients share the list, not their
+         * place in it, which [mClientPages] keeps for each (fnr-1557f).
+         *
+         * The children are taken from the list the page was stored in, not read from the tree
+         * afterwards: the main thread may invalidate the node between the two, and a read then
+         * would find no list to answer from (fnr-1bz3d).
          *
          * The return type is pinned to [LibraryResult] rather than left open so that a parent id
          * no command answers can be completed with an error. Leaving that future unset would hang
          * the browse request for as long as the client keeps waiting.
          */
         private fun <V : Any> callWhenSourceReady(
+            client: MediaSession.ControllerInfo,
             parentId: String,
             page: Int,
             action: (children: List<MediaItem>) -> LibraryResult<V>
         ): ListenableFuture<LibraryResult<V>> {
-            val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
             mCurrentParentId = parentId
             // If Parent Id contains Country Code - use it in the API.
             val countryCode = MediaId.getCountryCode(parentId, mPresenter.getCountryCode())
             // A country stations list built for a country no longer stored is not the node's list
-            // any more, and the new country's list starts at its first page, not at the page the
-            // old one had reached.
+            // any more. The new country's list starts at its first page, and a later page of the
+            // old one gets nothing, so nothing of the new country is appended to the list the
+            // client holds.
             val isOtherCountry =
                 parentId == MediaId.MEDIA_ID_COUNTRY_STATIONS && countryCode != mCountryStationsCode
             if (isOtherCountry) {
                 mBrowseTree.invalidate(parentId)
-                // A later page extends the list the client holds, which is the old country's, so
-                // nothing of the new country may be appended to it.
-                if (page != 0) {
-                    return Futures.immediateFuture(action(emptyList()))
-                }
             }
-            val cached = mBrowseTree[parentId]
-            if (page == 0
-                && cached != null
-                //  Do not cache these categories, always fetch fresh data.
-                && parentId != MediaId.MEDIA_ID_FAVORITES_LIST
-                && parentId != MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
-            ) {
-                return Futures.immediateFuture(action(cached))
+            val held = mBrowseTree.getPagedList(parentId)
+            val fetchedPage = if (page == 0) {
+                if (held != null
+                    //  Do not cache these categories, always fetch fresh data.
+                    && parentId != MediaId.MEDIA_ID_FAVORITES_LIST
+                    && parentId != MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
+                ) {
+                    return Futures.immediateFuture(action(mClientPages.answerWhole(client, parentId, held)))
+                }
+                UrlLayer.FIRST_PAGE_INDEX
+            } else {
+                when (val next = mClientPages.next(client, parentId, held)) {
+                    is ClientPages.Next.Answer -> return Futures.immediateFuture(action(next.items))
+                    is ClientPages.Next.Fetch -> next.page
+                }
             }
             val id = MediaId.getId(parentId, AppUtils.EMPTY_STRING)
             val command = mPresenter.getMediaItemCommand(id)
@@ -1190,7 +1207,7 @@ class OpenRadioService : MediaLibraryService() {
             val future = SettableFuture.create<LibraryResult<V>>()
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, countryCode, parentId,
-                isSameCatalogue && !isOtherCountry, mIsRestoreState, Bundle(), mCommandScope,
+                fetchedPage, mIsRestoreState, Bundle(), mCommandScope,
                 object : ResultListener {
 
                     override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
@@ -1205,7 +1222,7 @@ class OpenRadioService : MediaLibraryService() {
                             AppLogger.d("$TAG loaded [$pageNumber:${items.size}] for $parentId")
                             val browseData = BrowseTree.BrowseData(items, radioStations)
                             val children = if (pageNumber == 0) {
-                                mBrowseTree[parentId] = browseData
+                                val stored = mBrowseTree.store(parentId, browseData)
                                 // Marked only once the list is in the tree: marked before, a browse
                                 // in between would take the old country's list, still held, for
                                 // the new one's.
@@ -1213,9 +1230,12 @@ class OpenRadioService : MediaLibraryService() {
                                     mCountryStationsCode = countryCode
                                 }
                                 mUiScope.launch { maybeCreateInitialPlaylist() }
-                                browseData.children
+                                mClientPages.answerWhole(client, parentId, stored)
                             } else {
-                                mBrowseTree.append(parentId, browseData)
+                                // A later page is only fetched to continue the list held, so
+                                // held is that list.
+                                val stored = held?.let { mBrowseTree.append(parentId, it, browseData) }
+                                mClientPages.answerRest(client, parentId, stored)
                             }
 
                             future.set(action(children))
@@ -1245,7 +1265,7 @@ class OpenRadioService : MediaLibraryService() {
             val future = SettableFuture.create<LibraryResult<V>>()
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, Country.COUNTRY_CODE_DEFAULT, id,
-                false, mIsRestoreState, AppUtils.makeSearchQueryBundle(query), mCommandScope,
+                UrlLayer.FIRST_PAGE_INDEX, mIsRestoreState, AppUtils.makeSearchQueryBundle(query), mCommandScope,
 
                 object : ResultListener {
 

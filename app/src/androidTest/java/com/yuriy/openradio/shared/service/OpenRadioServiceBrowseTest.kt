@@ -103,11 +103,6 @@ class OpenRadioServiceBrowseTest {
         mBrowser.connect()
         // The service caches every node but favorites and locals, and it outlives a single test.
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
-        // Browsing the root has a second effect the seeded cases rely on. An
-        // IndexableMediaItemCommand keeps its page index on a command instance that lives as long
-        // as the process, and only resets it when the node being browsed differs from the one
-        // browsed before. Every case therefore starts with the root as the previous node, and asks
-        // its own node for page one rather than for wherever an earlier case left the counter.
         assertRadioBrowserIsBound(mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT))
         mBrowser.forgetNotifications()
     }
@@ -523,9 +518,8 @@ class OpenRadioServiceBrowseTest {
      * the last node browsed when the country changes, as it is for a user who picks the country
      * while its stations are on screen.
      *
-     * The command behind the entry keeps a page index that a browse of the node browsed just
-     * before carries on from rather than resets, because that is how it serves the next page of
-     * one list. The list of another country has to start again at the first page: the second
+     * The list the entry holds, and the client with it, is the old country's. The list of another
+     * country has to start again at the first page rather than go on from the old one: the second
      * country is seeded at that page only, so a browse that carried on asks for a page nothing
      * answers and comes back empty.
      */
@@ -587,13 +581,7 @@ class OpenRadioServiceBrowseTest {
      */
     @Test
     fun aLaterPageAnswersWithTheStationsItAdded() {
-        seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
-        seedResponse(
-            mUrls.getStationsByCountry(FIRST_COUNTRY_CODE, UrlLayer.FIRST_PAGE_INDEX + 1).toString(),
-            FIRST_COUNTRY_SECOND_PAGE_RESPONSE,
-            MediaId.MEDIA_ID_COUNTRY_STATIONS
-        )
-        chooseCountry(FIRST_COUNTRY_CODE)
+        seedFirstCountryWithTwoPages()
         assertEquals(
             listOf("first-one", "first-two"),
             mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
@@ -609,6 +597,61 @@ class OpenRadioServiceBrowseTest {
         )
         assertEquals(
             "The node did not hold both pages after the second was stored",
+            listOf("first-one", "first-two", "page-two-one", "page-two-two"),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        )
+    }
+
+    /**
+     * A client asking for more of a list gets the page after the list it holds, whatever another
+     * client browsed in between. The command behind the node is shared by every client, and it
+     * used to keep the page and start it over whenever the node browsed last was another one, so
+     * a car browsing the root sent the phone's next request back to the first page (fnr-1557f).
+     */
+    @Test
+    fun aLaterPageFollowsTheListTheClientHoldsWhateverAnotherClientBrowsed() {
+        seedFirstCountryWithTwoPages()
+        assertEquals(listOf("first-one", "first-two"), mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS))
+
+        val result = withAnotherClient { car ->
+            car.mediaIds(MediaId.MEDIA_ID_ROOT)
+            mBrowser.childrenResult(MediaId.MEDIA_ID_COUNTRY_STATIONS, page = 1)
+        }
+
+        assertEquals(LibraryResult.RESULT_SUCCESS, result.resultCode)
+        assertEquals(
+            "The phone's next page was not the one after the list it holds",
+            listOf("page-two-one", "page-two-two"),
+            result.value!!.map { it.mediaId }
+        )
+    }
+
+    /**
+     * A page one client fetched extends the list both hold, so the other client asking for more
+     * is answered with that page from the list. Neither client skips it, and the provider is not
+     * asked for it twice: its response is gone from the API caches by then, and with networking
+     * off a second fetch would come back empty.
+     */
+    @Test
+    fun aPageAnotherClientFetchedIsAnsweredFromTheList() {
+        seedFirstCountryWithTwoPages()
+        assertEquals(listOf("first-one", "first-two"), mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS))
+
+        val (byCar, byPhone) = withAnotherClient { car ->
+            assertEquals(listOf("first-one", "first-two"), car.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS))
+            val byCar = car.childrenResult(MediaId.MEDIA_ID_COUNTRY_STATIONS, page = 1)
+            forgetCachedResponse(firstCountrySecondPageUrl())
+            byCar to mBrowser.childrenResult(MediaId.MEDIA_ID_COUNTRY_STATIONS, page = 1)
+        }
+
+        assertEquals(listOf("page-two-one", "page-two-two"), byCar.value!!.map { it.mediaId })
+        assertEquals(
+            "The phone was not answered with the page the car had fetched",
+            listOf("page-two-one", "page-two-two"),
+            byPhone.value!!.map { it.mediaId }
+        )
+        assertEquals(
+            "The node did not hold the second page once",
             listOf("first-one", "first-two", "page-two-one", "page-two-two"),
             mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
         )
@@ -727,6 +770,33 @@ class OpenRadioServiceBrowseTest {
         forgetCachedResponse(url)
         PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME).put(url, response)
         invalidate(node)
+    }
+
+    /**
+     * Seeds two pages of stations for [FIRST_COUNTRY_CODE] and stores that country.
+     */
+    private fun seedFirstCountryWithTwoPages() {
+        seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
+        seedResponse(firstCountrySecondPageUrl(), FIRST_COUNTRY_SECOND_PAGE_RESPONSE, MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        chooseCountry(FIRST_COUNTRY_CODE)
+    }
+
+    private fun firstCountrySecondPageUrl(): String {
+        return mUrls.getStationsByCountry(FIRST_COUNTRY_CODE, UrlLayer.FIRST_PAGE_INDEX + 1).toString()
+    }
+
+    /**
+     * Runs [body] with a second browser connected to the service, as a car is beside the phone,
+     * and releases it afterwards.
+     */
+    private fun <T> withAnotherClient(body: (ServiceBrowser) -> T): T {
+        val other = ServiceBrowser()
+        try {
+            other.connect()
+            return body(other)
+        } finally {
+            other.release()
+        }
     }
 
     /**

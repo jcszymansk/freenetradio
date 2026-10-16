@@ -16,6 +16,7 @@
 
 package com.yuriy.openradio.shared.model.media.item
 
+import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlinx.coroutines.CoroutineScope
@@ -56,44 +57,36 @@ class MediaItemCommandDependenciesTest {
     }
 
     /**
-     * What a command keeps for the next request moves on in [MediaItemCommandDependencies.answer]'s
-     * callback, so the callback has to run for the answer and only for it, and before the client
-     * holds the answer: a client that asks again at once must find it done.
+     * The service tells a first page from a later one by the page an answer carries, which is the
+     * page the request asked for.
      */
     @Test
-    fun onlyTheAnswerRunsItsCallbackAndRunsItBeforeTheListenerHearsOfIt() {
+    fun onlyTheFirstAnswerIsDeliveredForThePageTheRequestAskedFor() {
         val listener = RecordingCommandListener()
-        val dependencies = dependencies(RecordingPresenter(), listener)
-        val resultsSeenByCallbacks = mutableListOf<Int>()
+        val dependencies = dependencies(RecordingPresenter(), listener, pageNumber = UrlLayer.FIRST_PAGE_INDEX + 2)
 
-        val first = dependencies.answer(listOf(item("first"))) { resultsSeenByCallbacks.add(listener.results) }
-        val second = dependencies.answer(listOf(item("second"))) { resultsSeenByCallbacks.add(listener.results) }
+        val first = dependencies.answer(listOf(item("first")))
+        val second = dependencies.answer(listOf(item("second")))
 
         assertTrue("The first answer was reported as dropped", first)
         assertFalse("A second answer was reported as delivered", second)
-        assertEquals(
-            "The callback did not run exactly once, before the listener had the answer",
-            listOf(0),
-            resultsSeenByCallbacks
-        )
         assertEquals(1, listener.results)
         listener.assertMediaIds("first")
+        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 2, listener.pageNumber)
     }
 
     @Test
     fun anAnswerAfterTheDeadlineIsReportedAsDropped() {
         val listener = RecordingCommandListener()
         val dependencies = dependencies(RecordingPresenter(), listener, timeoutMillis = DEADLINE_MILLIS)
-        var callbackRan = false
 
         dependencies.execute(MediaItemCommand { _, _ -> listener.awaitDelivery() }, listener.playbackStateListener)
         listener.awaitResult()
 
         assertFalse(
             "An answer after the deadline was reported as delivered",
-            dependencies.answer(listOf(item("late"))) { callbackRan = true }
+            dependencies.answer(listOf(item("late")))
         )
-        assertFalse("A dropped answer ran its callback", callbackRan)
         assertEquals(emptyList<String>(), listener.mediaIds)
     }
 

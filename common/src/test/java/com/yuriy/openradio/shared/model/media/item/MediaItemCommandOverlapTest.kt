@@ -37,8 +37,11 @@ import org.junit.Test
  * execution has it answered empty by the deadline at that point. Once released, each request has
  * to get the data.
  *
- * The paged commands keep their page index on the shared instance, so for them both requests have
- * to get the same page, and the next request the page after it rather than one past (fnr-3ktp).
+ * The paged commands keep no page on the shared instance: each request gets the page it asked
+ * for, however the other execution runs alongside it (fnr-1557f). The country command asks its
+ * provider twice, for the countries and then for the page, so an execution held at the first call
+ * and released after the other one had answered used to find the page moved on and fetch the next
+ * one (fnr-ku215).
  */
 class MediaItemCommandOverlapTest {
 
@@ -93,7 +96,7 @@ class MediaItemCommandOverlapTest {
     }
 
     @Test
-    fun overlappingCategoryPageRequestsBothGetThePageAndMoveItOnOnce() {
+    fun overlappingCategoryPageRequestsBothGetThePageTheyAskedFor() {
         val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
         val command = MediaItemChildCategories()
         val presenter = assertBothAnswered(command, "first", parentId = parentId) { hold ->
@@ -112,7 +115,7 @@ class MediaItemCommandOverlapTest {
     }
 
     @Test
-    fun overlappingCountryPageRequestsBothGetThePageAndMoveItOnOnce() {
+    fun overlappingCountryPageRequestsBothGetThePageTheyAskedFor() {
         val parentId = MediaId.MEDIA_ID_COUNTRY_STATIONS
         val command = MediaItemCountryStations()
         val presenter = assertBothAnswered(command, "first", parentId = parentId) { hold ->
@@ -134,7 +137,10 @@ class MediaItemCommandOverlapTest {
         )
     }
 
-    /** Asks [command] for more of the node it has just answered, and asserts it got [expectedId]. */
+    /**
+     * Asks [command] for the second page of the node it has just answered, and asserts it got
+     * [expectedId], so the overlap left nothing behind that moves a later request.
+     */
     private fun assertNextPageIs(
         command: MediaItemCommand,
         presenter: RecordingPresenter,
@@ -142,7 +148,7 @@ class MediaItemCommandOverlapTest {
         expectedId: String
     ) {
         val listener = RecordingCommandListener()
-        dependencies(presenter, listener, parentId = parentId, isSameCatalogue = true)
+        dependencies(presenter, listener, parentId = parentId, pageNumber = UrlLayer.FIRST_PAGE_INDEX + 1)
             .execute(command, listener.playbackStateListener)
         listener.awaitResult().assertMediaIds(expectedId)
         assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, listener.pageNumber)

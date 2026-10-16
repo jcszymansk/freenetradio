@@ -29,9 +29,10 @@ import org.junit.Test
 /**
  * Covers what a browse command does with an answer its provider gives after the deadline has
  * answered the request empty (fnr-3ktp). The late answer is dropped, so nothing it did may outlast
- * it: a paged command must not move past the page it fetched, or the next request for the same
- * node skips that page and its stations never appear, and a node found empty must not report "no
- * data" for a request that was answered long before.
+ * it: the next request for the page that was late has to get that page, and a node found empty
+ * must not report "no data" for a request that was answered long before. That the service then
+ * asks for the late page again, rather than for the one after it, is decided by
+ * [com.yuriy.openradio.shared.model.media.ClientPages] and covered by its test.
  *
  * Each case runs the command the way the service does, through
  * [MediaItemCommandDependencies.execute], holds the provider until the deadline has answered, then
@@ -79,7 +80,6 @@ class MediaItemCommandLateAnswerTest {
         )
     }
 
-    /** A load more that is late leaves the page it fetched for the next load more to ask for. */
     @Test
     fun aLateNextPageIsAskedForAgain() {
         val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
@@ -89,8 +89,8 @@ class MediaItemCommandLateAnswerTest {
         val command = MediaItemChildCategories()
 
         presenter.runInTime(command, parentId).assertMediaIds("first")
-        presenter.runPastTheDeadline(command, parentId, isSameCatalogue = true)
-        val retry = presenter.runInTime(command, parentId)
+        presenter.runPastTheDeadline(command, parentId, UrlLayer.FIRST_PAGE_INDEX + 1)
+        val retry = presenter.runInTime(command, parentId, UrlLayer.FIRST_PAGE_INDEX + 1)
 
         retry.assertMediaIds("second")
         assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, retry.pageNumber)
@@ -170,7 +170,7 @@ class MediaItemCommandLateAnswerTest {
         fun runPastTheDeadline(
             command: MediaItemCommand,
             parentId: String,
-            isSameCatalogue: Boolean = false
+            pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX
         ): RecordingCommandListener {
             val listener = RecordingCommandListener()
             val held = Held(listener)
@@ -180,7 +180,7 @@ class MediaItemCommandLateAnswerTest {
                     recording,
                     listener,
                     parentId = parentId,
-                    isSameCatalogue = isSameCatalogue,
+                    pageNumber = pageNumber,
                     timeoutMillis = DEADLINE_MILLIS
                 ).execute(command, listener.playbackStateListener)
                 assertTrue(
@@ -197,13 +197,17 @@ class MediaItemCommandLateAnswerTest {
         }
 
         /**
-         * Runs [command] on the same catalogue as the request before, with nothing held.
+         * Runs [command] for [pageNumber] of [parentId], with nothing held.
          *
          * @return The listener of the request, holding its answer, settled.
          */
-        fun runInTime(command: MediaItemCommand, parentId: String): RecordingCommandListener {
+        fun runInTime(
+            command: MediaItemCommand,
+            parentId: String,
+            pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX
+        ): RecordingCommandListener {
             val listener = RecordingCommandListener()
-            dependencies(recording, listener, parentId = parentId, isSameCatalogue = true)
+            dependencies(recording, listener, parentId = parentId, pageNumber = pageNumber)
                 .execute(command, listener.playbackStateListener)
             listener.awaitResult()
             listener.assertNoError()

@@ -41,45 +41,55 @@ class MediaItemChildCategoriesTest {
     }
 
     @Test
-    fun browsingTheSameCategoryAgainAsksForTheNextPage() {
+    fun aRequestForALaterPageAsksForThatPage() {
         val presenter = RecordingPresenter(mCategoryStations = stations("first", "second"))
-        val command = MediaItemChildCategories()
-        val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
+        val listener = RecordingCommandListener()
 
-        val first = RecordingCommandListener()
-        command.execute(first.playbackStateListener, dependencies(presenter, first, parentId = parentId))
-        first.awaitResult()
-
-        val second = RecordingCommandListener()
-        command.execute(
-            second.playbackStateListener,
-            dependencies(presenter, second, parentId = parentId, isSameCatalogue = true)
+        MediaItemChildCategories().execute(
+            listener.playbackStateListener,
+            dependencies(
+                presenter,
+                listener,
+                parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock",
+                pageNumber = UrlLayer.FIRST_PAGE_INDEX + 1
+            )
         )
 
-        second.awaitResult().assertMediaIds("second")
-        assertEquals(
-            listOf("rock" to UrlLayer.FIRST_PAGE_INDEX, "rock" to UrlLayer.FIRST_PAGE_INDEX + 1),
-            presenter.categoryRequests
-        )
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, second.pageNumber)
+        listener.awaitResult().assertMediaIds("second")
+        assertEquals(listOf("rock" to UrlLayer.FIRST_PAGE_INDEX + 1), presenter.categoryRequests)
+        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, listener.pageNumber)
+        listener.assertNoError()
     }
 
+    /**
+     * The presenter shares one instance of the command among every client, so a request that
+     * kept a page on it would move the page of the next request, whoever made it (fnr-1557f).
+     */
     @Test
-    fun leavingTheCategoryAndComingBackStartsOverAtTheFirstPage() {
+    fun aRequestAsksForItsOwnPageWhateverTheRequestBeforeAskedFor() {
         val presenter = RecordingPresenter(mCategoryStations = stations("first", "second"))
         val command = MediaItemChildCategories()
         val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
 
+        val later = RecordingCommandListener()
+        command.execute(
+            later.playbackStateListener,
+            dependencies(presenter, later, parentId = parentId, pageNumber = UrlLayer.FIRST_PAGE_INDEX + 1)
+        )
+        later.awaitResult()
         val first = RecordingCommandListener()
         command.execute(first.playbackStateListener, dependencies(presenter, first, parentId = parentId))
-        first.awaitResult()
+        val again = RecordingCommandListener()
+        command.execute(again.playbackStateListener, dependencies(presenter, again, parentId = parentId))
 
-        val second = RecordingCommandListener()
-        command.execute(second.playbackStateListener, dependencies(presenter, second, parentId = parentId))
-
-        second.awaitResult().assertMediaIds("first")
+        first.awaitResult().assertMediaIds("first")
+        again.awaitResult().assertMediaIds("first")
         assertEquals(
-            listOf("rock" to UrlLayer.FIRST_PAGE_INDEX, "rock" to UrlLayer.FIRST_PAGE_INDEX),
+            listOf(
+                "rock" to UrlLayer.FIRST_PAGE_INDEX + 1,
+                "rock" to UrlLayer.FIRST_PAGE_INDEX,
+                "rock" to UrlLayer.FIRST_PAGE_INDEX
+            ),
             presenter.categoryRequests
         )
     }
@@ -87,17 +97,16 @@ class MediaItemChildCategoriesTest {
     @Test
     fun reachingTheEndOfTheSecondPageReportsThatNothingMoreArrived() {
         val presenter = RecordingPresenter(mCategoryStations = stations("only"))
-        val command = MediaItemChildCategories()
-        val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
-
-        val first = RecordingCommandListener()
-        command.execute(first.playbackStateListener, dependencies(presenter, first, parentId = parentId))
-        first.awaitResult()
-
         val second = RecordingCommandListener()
-        command.execute(
+
+        MediaItemChildCategories().execute(
             second.playbackStateListener,
-            dependencies(presenter, second, parentId = parentId, isSameCatalogue = true)
+            dependencies(
+                presenter,
+                second,
+                parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock",
+                pageNumber = UrlLayer.FIRST_PAGE_INDEX + 1
+            )
         )
 
         second.awaitResult().awaitError()
@@ -106,7 +115,7 @@ class MediaItemChildCategoriesTest {
         assertEquals(
             "The command did not ask the category for its second page, so the error above says " +
                 "nothing about a page that came back empty",
-            listOf("rock" to UrlLayer.FIRST_PAGE_INDEX, "rock" to UrlLayer.FIRST_PAGE_INDEX + 1),
+            listOf("rock" to UrlLayer.FIRST_PAGE_INDEX + 1),
             presenter.categoryRequests
         )
     }

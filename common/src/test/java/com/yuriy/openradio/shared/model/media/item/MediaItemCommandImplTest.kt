@@ -17,7 +17,6 @@
 package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.model.media.RadioStation
-import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import com.yuriy.openradio.shared.utils.MediaItemHelper
 import org.junit.Assert.assertEquals
@@ -42,7 +41,9 @@ class MediaItemCommandImplTest {
         val loaded = stations("plain", "starred")
         val command = StubCommand(isNoDataReported = true)
 
-        command.handleDataLoaded(listener.playbackStateListener, dependencies(presenter, listener), loaded, PAGE)
+        command.handleDataLoaded(
+            listener.playbackStateListener, dependencies(presenter, listener, pageNumber = PAGE), loaded
+        )
 
         listener.awaitResult().assertMediaIds("plain", "starred")
         assertEquals(listOf("plain", "starred"), presenter.favoriteChecks)
@@ -54,18 +55,18 @@ class MediaItemCommandImplTest {
         assertEquals(loaded, listener.radioStations)
         assertEquals(PAGE, listener.pageNumber)
         assertEquals(1, listener.results)
-        assertEquals("A non-empty set was checked for the no data policy", 0, command.noDataQuestions)
+        assertEquals("A non-empty set was checked for the no data policy", emptyList<Int>(), command.noDataPages)
         listener.assertNoError()
     }
 
     @Test
     fun loadedStationsFollowTheItemsAlreadyCollected() {
         val listener = RecordingCommandListener()
-        val dependencies = dependencies(RecordingPresenter(), listener)
+        val dependencies = dependencies(RecordingPresenter(), listener, pageNumber = PAGE)
         dependencies.addMediaItem(MediaItemBuilder.buildPlayable(station("earlier")))
 
         StubCommand(isNoDataReported = false).handleDataLoaded(
-            listener.playbackStateListener, dependencies, stations("loaded"), PAGE
+            listener.playbackStateListener, dependencies, stations("loaded")
         )
 
         listener.awaitResult().assertMediaIds("earlier", "loaded")
@@ -76,11 +77,11 @@ class MediaItemCommandImplTest {
     fun anEmptySetIsReportedAsMissingDataWhenTheCommandAsksForIt() {
         val presenter = RecordingPresenter()
         val listener = RecordingCommandListener()
-        val dependencies = dependencies(presenter, listener)
+        val dependencies = dependencies(presenter, listener, pageNumber = PAGE)
         dependencies.addMediaItem(MediaItemBuilder.buildPlayable(station("earlier")))
         val command = StubCommand(isNoDataReported = true)
 
-        command.handleDataLoaded(listener.playbackStateListener, dependencies, emptySet(), PAGE)
+        command.handleDataLoaded(listener.playbackStateListener, dependencies, emptySet())
 
         listener.awaitError()
         assertEquals(1, listener.errors)
@@ -88,12 +89,12 @@ class MediaItemCommandImplTest {
         assertEquals(1, listener.results)
         listener.assertMediaIds("earlier")
         assertEquals(emptySet<RadioStation>(), listener.radioStations)
+        assertEquals("Missing data was not answered for the page the request asked for", PAGE, listener.pageNumber)
         assertEquals(
-            "Missing data is reported for the first page, not the one that came back empty",
-            UrlLayer.FIRST_PAGE_INDEX,
-            listener.pageNumber
+            "The no data policy was not asked about the page the request asked for",
+            listOf(PAGE),
+            command.noDataPages
         )
-        assertEquals(1, command.noDataQuestions)
         assertEquals(emptyList<String>(), presenter.favoriteChecks)
     }
 
@@ -101,62 +102,37 @@ class MediaItemCommandImplTest {
     fun anEmptySetIsAnsweredAsAnEmptyPageOtherwise() {
         val presenter = RecordingPresenter()
         val listener = RecordingCommandListener()
-        val dependencies = dependencies(presenter, listener)
+        val dependencies = dependencies(presenter, listener, pageNumber = PAGE)
         dependencies.addMediaItem(MediaItemBuilder.buildPlayable(station("earlier")))
         val command = StubCommand(isNoDataReported = false)
 
-        command.handleDataLoaded(listener.playbackStateListener, dependencies, emptySet(), PAGE)
+        command.handleDataLoaded(listener.playbackStateListener, dependencies, emptySet())
 
         listener.awaitResult().assertMediaIds("earlier")
         assertEquals(emptySet<RadioStation>(), listener.radioStations)
         assertEquals(PAGE, listener.pageNumber)
         assertEquals(1, listener.results)
-        assertEquals(1, command.noDataQuestions)
+        assertEquals(listOf(PAGE), command.noDataPages)
         assertEquals(emptyList<String>(), presenter.favoriteChecks)
         listener.assertNoError()
     }
 
-    @Test
-    fun anEmptyPageWithoutAPageNumberIsTheFirst() {
-        val listener = RecordingCommandListener()
-
-        StubCommand(isNoDataReported = false).handleDataLoaded(
-            listener.playbackStateListener, dependencies(RecordingPresenter(), listener), emptySet()
-        )
-
-        listener.awaitResult()
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber)
-        listener.assertNoError()
-    }
-
-    @Test
-    fun loadedStationsWithoutAPageNumberArriveAsTheFirstPage() {
-        val listener = RecordingCommandListener()
-
-        StubCommand(isNoDataReported = false).handleDataLoaded(
-            listener.playbackStateListener, dependencies(RecordingPresenter(), listener), stations("only")
-        )
-
-        listener.awaitResult().assertMediaIds("only")
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber)
-    }
-
     /**
      * The restored instance answer: nothing loaded, so only what was collected before is sent, for
-     * the first page, without consulting the presenter.
+     * the page the request asked for, without consulting the presenter.
      */
     @Test
     fun deliveringWithoutASetSendsOnlyTheItemsAlreadyCollected() {
         val presenter = RecordingPresenter()
         val listener = RecordingCommandListener()
-        val dependencies = dependencies(presenter, listener)
+        val dependencies = dependencies(presenter, listener, pageNumber = PAGE)
         dependencies.addMediaItem(MediaItemBuilder.buildPlayable(station("earlier")))
 
         StubCommand(isNoDataReported = true).deliverResult(dependencies)
 
         listener.awaitResult().assertMediaIds("earlier")
         assertEquals(emptySet<RadioStation>(), listener.radioStations)
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber)
+        assertEquals(PAGE, listener.pageNumber)
         assertEquals(emptyList<String>(), presenter.favoriteChecks)
         listener.assertNoError()
     }
@@ -172,21 +148,20 @@ class MediaItemCommandImplTest {
 
         assertEquals(0, listener.results)
         assertEquals(0, listener.errors)
-        assertEquals(0, command.noDataQuestions)
+        assertEquals(emptyList<Int>(), command.noDataPages)
         assertEquals(emptyList<String>(), presenter.favoriteChecks)
     }
 
     /**
-     * The smallest concrete command: its only decision is the no data policy, and it counts how
-     * often it was asked.
+     * The smallest concrete command: its only decision is the no data policy, and it records the
+     * pages it was asked about.
      */
     private class StubCommand(private val isNoDataReported: Boolean) : MediaItemCommandImpl() {
 
-        var noDataQuestions = 0
-            private set
+        val noDataPages = mutableListOf<Int>()
 
-        override fun doLoadNoDataReceived(): Boolean {
-            noDataQuestions++
+        override fun doLoadNoDataReceived(pageNumber: Int): Boolean {
+            noDataPages.add(pageNumber)
             return isNoDataReported
         }
     }
@@ -194,8 +169,8 @@ class MediaItemCommandImplTest {
     private companion object {
 
         /**
-         * Neither the first page nor the default, so a page number that arrives intact was passed
-         * through rather than defaulted.
+         * Not the first page, which is what a request names by default, so a page number that
+         * arrives intact was passed through rather than defaulted.
          */
         const val PAGE = 3
     }

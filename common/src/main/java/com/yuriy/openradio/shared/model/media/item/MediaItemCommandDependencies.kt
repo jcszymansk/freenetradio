@@ -55,7 +55,13 @@ class MediaItemCommandDependencies(
     val presenter: OpenRadioServicePresenter,
     val countryCode: String,
     val parentId: String,
-    val isSameCatalogue: Boolean,
+    /**
+     * The page of the node the request asks the provider for, counted from
+     * [UrlLayer.FIRST_PAGE_INDEX]. A paged command fetches this page and no other, and every
+     * answer carries it. The service decides it per request, from what the client asking already
+     * holds, so a command keeps no page of its own that another client could move.
+     */
+    val pageNumber: Int,
     val isSavedInstance: Boolean,
     val options: Bundle,
     /**
@@ -85,22 +91,14 @@ class MediaItemCommandDependencies(
     private val mExecuted = AtomicBoolean(false)
 
     /**
-     * Answers the browse request, unless it has been answered already, and tells whether it did.
-     *
-     * [onAnswering] runs only when this is the answer, and before the client can see it, so that
-     * whatever a command keeps for the requests after this one, such as the page it is at, moves on
-     * exactly when the client has the answer coming and never for an answer that was dropped.
+     * Answers the browse request for [pageNumber], unless it has been answered already, and tells
+     * whether it did.
      *
      * @return Whether this answered the request. False when the deadline, or an earlier result,
      * answered it first and this one was dropped.
      */
-    fun answer(
-        items: List<MediaItem>,
-        radioStations: Set<RadioStation> = TreeSet(),
-        pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX,
-        onAnswering: () -> Unit = {}
-    ): Boolean {
-        return mResultListener.offer(items, radioStations, pageNumber, onAnswering)
+    fun answer(items: List<MediaItem>, radioStations: Set<RadioStation> = TreeSet()): Boolean {
+        return mResultListener.offer(items, radioStations, pageNumber)
     }
 
     fun addMediaItem(item: MediaItem) {
@@ -160,25 +158,19 @@ class MediaItemCommandDependencies(
         private val mAnswered = AtomicBoolean(false)
 
         override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
-            offer(items, radioStations, pageNumber) {}
+            offer(items, radioStations, pageNumber)
         }
 
         /**
-         * Passes the result to [mDelegate] if it is the first, running [onAnswering] just before.
+         * Passes the result to [mDelegate] if it is the first.
          *
          * @return Whether the result was passed on.
          */
-        fun offer(
-            items: List<MediaItem>,
-            radioStations: Set<RadioStation>,
-            pageNumber: Int,
-            onAnswering: () -> Unit
-        ): Boolean {
+        fun offer(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int): Boolean {
             if (mAnswered.compareAndSet(false, true).not()) {
                 AppLogger.w("$CLASS_NAME dropped a result of ${items.size} items for an answered request")
                 return false
             }
-            onAnswering()
             mDelegate.onResult(items, radioStations, pageNumber)
             return true
         }
