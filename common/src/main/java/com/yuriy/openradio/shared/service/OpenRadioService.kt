@@ -428,19 +428,15 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     /**
-     * The url the station of [mediaId] was listed with. The browse tree holds every station of a
-     * queue built from browse items, but not the last played station the service restores at the
-     * head of its initial playlist, so the active station answers when the tree cannot.
+     * The url the station of [mediaId] was listed with. The browse tree holds every station of the
+     * queue the player was handed, so it knows the station of every item the player plays.
      */
     private fun getStationUrl(mediaId: String): String {
         val station = mBrowseTree.getRadioStationByMediaId(mediaId)
-        if (station.isInvalid().not()) {
-            return station.getStreamUrlFixed()
+        if (station.isInvalid()) {
+            return AppUtils.EMPTY_STRING
         }
-        if (mActiveRS.id == mediaId) {
-            return mActiveRS.getStreamUrlFixed()
-        }
-        return AppUtils.EMPTY_STRING
+        return station.getStreamUrlFixed()
     }
 
     @MainThread
@@ -689,14 +685,16 @@ class OpenRadioService : MediaLibraryService() {
             }
             AppLogger.d("$TAG create init npl with ${radioStations.size}")
             val list = radioStations.map { MediaItemBuilder.buildPlayable(it) }.toMutableList()
+            val playlistStations = radioStations.toMutableSet()
             if (radioStations.none { it.id == rs.id }) {
                 list.add(0, MediaItemBuilder.buildPlayable(rs))
+                playlistStations.add(rs)
             }
             val pos = list.indexOfFirst { it.mediaId == rs.id }
             mUiScope.launch {
-                // This is needed for Media Browser when framework will require media item by id and the view will contain
-                // Browsables only:
-                mBrowseTree.setPlaylist(BrowseTree.BrowseData(list, radioStations))
+                // The playlist is what keeps every station of the queue resolvable, the one at its
+                // head included, which no list may hold:
+                mBrowseTree.setPlaylist(BrowseTree.BrowseData(list, playlistStations))
                 onBuilt(MediaSession.MediaItemsWithStartPosition(list, pos, C.TIME_UNSET))
             }
         }
@@ -1288,9 +1286,9 @@ class OpenRadioService : MediaLibraryService() {
             val mediaId = OpenRadioStore.extractMediaId(args).ifEmpty { mActiveRS.id }
             var rs = getRadioStationByMediaId(mediaId)
             // The active station is not always one the browse tree holds: the last played station
-            // the service restores when it starts is held by no list, and the initial playlist
-            // built around it holds it only when it is a favorite or a new station. It is still
-            // the station the button concerns.
+            // the service restores when it starts is held by nothing until a playlist is built
+            // around it. The button is published for it from the start, and it concerns that
+            // station.
             if (rs.isInvalid() && mediaId == mActiveRS.id) {
                 rs = RadioStation.makeCopyInstance(mActiveRS)
             }

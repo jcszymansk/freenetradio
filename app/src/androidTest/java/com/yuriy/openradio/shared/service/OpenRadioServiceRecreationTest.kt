@@ -19,6 +19,7 @@ package com.yuriy.openradio.shared.service
 import android.content.Context
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.SessionResult
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.RadioStation
@@ -134,6 +135,38 @@ class OpenRadioServiceRecreationTest {
         assertEquals(stations[1].getStreamUrlFixed(), mBrowser.currentMediaItemUri())
     }
 
+    /**
+     * fnr-imqme. The latest station that heads the restored playlist is held by no list of the new
+     * service, so only the playlist makes it resolvable. Coming back to it from a favorite has to
+     * make it the active station again, or the favorite button, which concerns the active
+     * station, marks the favorite played before it in its place.
+     */
+    @Test
+    fun theLatestStationHeadingARestoredPlaylistBecomesActiveAgainWhenPlaybackReturnsToIt() {
+        val stations = seedStations(2)
+        mStorages.favorites.add(stations[0])
+        playUntilLatest(stations[1])
+
+        recreateTheService(stations[1])
+        mBrowser.play()
+        mBrowser.awaitPlaying()
+        assertEquals(listOf(stations[1], stations[0]).map { it.id }, mBrowser.queueMediaIds())
+
+        mBrowser.seekToNext()
+        awaitLatest(stations[0])
+        mBrowser.seekToPrevious()
+        awaitLatest(stations[1])
+
+        assertEquals(
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(OpenRadioService.CMD_MARK_FAVORITE).resultCode
+        )
+        assertEquals(
+            setOf(stations[0].id, stations[1].id),
+            mStorages.freshFavorites().getAll().map { it.id }.toSet()
+        )
+    }
+
     private fun seedStations(count: Int): List<RadioStation> {
         val urls = (0 until count).map { mAudio.wav("fixture-$it.wav") }.toTypedArray()
         return mStations.seed(*urls)
@@ -141,12 +174,21 @@ class OpenRadioServiceRecreationTest {
 
     /**
      * Plays [station] the way selecting it in a list does, and waits for it to be stored as the
-     * latest station, which is written from a background coroutine after the player reports it.
+     * latest station.
      */
     private fun playUntilLatest(station: RadioStation) {
         mBrowser.setMediaItem(mStations.item(station))
         mBrowser.prepareAndPlay()
         mBrowser.awaitPlaying()
+        awaitLatest(station)
+    }
+
+    /**
+     * Waits until the service has taken [station] as its active station. It stores the station as
+     * the latest one from the same callback, on a background coroutine, so the store is what a
+     * test can see it through.
+     */
+    private fun awaitLatest(station: RadioStation) {
         mBrowser.awaitPlayback("'${station.id}' to be stored as the latest station") {
             mStorages.freshLatest().get().id == station.id
         }
