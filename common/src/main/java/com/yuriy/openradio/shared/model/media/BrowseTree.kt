@@ -119,6 +119,20 @@ class BrowseTree {
         update { it.withList(mediaId, null) }
     }
 
+    /**
+     * Drops every browse list, for when the data they were built from is gone. The playlist stays:
+     * it is the player's queue, which outlives the lists it was selected from.
+     *
+     * @return the ids of the lists that were dropped.
+     */
+    fun invalidateAll(): Set<String> {
+        synchronized(mLock) {
+            val dropped = mState.lists.keys
+            mState = State(emptyMap(), mState.playlist)
+            return dropped
+        }
+    }
+
     private fun update(next: (State) -> State) {
         synchronized(mLock) {
             mState = next(mState)

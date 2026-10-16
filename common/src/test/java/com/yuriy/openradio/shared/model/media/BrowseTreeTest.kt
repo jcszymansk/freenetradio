@@ -98,6 +98,46 @@ class BrowseTreeTest {
     }
 
     /**
+     * A clear of the app data leaves every list the tree holds stale, not only one node, so the
+     * service drops them all and tells the subscribers of each id it gets back.
+     */
+    @Test
+    fun invalidatingEverythingDropsEveryListAndNamesThem() {
+        val tree = BrowseTree()
+        val first = station("first")
+        val second = station("second")
+        tree["first-parent"] = data(first)
+        tree["second-parent"] = data(second)
+
+        val dropped = tree.invalidateAll()
+
+        assertEquals(setOf("first-parent", "second-parent"), dropped)
+        assertNull(tree["first-parent"])
+        assertNull(tree["second-parent"])
+        assertNull(tree.getMediaItemByMediaId(first.id))
+        assertSame(RadioStation.INVALID_INSTANCE, tree.getRadioStationByMediaId(second.id))
+        assertTrue(tree.invalidateAll().isEmpty())
+    }
+
+    /**
+     * The playlist is the player's queue, which a clear does not stop, so its stations have to
+     * stay resolvable for the player to report on them.
+     */
+    @Test
+    fun invalidatingEverythingKeepsThePlaylist() {
+        val tree = BrowseTree()
+        val queued = station("queued")
+        val playlist = data(queued)
+        tree["parent"] = data(queued, station("sibling"))
+        tree.setPlaylist(playlist)
+
+        tree.invalidateAll()
+
+        assertSame(playlist.children, tree.getMediaItemsByMediaId(queued.id))
+        assertSame(queued, tree.getRadioStationByMediaId(queued.id))
+    }
+
+    /**
      * TASK-041: the playlist the service builds for its active station used to be stored under that
      * station's id, which answered every later selection of the station with the playlist instead
      * of the list it was selected from.

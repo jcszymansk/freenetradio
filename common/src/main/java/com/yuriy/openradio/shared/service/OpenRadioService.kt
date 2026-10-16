@@ -484,9 +484,23 @@ class OpenRadioService : MediaLibraryService() {
         mPlayer.play()
     }
 
+    /**
+     * Clears the app data, then every browse list built from it: a page-0 browse answers from the
+     * browse tree whenever it holds the node, so a list left there would keep serving what the
+     * clear removed. The tree goes after the presenter, so a browse in between cannot fill it again
+     * from what is about to be cleared, and the subscribers of each dropped list are told after
+     * that, so whatever they browse next reaches the presenter.
+     */
     private fun handleClearCache(context: Context) {
         mScope.launch {
             mPresenter.clear()
+            val dropped = mBrowseTree.invalidateAll()
+            AppLogger.i("$TAG clear dropped browse lists $dropped")
+            mUiScope.launch {
+                for (mediaId in dropped) {
+                    mSession.notifyChildrenChanged(mediaId, Int.MAX_VALUE, null)
+                }
+            }
             SafeToast.showAnyThread(context, getString(R.string.clear_completed))
         }
     }

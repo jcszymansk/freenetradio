@@ -522,8 +522,13 @@ class OpenRadioServiceBrowseTest {
      * one. This case does that first browse itself, so it holds whichever case ran before it, and
      * then clears the app data the way the settings do. A clear that left the memo behind would
      * answer the second browse with the seeded countries although nothing is cached any more
-     * (TASK-035). The settings stop at the clear, but it leaves the node in the browse tree, so the
-     * case invalidates the node itself to make the second browse reach the presenter.
+     * (TASK-035). The settings stop at the clear, so the service has to drop the node from its
+     * browse tree as well, or the second browse would be answered from there without reaching the
+     * presenter.
+     *
+     * The clear finishes on a coroutine, after the presenter, so the case subscribes to the node
+     * and waits for the push the service sends once the node is gone. Waiting for the presenter
+     * alone could browse before the tree has been emptied.
      */
     @Test
     fun theCountriesNodeIsEmptyAgainAfterAClearOnceItWasBrowsed() {
@@ -540,8 +545,12 @@ class OpenRadioServiceBrowseTest {
             "The clear probe was not stored, so waiting for it to go would prove nothing",
             mStorages.latest.get().isInvalid()
         )
+        assertEquals(
+            LibraryResult.RESULT_SUCCESS,
+            mBrowser.subscribe(MediaId.MEDIA_ID_COUNTRIES_LIST).resultCode
+        )
         mAppData.clearCaches(mBrowser) { mStorages.latest.get().isInvalid() }
-        invalidate(MediaId.MEDIA_ID_COUNTRIES_LIST)
+        mBrowser.awaitChildrenChanged(MediaId.MEDIA_ID_COUNTRIES_LIST)
 
         val result = mBrowser.childrenResult(
             MediaId.MEDIA_ID_COUNTRIES_LIST,
