@@ -93,8 +93,6 @@ private class UnusedSleepTimerModel : SleepTimerModel {
 
     override fun getTimestamp() = unexpected()
 
-    override fun isTimestampNotValid(value: Long) = unexpected()
-
     override fun addSleepTimerListener(listener: SleepTimerListener) = unexpected()
 
     override fun removeSleepTimerListener(listener: SleepTimerListener) = unexpected()

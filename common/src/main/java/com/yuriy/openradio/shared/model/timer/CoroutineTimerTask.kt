@@ -38,9 +38,10 @@ class CoroutineTimerTask internal constructor(private val mName: String, private
     private val mCoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
-     * The pending run. Guarded by this task's monitor.
+     * The latest run, or [NOTHING_ARMED] before the first [start]. A run that has finished or
+     * been cancelled is no longer pending. Guarded by this task's monitor.
      */
-    private var mJob: Job? = null
+    private var mJob: Job = NOTHING_ARMED
 
     /**
      * Cancels the pending run, if any, and schedules the action to run once after [delay]
@@ -48,7 +49,7 @@ class CoroutineTimerTask internal constructor(private val mName: String, private
      */
     @Synchronized
     fun start(delay: Long) {
-        mJob?.cancel("replaced by start()")
+        mJob.cancel("replaced by start()")
         mJob = mCoroutineScope.launch(CoroutineName(mName)) {
             delay(delay)
             try {
@@ -60,12 +61,28 @@ class CoroutineTimerTask internal constructor(private val mName: String, private
     }
 
     /**
+     * Whether a run is scheduled and has not finished or been cancelled. A run whose action is
+     * under way still counts.
+     */
+    @Synchronized
+    fun isPending(): Boolean {
+        return mJob.isActive
+    }
+
+    /**
      * Immediately stops the timer task, even if the job is currently running,
      * by cancelling the underlying Job.
      */
     @Synchronized
     fun cancel() {
-        mJob?.cancel("cancel() called")
-        mJob = null
+        mJob.cancel("cancel() called")
+    }
+
+    companion object {
+        /**
+         * A run that has already finished, so that the task never holds a null job: cancelling it
+         * does nothing and it is never pending.
+         */
+        private val NOTHING_ARMED: Job = Job().apply { complete() }
     }
 }

@@ -95,7 +95,8 @@ class OpenRadioService : MediaLibraryService() {
             applicationContext,
             PlayerListener(),
             mPresenter.getEqualizerLayer(),
-            mBrowseTree
+            mBrowseTree,
+            { mPresenter.isPlaybackBlockedByMobileNetwork() }
         )
     }
 
@@ -677,6 +678,14 @@ class OpenRadioService : MediaLibraryService() {
 
         override fun onHandledError(error: PlaybackException) {
             this@OpenRadioService.onHandledError(error)
+        }
+
+        /**
+         * The network monitor has not reported the blocked network yet, or never will, so this
+         * is the pause it would have made.
+         */
+        override fun onStreamRetryBlocked() {
+            pauseForNetworkPolicyUiThread()
         }
 
         override fun onPlaybackStateChanged(mediaItem: MediaItem) {

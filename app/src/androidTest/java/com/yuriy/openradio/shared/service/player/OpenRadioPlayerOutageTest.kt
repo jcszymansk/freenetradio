@@ -21,6 +21,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.service.LocalAudioFixture
@@ -52,6 +55,12 @@ import java.util.concurrent.TimeUnit
  * as it would a real one. The device's networking stays disabled throughout: the outage is the
  * broadcast going off the air, which is how a dead zone looks from the phone, and no
  * network-connected event is ever sent.
+ *
+ * Each wait is bounded by what ExoPlayer is configured to spend on the stream, not by how long it
+ * took on one emulator, and waits for the playback state the player reports rather than for
+ * [Player.isPlaying], which the device's audio focus decides as well. A wait that times out
+ * reports what the player did meanwhile: under a full suite run this test once timed out with
+ * nothing more to go on.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
@@ -66,6 +75,14 @@ class OpenRadioPlayerOutageTest {
     private lateinit var mPlayer: OpenRadioPlayer
 
     private val mEvents = CopyOnWriteArrayList<Event>()
+
+    /**
+     * Everything the player reported, with when it did, for the message of a wait that timed out.
+     * [mEvents] keeps only what the assertions compare.
+     */
+    private val mTrace = CopyOnWriteArrayList<String>()
+
+    private val mStartNanos = System.nanoTime()
 
     @Before
     fun setUp() {
@@ -95,14 +112,19 @@ class OpenRadioPlayerOutageTest {
      * being closed or refused, ExoPlayer times out on it until it gives up, and the station has
      * to come back on its own once it is on the air again. Before the fix the player took the
      * timeout for a broken stream, not a lost network, and sat stopped for good.
+     *
+     * Coming back is the stream reaching the ready state with the play request still standing,
+     * which is everything the player decides. Whether audio then comes out is the audio focus's
+     * call, and another app may hold it.
      */
     @Test
     fun aStationResumesByItselfAfterAnOutageThatOutlastsExoPlayersOwnRetries() {
         playTheBroadcast()
 
         mBroadcast.goOffAir()
+        trace("off the air")
 
-        val error = awaitError(OUTAGE_SECONDS)
+        val error = awaitError(GIVE_UP_LIVE_SECONDS)
         assertEquals(
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT, error.errorCode
         )
@@ -115,10 +137,15 @@ class OpenRadioPlayerOutageTest {
             mBroadcast.connections() > connectionsAtGiveUp
         }
 
+        val mark = mEvents.size
         mBroadcast.goOnAir()
+        trace("on the air")
 
-        await("the station to play again", RETRY_SECONDS + OUTAGE_SECONDS) { onMain { mPlayer.isPlaying } }
+        await("the station to be ready again", RESUME_SECONDS) {
+            eventsSince(mark).contains(Event.State(Player.STATE_READY))
+        }
         onMain {
+            assertTrue("The play request did not survive the outage", mPlayer.playWhenReady)
             assertEquals(mBroadcast.url, mPlayer.currentMediaItem?.localConfiguration?.uri.toString())
             assertFalse(mPlayer.resumesOnReconnect())
         }
@@ -211,7 +238,10 @@ class OpenRadioPlayerOutageTest {
             mPlayer.prepare()
             mPlayer.play()
         }
-        await("the broadcast to play", GIVE_UP_SECONDS) { onMain { mPlayer.isPlaying } }
+        await("the broadcast to be ready", GIVE_UP_SECONDS) {
+            mEvents.contains(Event.State(Player.STATE_READY))
+        }
+        onMain { assertTrue(mPlayer.playWhenReady) }
         mEvents.clear()
     }
 
@@ -234,7 +264,23 @@ class OpenRadioPlayerOutageTest {
             }
             Thread.sleep(POLL_MILLIS)
         }
-        fail("Timed out waiting for $what")
+        fail("Timed out waiting for $what after $seconds s\n${describe()}")
+    }
+
+    private fun describe(): String {
+        val state = onMain {
+            "playbackState=${mPlayer.playbackState} playWhenReady=${mPlayer.playWhenReady} " +
+                "suppression=${mPlayer.playbackSuppressionReason} isPlaying=${mPlayer.isPlaying} " +
+                "resumesOnReconnect=${mPlayer.resumesOnReconnect()}"
+        }
+        return "$state connections=${mBroadcast.connections()} " +
+            "open=${mBroadcast.openConnections()} bytesSent=${mBroadcast.bytesSent()}\n" +
+            mTrace.joinToString("\n")
+    }
+
+    private fun trace(what: String) {
+        val millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - mStartNanos)
+        mTrace.add("$millis ms: $what (connections ${mBroadcast.connections()})")
     }
 
     private sealed class Event {
@@ -247,11 +293,25 @@ class OpenRadioPlayerOutageTest {
     private inner class EventRecorder : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            trace("state $playbackState")
             mEvents.add(Event.State(playbackState))
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            trace("error ${error.errorCodeName}")
             mEvents.add(Event.Error(error))
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            trace("playWhenReady $playWhenReady, reason $reason")
+        }
+
+        override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
+            trace("suppression $playbackSuppressionReason")
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            trace("isPlaying $isPlaying")
         }
     }
 
@@ -260,11 +320,43 @@ class OpenRadioPlayerOutageTest {
         const val UNREACHABLE_STREAM = "$UNREACHABLE_ORIGIN/live.mp3"
 
         /**
-         * Longer than ExoPlayer keeps a silent live stream before giving it up: seven attempts that
-         * each wait out the data source's eight-second timeout, and the pauses between them, which
-         * took about 80 seconds on the emulator.
+         * How much longer than ExoPlayer's own budget a wait allows, for a device the rest of the
+         * suite is slowing down. ExoPlayer's timeouts are wall-clock time, so a slow device
+         * stretches only the work between them.
          */
-        const val OUTAGE_SECONDS = 180L
+        const val SLACK_FACTOR = 3
+
+        /**
+         * The longest pause ExoPlayer's default load error policy makes before a retry: a second
+         * per failure so far, up to this.
+         */
+        const val MAX_RETRY_PAUSE_MILLIS = 5_000L
+
+        /**
+         * How long ExoPlayer keeps a silent live stream before it gives it up: every attempt the
+         * default load error policy allows a live progressive stream waits out the data source's
+         * read timeout, with the pauses between them. 71 seconds with Media3 1.2.1's defaults,
+         * which the app does not change.
+         */
+        val GIVE_UP_LIVE_MILLIS = giveUpMillis(
+            DefaultLoadErrorHandlingPolicy.DEFAULT_MIN_LOADABLE_RETRY_COUNT_PROGRESSIVE_LIVE
+        )
+
+        val GIVE_UP_LIVE_SECONDS = SLACK_FACTOR * toSeconds(GIVE_UP_LIVE_MILLIS)
+
+        /**
+         * Longer than the station takes to be ready once it is back on the air. The attempt that
+         * found it silent times out and the next one plays it, ten seconds or so. This allows for
+         * the worst case too: every attempt ExoPlayer makes in the player's first retry failing
+         * until it gives the stream up, the player trying it again after its second delay, and
+         * that attempt buffering enough to play. The schedule allows more retries than that, so
+         * the station comes back well within its bound.
+         */
+        val RESUME_SECONDS = SLACK_FACTOR * toSeconds(
+            GIVE_UP_LIVE_MILLIS
+                + StreamRetrySchedule.DEFAULT_DELAYS_MS[1]
+                + DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS
+        )
 
         /**
          * Longer than ExoPlayer keeps retrying a refused connection, a few seconds.
@@ -275,8 +367,26 @@ class OpenRadioPlayerOutageTest {
          * Comfortably longer than the player waits before it tries a stream the network stopped
          * again.
          */
-        val RETRY_SECONDS = TimeUnit.MILLISECONDS.toSeconds(OpenRadioPlayer.STREAM_RETRY_DELAY_MS) * 2
+        val RETRY_SECONDS =
+            TimeUnit.MILLISECONDS.toSeconds(StreamRetrySchedule.DEFAULT_DELAYS_MS.first()) * 2
 
         const val POLL_MILLIS = 50L
+
+        /**
+         * How long ExoPlayer spends on a load that never gets an answer before it reports the
+         * error: one attempt and [retries] more, each waiting out the read timeout, and the pause
+         * the default load error policy makes before each retry.
+         */
+        fun giveUpMillis(retries: Int): Long {
+            val attempts = DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS.toLong() * (retries + 1)
+            val pauses = (1..retries).sumOf { failure ->
+                minOf((failure - 1) * 1_000L, MAX_RETRY_PAUSE_MILLIS)
+            }
+            return attempts + pauses
+        }
+
+        fun toSeconds(millis: Long): Long {
+            return TimeUnit.MILLISECONDS.toSeconds(millis + TimeUnit.SECONDS.toMillis(1) - 1)
+        }
     }
 }

@@ -84,17 +84,17 @@ class SleepTimerDialog : BaseDialogFragment(), SleepTimerModelDependency {
         return createAlertDialog(mView)
     }
 
+    /**
+     * Hands the picked time to the model whether or not it is valid: only the model knows whether
+     * the toggle left a timer armed, and so whether a refused time must also turn the stored
+     * timer off.
+     */
     override fun onDetach() {
         super.onDetach()
-        val timestamp = mSleepTimerModel.getTimestamp()
-        if (mIsEnabled) {
-            if (mSleepTimerModel.isTimestampNotValid(timestamp)) {
-                val ctx = context ?: return
-                SafeToast.showAnyThread(ctx, getString(R.string.failure))
-                return
-            }
+        if (!mSleepTimerModel.updateTimer(mSleepTimerModel.getTimestamp(), mIsEnabled)) {
+            val ctx = context ?: return
+            SafeToast.showAnyThread(ctx, getString(R.string.failure))
         }
-        mSleepTimerModel.updateTimer(timestamp, mIsEnabled)
     }
 
     fun onDateSet(year: Int, month: Int, day: Int) {

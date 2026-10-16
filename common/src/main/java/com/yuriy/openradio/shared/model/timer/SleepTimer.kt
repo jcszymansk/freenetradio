@@ -20,9 +20,14 @@ interface SleepTimer {
 
     /**
      * Replaces whatever timer is running with one that completes at [time], or with none when
-     * [enabled] is false or [time] is not accepted.
+     * [enabled] is false.
+     *
+     * A [time] that is not strictly after the timer's current time is refused: the running timer,
+     * if any, is left as it was, and the call returns false.
+     *
+     * @return False when [time] was refused, true otherwise.
      */
-    fun handle(time: Long, enabled: Boolean)
+    fun handle(time: Long, enabled: Boolean): Boolean
 
     /**
      * Stops the running timer, if any, so that it never completes.
@@ -30,7 +35,7 @@ interface SleepTimer {
     fun cancel()
 
     /**
-     * Whether [time] is late enough to be armed: strictly after the timer's current time.
+     * Whether a timer is counting down, or completing, and has not been cancelled.
      */
-    fun accepts(time: Long): Boolean
+    fun isArmed(): Boolean
 }

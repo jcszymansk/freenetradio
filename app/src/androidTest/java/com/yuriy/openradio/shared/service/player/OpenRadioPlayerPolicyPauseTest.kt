@@ -99,6 +99,11 @@ class OpenRadioPlayerPolicyPauseTest {
      * connection of its own, then drops the one it started on (TASK-106). What the policy pause
      * promises is that the station plays over one connection, and that the connection is new,
      * since the old one was closed before the resume.
+     *
+     * So the resume makes one or two connections, never more: on top of the one closed by the
+     * pause, the broadcast sees two or three in all. The upper bound is what catches a resume
+     * that reconnects in a loop and leaves one connection open, and the count is read again after
+     * [QUIET_MILLIS] so that a loop slower than the wait for a single open connection fails too.
      */
     @Test
     fun aStationThePolicyPausedPlaysAgainOverANewConnectionWhenResumed() {
@@ -119,7 +124,13 @@ class OpenRadioPlayerPolicyPauseTest {
         await("the player to keep a single connection to the broadcast") {
             mBroadcast.openConnections() == 1
         }
-        assertTrue("The resume made no new connection", mBroadcast.connections() > 1)
+        Thread.sleep(QUIET_MILLIS)
+        assertEquals(1, mBroadcast.openConnections())
+        val connections = mBroadcast.connections()
+        assertTrue(
+            "The resume made ${connections - 1} connections, not one or two",
+            connections in RESUMED_CONNECTIONS
+        )
         onMain { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 
@@ -341,5 +352,11 @@ class OpenRadioPlayerPolicyPauseTest {
          * Many times the 20 milliseconds between the broadcast's chunks.
          */
         const val QUIET_MILLIS = 2_000L
+
+        /**
+         * Every connection the broadcast sees in a policy pause and resume: the one the pause
+         * closed, the resume's own, and the one it may open to ask for the kept position.
+         */
+        val RESUMED_CONNECTIONS = 2..3
     }
 }

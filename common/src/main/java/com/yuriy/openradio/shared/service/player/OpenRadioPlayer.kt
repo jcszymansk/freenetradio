@@ -73,13 +73,19 @@ import kotlin.math.min
  *
  * @param mContext  Application context.
  * @param mListener Listener for the wrapper's events.
+ * @param mIsPlaybackBlocked Whether the mobile-network policy forbids playback now, the check every
+ * play request goes through. Asked on the main thread.
+ * @param mStreamRetrySchedule When to try again a stream ExoPlayer gave up for a lost network, and
+ * when to give the station up instead.
  */
 @UnstableApi
 class OpenRadioPlayer(
     private val mContext: Context,
     private val mListener: Listener,
     private val mEqualizerLayer: EqualizerLayer,
-    private val mBrowseTree: BrowseTree
+    private val mBrowseTree: BrowseTree,
+    private val mIsPlaybackBlocked: () -> Boolean,
+    private val mStreamRetrySchedule: StreamRetrySchedule = StreamRetrySchedule()
 ) : Player {
     /**
      * Listener for the main public events.
@@ -89,6 +95,13 @@ class OpenRadioPlayer(
         fun onHandledError(error: PlaybackException)
 
         fun onPlaybackStateChanged(mediaItem: MediaItem)
+
+        /**
+         * A retry of a stream the network stopped came due while the mobile-network policy forbids
+         * playback, so the player did not make it. The station still awaits a network it may use,
+         * and nothing tries it again until that network connects.
+         */
+        fun onStreamRetryBlocked()
     }
 
     /**
@@ -139,9 +152,10 @@ class OpenRadioPlayer(
      * The pending retry of a stream ExoPlayer gave up for a lost network. A network-connected
      * event resumes such a stream too, but a phone that loses its signal in a dead zone usually
      * keeps reporting the network it had, so that event may never come (TASK-018). Pending only
-     * while [mNetworkRecovery] awaits the network. Started and cancelled on the main thread.
+     * while [mNetworkRecovery] awaits the network; [NO_STREAM_RETRY] when none is. Started and
+     * cancelled on the main thread.
      */
-    private var mStreamRetry: Job? = null
+    private var mStreamRetry: Job = NO_STREAM_RETRY
 
     private val mExoPlayer: Player by lazy {
         AppLogger.i("Init ExoPlayer")
@@ -249,6 +263,9 @@ class OpenRadioPlayer(
 
     override fun prepare() {
         forgetAwaitedStream("prepare")
+        // Whoever prepares the stream from outside, the user or the service resuming it on a
+        // network that connected, starts a new attempt at it, which gets retries of its own.
+        mStreamRetrySchedule.reset()
         mPlayer.prepare()
     }
 
@@ -918,20 +935,30 @@ class OpenRadioPlayer(
     }
 
     /**
-     * Tries the stream again after [STREAM_RETRY_DELAY_MS], unless something ends the wait for the
-     * network first. A retry that fails for the network again schedules the next one, so the
-     * stream is tried for as long as the user wants it playing.
+     * Tries the stream again after [delayMs], unless something ends the wait for the network
+     * first. A retry that fails for the network again takes the next one from
+     * [mStreamRetrySchedule], until the schedule is spent.
+     *
+     * The retry asks the mobile-network policy when it is due, as a play request does. The
+     * service pauses the station when the network monitor reports a blocked network, but that
+     * report may come after the retry, or not at all when the default network changes without
+     * the event the monitor listens for (fnr-7shj).
      */
-    private fun scheduleStreamRetry() {
+    private fun scheduleStreamRetry(delayMs: Long) {
         cancelStreamRetry("a new retry")
-        AppLogger.i("$TAG retry the stream in $STREAM_RETRY_DELAY_MS ms")
+        AppLogger.i("$TAG retry the stream in $delayMs ms")
         mStreamRetry = mUiScope.launch {
-            delay(STREAM_RETRY_DELAY_MS)
-            mStreamRetry = null
+            delay(delayMs)
+            mStreamRetry = NO_STREAM_RETRY
             if (mNetworkRecovery != NetworkRecovery.AWAITING_NETWORK
                 || mPlayer.playbackState != Player.STATE_IDLE
             ) {
                 AppLogger.d("$TAG stream retry not needed, recovery $mNetworkRecovery")
+                return@launch
+            }
+            if (mIsPlaybackBlocked()) {
+                AppLogger.i("$TAG stream retry blocked by the mobile network policy")
+                mListener.onStreamRetryBlocked()
                 return@launch
             }
             AppLogger.i("$TAG retry the stream the network stopped")
@@ -940,10 +967,13 @@ class OpenRadioPlayer(
     }
 
     private fun cancelStreamRetry(event: String) {
-        val retry = mStreamRetry ?: return
+        val retry = mStreamRetry
+        if (!retry.isActive) {
+            return
+        }
         AppLogger.i("$TAG cancel the stream retry on $event")
         retry.cancel()
-        mStreamRetry = null
+        mStreamRetry = NO_STREAM_RETRY
     }
 
     private fun forgetAwaitedStream(event: String) {
@@ -958,6 +988,7 @@ class OpenRadioPlayer(
         mNetworkRecovery = next
         if (next != NetworkRecovery.AWAITING_NETWORK) {
             cancelStreamRetry(event)
+            mStreamRetrySchedule.reset()
         }
         if (previous != next) {
             AppLogger.i("$TAG network recovery $previous -> $next on $event")
@@ -1079,9 +1110,10 @@ class OpenRadioPlayer(
                         mNetworkRecovery.onNetworkLost(mPlayer.playWhenReady), "network lost"
                     )
                     if (mNetworkRecovery == NetworkRecovery.AWAITING_NETWORK) {
-                        scheduleStreamRetry()
+                        retryStreamTheNetworkStopped()
+                    } else {
+                        updateStreamMetadata(mContext.getString(R.string.media_stream_network_failed))
                     }
-                    updateStreamMetadata(mContext.getString(R.string.media_stream_network_failed))
                 }
 
                 is PlaybackErrorDecision.StreamRejected -> {
@@ -1105,6 +1137,26 @@ class OpenRadioPlayer(
 
         fun invalidateMetaData() {
             updateStreamMetadata(mStreamMetadata)
+        }
+
+        /**
+         * Tries again a stream the network stopped while the user wanted it playing, or gives the
+         * station up once [mStreamRetrySchedule] is spent. Giving up stops only the player's own
+         * retries: the station stays the one to resume on a network that connects, since the
+         * outage may have been a real one that outlasted them.
+         */
+        private fun retryStreamTheNetworkStopped() {
+            when (val retry = mStreamRetrySchedule.next()) {
+                is StreamRetry.After -> {
+                    scheduleStreamRetry(retry.delayMs)
+                    updateStreamMetadata(mContext.getString(R.string.media_stream_network_failed))
+                }
+
+                StreamRetry.Exhausted -> {
+                    AppLogger.w("$TAG stream retries spent, give the station up")
+                    reportUnplayableStream()
+                }
+            }
         }
 
         fun reportUnplayableStream() {
@@ -1163,11 +1215,9 @@ class OpenRadioPlayer(
         private const val TAG = "ORP"
 
         /**
-         * How long the player waits, once ExoPlayer has given up a stream the network stopped,
-         * before it tries the stream again. ExoPlayer has spent its own retries by then, from a
-         * few seconds for a refused connection to over a minute for one that times out, so this
-         * only spaces the attempts out.
+         * A retry that has already finished, standing for "no retry pending" so that
+         * [mStreamRetry] is never null: it is not active and cancelling it does nothing.
          */
-        const val STREAM_RETRY_DELAY_MS = 10_000L
+        private val NO_STREAM_RETRY: Job = Job().apply { complete() }
     }
 }
