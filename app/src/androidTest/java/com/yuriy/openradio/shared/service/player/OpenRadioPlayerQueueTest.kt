@@ -21,6 +21,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import com.yuriy.openradio.testing.onMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -45,25 +46,25 @@ class OpenRadioPlayerQueueTest {
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        mPlayer = onMain { newOpenRadioPlayer(context) }
-        onMain { mPlayer.setMediaItems(STATIONS.map(::station).toMutableList()) }
+        mPlayer = onMainThread { newOpenRadioPlayer(context) }
+        onMainThread { mPlayer.setMediaItems(STATIONS.map(::station).toMutableList()) }
     }
 
     @After
     fun tearDown() {
-        onMain { mPlayer.release() }
+        onMainThread { mPlayer.release() }
     }
 
     @Test
     fun aRangeMovedTowardsTheEndIsMovedInBothQueues() {
-        onMain { mPlayer.moveMediaItems(1, 3, 3) }
+        onMainThread { mPlayer.moveMediaItems(1, 3, 3) }
 
         assertQueues(listOf("a", "d", "e", "b", "c"))
     }
 
     @Test
     fun aRangeMovedTowardsTheStartIsMovedInBothQueues() {
-        onMain { mPlayer.moveMediaItems(3, 5, 0) }
+        onMainThread { mPlayer.moveMediaItems(3, 5, 0) }
 
         assertQueues(listOf("d", "e", "a", "b", "c"))
     }
@@ -74,7 +75,7 @@ class OpenRadioPlayerQueueTest {
      */
     @Test
     fun aRangeMovedPastTheEndEndsBothQueues() {
-        onMain { mPlayer.moveMediaItems(0, 2, 10) }
+        onMainThread { mPlayer.moveMediaItems(0, 2, 10) }
 
         assertQueues(listOf("c", "d", "e", "a", "b"))
     }
@@ -85,28 +86,28 @@ class OpenRadioPlayerQueueTest {
      */
     @Test
     fun aRangeRunningPastTheEndIsMovedAsFarAsTheEndInBothQueues() {
-        onMain { mPlayer.moveMediaItems(3, 10, 0) }
+        onMainThread { mPlayer.moveMediaItems(3, 10, 0) }
 
         assertQueues(listOf("d", "e", "a", "b", "c"))
     }
 
     @Test
     fun anItemMovedAloneIsMovedInBothQueues() {
-        onMain { mPlayer.moveMediaItem(0, 3) }
+        onMainThread { mPlayer.moveMediaItem(0, 3) }
 
         assertQueues(listOf("b", "c", "d", "a", "e"))
     }
 
     @Test
     fun anItemReplacedIsReplacedInBothQueues() {
-        onMain { mPlayer.replaceMediaItem(2, station("x")) }
+        onMainThread { mPlayer.replaceMediaItem(2, station("x")) }
 
         assertQueues(listOf("a", "b", "x", "d", "e"))
     }
 
     @Test
     fun aRangeReplacedIsReplacedInBothQueues() {
-        onMain { mPlayer.replaceMediaItems(1, 3, mutableListOf(station("x"))) }
+        onMainThread { mPlayer.replaceMediaItems(1, 3, mutableListOf(station("x"))) }
 
         assertQueues(listOf("a", "x", "d", "e"))
     }
@@ -117,7 +118,7 @@ class OpenRadioPlayerQueueTest {
      */
     @Test
     fun aRangeRunningPastTheEndIsReplacedAsFarAsTheEndInBothQueues() {
-        onMain { mPlayer.replaceMediaItems(3, 10, mutableListOf(station("x"), station("y"))) }
+        onMainThread { mPlayer.replaceMediaItems(3, 10, mutableListOf(station("x"), station("y"))) }
 
         assertQueues(listOf("a", "b", "c", "x", "y"))
     }
@@ -128,13 +129,13 @@ class OpenRadioPlayerQueueTest {
      */
     @Test
     fun aRangeStartingPastTheEndIsIgnoredByBothQueues() {
-        onMain { mPlayer.replaceMediaItems(7, 9, mutableListOf(station("x"))) }
+        onMainThread { mPlayer.replaceMediaItems(7, 9, mutableListOf(station("x"))) }
 
         assertQueues(STATIONS)
     }
 
     private fun assertQueues(expected: List<String>) {
-        onMain {
+        onMainThread {
             val played = (0 until mPlayer.mediaItemCount).map { mPlayer.getMediaItemAt(it).mediaId }
             assertEquals("The wrapped player's queue", expected, played)
             assertEquals("The wrapper's queue", expected, mPlayer.getPlaylist().map { it.mediaId })

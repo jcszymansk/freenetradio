@@ -28,6 +28,7 @@ import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import com.yuriy.openradio.testing.onMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -95,7 +96,7 @@ class OpenRadioPlayerRetryBoundTest {
             LocalAudioFixture.MP3_BYTES_PER_SECOND,
             LocalAudioFixture(mContext).silentMp3Frame()
         )
-        mPlayer = onMain {
+        mPlayer = onMainThread {
             newOpenRadioPlayer(mContext, StreamRetrySchedule(RETRY_DELAYS_MS))
                 .also { it.addListener(Recorder()) }
         }
@@ -103,7 +104,7 @@ class OpenRadioPlayerRetryBoundTest {
 
     @After
     fun tearDown() {
-        onMain { mPlayer.release() }
+        onMainThread { mPlayer.release() }
         mServer.stop()
     }
 
@@ -116,7 +117,7 @@ class OpenRadioPlayerRetryBoundTest {
 
         assertEquals(ATTEMPTS, mPreparations.get())
         assertEquals(List(ATTEMPTS) { CONNECTION_FAILED }, mErrors.map { it.errorCode })
-        onMain {
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertEquals(
                 "Something replaced the message the user is left with",
@@ -167,10 +168,10 @@ class OpenRadioPlayerRetryBoundTest {
         play()
         awaitUnplayable()
         Thread.sleep(SETTLE_MILLIS)
-        onMain { assertTrue("Giving up forgot the station", mPlayer.resumesOnReconnect()) }
+        onMainThread { assertTrue("Giving up forgot the station", mPlayer.resumesOnReconnect()) }
 
         // What OpenRadioService.handlePlayRequestUiThread does when a network connects.
-        onMain {
+        onMainThread {
             mPlayer.prepare()
             mPlayer.play()
         }
@@ -184,7 +185,7 @@ class OpenRadioPlayerRetryBoundTest {
     }
 
     private fun play(url: String = UNREACHABLE_STREAM) {
-        onMain {
+        onMainThread {
             mPlayer.setMediaItem(MediaItem.fromUri(url))
             mPlayer.prepare()
             mPlayer.play()
@@ -193,7 +194,7 @@ class OpenRadioPlayerRetryBoundTest {
 
     private fun awaitUnplayable() {
         await("the player to say the station cannot be played") {
-            onMain { mPlayer.mediaMetadata.subtitle?.toString() } == mUnplayableMessage
+            onMainThread { mPlayer.mediaMetadata.subtitle?.toString() } == mUnplayableMessage
         }
     }
 

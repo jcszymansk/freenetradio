@@ -20,10 +20,10 @@ import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
-import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.MediaResourceManagerListener
 import com.yuriy.openradio.shared.model.media.MediaResourcesManager
 import com.yuriy.openradio.shared.model.media.PlaybackState
+import com.yuriy.openradio.testing.onMainThread
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertTrue
@@ -50,8 +50,6 @@ import org.junit.Assert.assertTrue
 @UnstableApi
 internal class JourneyPlayback(private val mContext: Context) {
 
-    private val mInstrumentation = InstrumentationRegistry.getInstrumentation()
-
     private val mConnected = CountDownLatch(1)
 
     private val mListener = object : MediaResourceManagerListener {
@@ -72,7 +70,7 @@ internal class JourneyPlayback(private val mContext: Context) {
      * before that has no player to reach.
      */
     fun connect() {
-        mInstrumentation.runOnMainSync { mManager = MediaResourcesManager(mContext, TAG, mListener) }
+        mManager = onMainThread { MediaResourcesManager(mContext, TAG, mListener) }
         assertTrue(
             "The journey did not connect to the media session within $TIMEOUT_SECONDS seconds, " +
                 "so nothing it selects can play",
@@ -89,7 +87,7 @@ internal class JourneyPlayback(private val mContext: Context) {
      * Media3 rejects that read from any other thread.
      */
     fun select(item: MediaItem, parentId: String) {
-        mInstrumentation.runOnMainSync { manager().playFromMediaId(item, parentId) }
+        onMainThread { manager().playFromMediaId(item, parentId) }
     }
 
     /**
@@ -99,7 +97,7 @@ internal class JourneyPlayback(private val mContext: Context) {
     fun release() {
         val manager = mManager ?: return
         mManager = null
-        mInstrumentation.runOnMainSync { manager.clean() }
+        onMainThread { manager.clean() }
     }
 
     private fun manager(): MediaResourcesManager {

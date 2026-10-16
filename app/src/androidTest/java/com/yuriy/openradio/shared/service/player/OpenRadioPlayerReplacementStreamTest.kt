@@ -24,6 +24,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
+import com.yuriy.openradio.testing.onMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,23 +72,23 @@ class OpenRadioPlayerReplacementStreamTest {
             LocalAudioFixture(mContext).endlessWavHeader(),
             LocalAudioFixture.BYTES_PER_SECOND
         )
-        mPlayer = onMain {
+        mPlayer = onMainThread {
             newOpenRadioPlayer(mContext)
         }
     }
 
     @After
     fun tearDown() {
-        onMain { mPlayer.release() }
+        onMainThread { mPlayer.release() }
         mServer.stop()
     }
 
     @Test
     fun theReplacementOfAStationStillMeantToPlayIsStarted() {
         failOnAnUnreadableStream()
-        onMain { mPlayer.stopForReplacementStream() }
+        onMainThread { mPlayer.stopForReplacementStream() }
 
-        val start = onMain { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
+        val start = onMainThread { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
 
         assertTrue("A station meant to play was held", start)
         assertCurrentItemIsTheBroadcast()
@@ -96,11 +97,11 @@ class OpenRadioPlayerReplacementStreamTest {
     @Test
     fun aStationPausedWhileItsReplacementIsFoundStaysPaused() {
         failOnAnUnreadableStream()
-        onMain { mPlayer.stopForReplacementStream() }
-        onMain { mPlayer.pause() }
-        onMain { mPlayer.stopForReplacementStream() }
+        onMainThread { mPlayer.stopForReplacementStream() }
+        onMainThread { mPlayer.pause() }
+        onMainThread { mPlayer.stopForReplacementStream() }
 
-        val start = onMain { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
+        val start = onMainThread { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
 
         assertFalse("A paused station was told to start its replacement", start)
         assertTheBroadcastIsNotStarted()
@@ -113,16 +114,16 @@ class OpenRadioPlayerReplacementStreamTest {
     @Test
     fun aStationPausedWhileItsReplacementIsFoundKeepsTheReplacement() {
         failOnAnUnreadableStream()
-        onMain { mPlayer.stopForReplacementStream() }
-        onMain { mPlayer.pause() }
-        onMain { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
+        onMainThread { mPlayer.stopForReplacementStream() }
+        onMainThread { mPlayer.pause() }
+        onMainThread { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
 
         assertCurrentItemIsTheBroadcast()
-        onMain {
+        onMainThread {
             mPlayer.prepare()
             mPlayer.play()
         }
-        await("the kept replacement to play") { onMain { mPlayer.isPlaying } }
+        await("the kept replacement to play") { onMainThread { mPlayer.isPlaying } }
         assertEquals(1, mBroadcast.connections())
     }
 
@@ -134,10 +135,10 @@ class OpenRadioPlayerReplacementStreamTest {
     @Test
     fun aStationPausedBeforeItsStreamFailedHoldsTheNextOne() {
         failOnAnUnreadableStream()
-        onMain { mPlayer.pause() }
-        onMain { mPlayer.stopForReplacementStream() }
+        onMainThread { mPlayer.pause() }
+        onMainThread { mPlayer.stopForReplacementStream() }
 
-        val start = onMain { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
+        val start = onMainThread { mPlayer.replaceAwaitedStream(MediaItem.fromUri(mBroadcast.url)) }
 
         assertFalse("A paused station was told to start its next stream", start)
         assertTheBroadcastIsNotStarted()
@@ -149,20 +150,22 @@ class OpenRadioPlayerReplacementStreamTest {
      */
     private fun failOnAnUnreadableStream() {
         val noise = mServer.serve("/noise", LoopbackHttpFixture.TEXT_PLAIN, NOT_AUDIO)
-        onMain {
+        onMainThread {
             mPlayer.setMediaItem(MediaItem.fromUri(noise))
             mPlayer.prepare()
             mPlayer.play()
         }
-        await("the player to fail on the unreadable stream") { onMain { mPlayer.playerError != null } }
-        onMain {
+        await("the player to fail on the unreadable stream") {
+            onMainThread { mPlayer.playerError != null }
+        }
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertTrue(mPlayer.playWhenReady)
         }
     }
 
     private fun assertCurrentItemIsTheBroadcast() {
-        onMain {
+        onMainThread {
             assertEquals(1, mPlayer.mediaItemCount)
             assertEquals(mBroadcast.url, mPlayer.currentMediaItem?.localConfiguration?.uri.toString())
         }
@@ -176,7 +179,7 @@ class OpenRadioPlayerReplacementStreamTest {
         assertCurrentItemIsTheBroadcast()
         Thread.sleep(QUIET_MILLIS)
         assertEquals(0, mBroadcast.connections())
-        onMain {
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertFalse(mPlayer.playWhenReady)
         }

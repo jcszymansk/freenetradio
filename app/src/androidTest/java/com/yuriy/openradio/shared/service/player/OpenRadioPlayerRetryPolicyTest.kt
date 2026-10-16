@@ -24,6 +24,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import com.yuriy.openradio.testing.onMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -70,7 +71,7 @@ class OpenRadioPlayerRetryPolicyTest {
     @Before
     fun setUp() {
         mContext = InstrumentationRegistry.getInstrumentation().targetContext
-        mPlayer = onMain {
+        mPlayer = onMainThread {
             newOpenRadioPlayer(
                 mContext,
                 StreamRetrySchedule(RETRY_DELAYS_MS),
@@ -82,7 +83,7 @@ class OpenRadioPlayerRetryPolicyTest {
 
     @After
     fun tearDown() {
-        onMain { mPlayer.release() }
+        onMainThread { mPlayer.release() }
     }
 
     @Test
@@ -95,7 +96,7 @@ class OpenRadioPlayerRetryPolicyTest {
         assertEquals("The retry streamed on blocked mobile data", 1, mPreparations.get())
         assertEquals(listOf(CONNECTION_FAILED), mErrors.map { it.errorCode })
         assertEquals(1, mBlockedRetries.get())
-        onMain {
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertFalse(mPlayer.playWhenReady)
             assertTrue("The blocked retry forgot the station", mPlayer.resumesOnReconnect())
@@ -113,7 +114,7 @@ class OpenRadioPlayerRetryPolicyTest {
 
         mIsBlocked.set(false)
         // What OpenRadioService.handlePlayRequestUiThread does when a network it may use connects.
-        onMain {
+        onMainThread {
             mPlayer.prepare()
             mPlayer.play()
         }
@@ -127,7 +128,7 @@ class OpenRadioPlayerRetryPolicyTest {
     }
 
     private fun play() {
-        onMain {
+        onMainThread {
             mPlayer.setMediaItem(MediaItem.fromUri(UNREACHABLE_STREAM))
             mPlayer.prepare()
             mPlayer.play()

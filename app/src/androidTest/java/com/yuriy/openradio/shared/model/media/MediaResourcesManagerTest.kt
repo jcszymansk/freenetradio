@@ -34,6 +34,7 @@ import com.yuriy.openradio.shared.service.ServiceStorages
 import com.yuriy.openradio.shared.service.assertRadioBrowserIsBound
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import com.yuriy.openradio.testing.onMainThread
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -75,9 +76,7 @@ class MediaResourcesManagerTest {
 
     @After
     fun tearDown() {
-        mResourcesManager?.let { manager ->
-            InstrumentationRegistry.getInstrumentation().runOnMainSync(manager::clean)
-        }
+        mResourcesManager?.let { manager -> onMainThread(manager::clean) }
         clearState()
     }
 

@@ -20,7 +20,6 @@ import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
-import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.eq.EqualizerState
 import com.yuriy.openradio.shared.model.media.BrowseTree
@@ -45,18 +44,6 @@ internal fun newOpenRadioPlayer(
     return OpenRadioPlayer(
         context, listener, InertEqualizerLayer(), BrowseTree(), isPlaybackBlocked, retrySchedule
     )
-}
-
-/**
- * Runs [block] on the main thread and returns its result. ExoPlayer is bound to the looper it was
- * built on, and the service builds it on the main one.
- */
-internal fun <T> onMain(block: () -> T): T {
-    var result: Result<T>? = null
-    InstrumentationRegistry.getInstrumentation().runOnMainSync {
-        result = runCatching(block)
-    }
-    return result?.getOrThrow() ?: throw IllegalStateException("The main thread ran nothing")
 }
 
 /**

@@ -26,6 +26,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.R
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
+import com.yuriy.openradio.testing.onMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
@@ -69,14 +70,14 @@ class OpenRadioPlayerToleratedErrorTest {
         mAudio = LocalAudioFixture(mContext)
         mServer = LoopbackHttpFixture()
         mServer.start()
-        mPlayer = onMain {
+        mPlayer = onMainThread {
             newOpenRadioPlayer(mContext).also { it.addListener(ErrorRecorder()) }
         }
     }
 
     @After
     fun tearDown() {
-        onMain { mPlayer.release() }
+        onMainThread { mPlayer.release() }
         mServer.stop()
     }
 
@@ -88,7 +89,9 @@ class OpenRadioPlayerToleratedErrorTest {
 
         play(url)
 
-        await("the station to play after its first attempt failed") { onMain { mPlayer.isPlaying } }
+        await("the station to play after its first attempt failed") {
+            onMainThread { mPlayer.isPlaying }
+        }
         assertEquals(
             listOf(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED), mErrors.map { it.errorCode }
         )
@@ -104,16 +107,16 @@ class OpenRadioPlayerToleratedErrorTest {
         await("the player to spend the error budget") { mErrors.size > TOLERATED_ERRORS }
         val message = mContext.getString(R.string.media_stream_error)
         await("the player to say the stream failed") {
-            onMain { mPlayer.mediaMetadata.subtitle?.toString() } == message
+            onMainThread { mPlayer.mediaMetadata.subtitle?.toString() } == message
         }
         Thread.sleep(SETTLE_MILLIS)
         assertEquals(TOLERATED_ERRORS + 1, mErrors.size)
         assertEquals(List(TOLERATED_ERRORS + 1) { STATION_PATH }, mServer.requestedPaths())
-        onMain { assertEquals(Player.STATE_IDLE, mPlayer.playbackState) }
+        onMainThread { assertEquals(Player.STATE_IDLE, mPlayer.playbackState) }
     }
 
     private fun play(url: String) {
-        onMain {
+        onMainThread {
             mPlayer.setMediaItem(MediaItem.fromUri(url))
             mPlayer.prepare()
             mPlayer.play()

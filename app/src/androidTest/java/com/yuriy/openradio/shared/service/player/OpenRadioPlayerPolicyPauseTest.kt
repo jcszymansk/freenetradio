@@ -24,6 +24,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
+import com.yuriy.openradio.testing.onMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,14 +68,14 @@ class OpenRadioPlayerPolicyPauseTest {
             LocalAudioFixture(mContext).endlessWavHeader(),
             LocalAudioFixture.BYTES_PER_SECOND
         )
-        mPlayer = onMain {
+        mPlayer = onMainThread {
             newOpenRadioPlayer(mContext)
         }
     }
 
     @After
     fun tearDown() {
-        onMain { mPlayer.release() }
+        onMainThread { mPlayer.release() }
         mServer.stop()
     }
 
@@ -82,11 +83,11 @@ class OpenRadioPlayerPolicyPauseTest {
     fun aPolicyPauseClosesTheConnectionAndSendsNothingMore() {
         playTheBroadcast()
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
         awaitConnectionsClosed()
         assertNothingMoreIsSent()
-        onMain {
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertFalse(mPlayer.isLoading)
         }
@@ -108,11 +109,11 @@ class OpenRadioPlayerPolicyPauseTest {
     @Test
     fun aStationThePolicyPausedPlaysAgainOverANewConnectionWhenResumed() {
         playTheBroadcast()
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
         awaitConnectionsClosed()
         assertEquals(1, mBroadcast.connections())
 
-        onMain {
+        onMainThread {
             assertTrue("The policy pause forgot the station", mPlayer.resumesOnReconnect())
             assertEquals(1, mPlayer.mediaItemCount)
             assertEquals(mBroadcast.url, mPlayer.currentMediaItem?.localConfiguration?.uri.toString())
@@ -131,32 +132,32 @@ class OpenRadioPlayerPolicyPauseTest {
             "The resume made ${connections - 1} connections, not one or two",
             connections in RESUMED_CONNECTIONS
         )
-        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 
     @Test
     fun aPolicyPauseOfAStationTheUserPausedClosesTheConnectionAndKeepsItPaused() {
         playTheBroadcast()
-        onMain { mPlayer.pause() }
+        onMainThread { mPlayer.pause() }
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
         awaitConnectionsClosed()
         assertNothingMoreIsSent()
-        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 
     @Test
     fun aRepeatedPolicyPauseKeepsTheStationToResume() {
         playTheBroadcast()
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
         awaitConnectionsClosed()
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
         assertNothingMoreIsSent()
         assertEquals(1, mBroadcast.connections())
-        onMain { assertTrue(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertTrue(mPlayer.resumesOnReconnect()) }
     }
 
     /**
@@ -168,7 +169,7 @@ class OpenRadioPlayerPolicyPauseTest {
     fun aPauseAloneKeepsReadingTheBroadcast() {
         playTheBroadcast()
 
-        onMain { mPlayer.pause() }
+        onMainThread { mPlayer.pause() }
         val sentAtPause = mBroadcast.bytesSent()
         Thread.sleep(QUIET_MILLIS)
 
@@ -187,21 +188,21 @@ class OpenRadioPlayerPolicyPauseTest {
     @Test
     fun aPolicyPauseWhileAReplacementStreamIsFoundResumesTheStation() {
         failOnAnUnreadableStream()
-        onMain {
+        onMainThread {
             mPlayer.stopForReplacementStream()
             assertFalse(mPlayer.resumesOnReconnect())
         }
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
-        onMain {
+        onMainThread {
             assertTrue("The policy pause forgot the station", mPlayer.resumesOnReconnect())
             mPlayer.replaceMediaItem(0, MediaItem.fromUri(mBroadcast.url))
             mPlayer.prepare()
             mPlayer.play()
         }
         awaitPlaying()
-        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 
     /**
@@ -211,39 +212,39 @@ class OpenRadioPlayerPolicyPauseTest {
     @Test
     fun aStopForAReplacementStreamKeepsAStationThePolicyPaused() {
         playTheBroadcast()
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
-        onMain { mPlayer.stopForReplacementStream() }
-        onMain { assertTrue(mPlayer.resumesOnReconnect()) }
+        onMainThread { mPlayer.stopForReplacementStream() }
+        onMainThread { assertTrue(mPlayer.resumesOnReconnect()) }
 
-        onMain { mPlayer.stop() }
-        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        onMainThread { mPlayer.stop() }
+        onMainThread { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 
     @Test
     fun aPolicyPauseAfterTheUserStoppedAStationAwaitingAReplacementDoesNotResumeIt() {
         failOnAnUnreadableStream()
-        onMain {
+        onMainThread {
             mPlayer.stopForReplacementStream()
             mPlayer.stop()
         }
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
-        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 
     @Test
     fun aPolicyPauseAfterTheUserPausedAStationAwaitingAReplacementDoesNotResumeIt() {
         failOnAnUnreadableStream()
-        onMain {
+        onMainThread {
             mPlayer.stopForReplacementStream()
             mPlayer.pause()
         }
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
-        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertFalse(mPlayer.resumesOnReconnect()) }
     }
 
     /**
@@ -253,14 +254,14 @@ class OpenRadioPlayerPolicyPauseTest {
     @Test
     fun aPolicyPauseAfterAnotherStationWasSetInPlaceOfOneAwaitingAReplacementDoesNotResumeIt() {
         failOnAnUnreadableStream()
-        onMain {
+        onMainThread {
             mPlayer.stopForReplacementStream()
             mPlayer.setMediaItem(MediaItem.fromUri(mBroadcast.url))
         }
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
-        onMain { assertFalse(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertFalse(mPlayer.resumesOnReconnect()) }
         assertEquals(0, mBroadcast.connections())
     }
 
@@ -271,12 +272,12 @@ class OpenRadioPlayerPolicyPauseTest {
     @Test
     fun aRepeatedPolicyPauseOfAStationAwaitingAReplacementKeepsItToResume() {
         failOnAnUnreadableStream()
-        onMain { mPlayer.stopForReplacementStream() }
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.stopForReplacementStream() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
-        onMain { mPlayer.pauseForNetworkPolicy() }
+        onMainThread { mPlayer.pauseForNetworkPolicy() }
 
-        onMain { assertTrue(mPlayer.resumesOnReconnect()) }
+        onMainThread { assertTrue(mPlayer.resumesOnReconnect()) }
     }
 
     /**
@@ -285,20 +286,22 @@ class OpenRadioPlayerPolicyPauseTest {
      */
     private fun failOnAnUnreadableStream() {
         val noise = mServer.serve("/noise", LoopbackHttpFixture.TEXT_PLAIN, NOT_AUDIO)
-        onMain {
+        onMainThread {
             mPlayer.setMediaItem(MediaItem.fromUri(noise))
             mPlayer.prepare()
             mPlayer.play()
         }
-        await("the player to fail on the unreadable stream") { onMain { mPlayer.playerError != null } }
-        onMain {
+        await("the player to fail on the unreadable stream") {
+            onMainThread { mPlayer.playerError != null }
+        }
+        onMainThread {
             assertEquals(Player.STATE_IDLE, mPlayer.playbackState)
             assertTrue(mPlayer.playWhenReady)
         }
     }
 
     private fun playTheBroadcast() {
-        onMain {
+        onMainThread {
             mPlayer.setMediaItem(MediaItem.fromUri(mBroadcast.url))
             mPlayer.prepare()
             mPlayer.play()
@@ -308,7 +311,7 @@ class OpenRadioPlayerPolicyPauseTest {
     }
 
     private fun awaitPlaying() {
-        await("the broadcast to play") { onMain { mPlayer.isPlaying } }
+        await("the broadcast to play") { onMainThread { mPlayer.isPlaying } }
     }
 
     private fun awaitConnectionsClosed() {
