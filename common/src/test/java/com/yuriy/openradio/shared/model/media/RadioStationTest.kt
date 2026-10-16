@@ -118,7 +118,7 @@ class RadioStationTest {
     }
 
     @Test
-    fun identityAndOrderingUseStreamsSortIdAndName() {
+    fun identityAndOrderingUseStreamsSortIdNameAndId() {
         val first = RadioStation.makeDefaultInstance("same").apply {
             name = "Bravo"
             sortId = 1
@@ -137,6 +137,11 @@ class RadioStationTest {
             sortId = 1
         }
 
+        val sameNameLaterId = RadioStation.makeDefaultInstance("so-also").apply {
+            name = "Bravo"
+            sortId = 1
+        }
+
         assertEquals(first, first)
         assertEquals(first, equal)
         assertEquals(first.hashCode(), equal.hashCode())
@@ -146,6 +151,8 @@ class RadioStationTest {
         assertNotEquals(first, "same")
         assertTrue(first < laterSortId)
         assertTrue(first < laterName)
+        assertTrue(first < sameNameLaterId)
+        assertTrue(sameNameLaterId > first)
         assertFalse(first.isInvalid())
         assertTrue(RadioStation.INVALID_INSTANCE.isInvalid())
         assertTrue(RadioStation.makeDefaultInstance("").isInvalid())

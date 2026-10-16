@@ -339,6 +339,59 @@ class ParserLayerMappingTest {
         )
     }
 
+    /**
+     * Radio Browser lists regional relays and re-uploads under one name, each with its own id and
+     * stream, and many stations carry no name at all. A name is not an identity, so every one of
+     * them is listed.
+     */
+    @Test
+    fun aRadioBrowserStationThatSharesANameIsKept() {
+        val stations = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
+            """
+            [{"stationuuid":"relay-one","name":"Relay","url":"https://radio.example/one"},
+             {"stationuuid":"relay-two","name":"Relay","url":"https://radio.example/two"},
+             {"stationuuid":"unnamed-one","url":"https://radio.example/three"},
+             {"stationuuid":"unnamed-two","name":"","url":"https://radio.example/four"}]
+            """.trimIndent(),
+            MediaIdBuilderDefault(),
+            Uri.parse("")
+        )
+
+        assertEquals(
+            mapOf(
+                "relay-one" to "https://radio.example/one",
+                "relay-two" to "https://radio.example/two",
+                "unnamed-one" to "https://radio.example/three",
+                "unnamed-two" to "https://radio.example/four"
+            ),
+            stations.associate { it.id to it.getStreamUrlFixed() }
+        )
+    }
+
+    @Test
+    fun aWebRadioStationThatSharesANameIsKept() {
+        val stations = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
+            """
+            {"relay-one":{"Genre":["Rock"],"Name":"Relay","StreamUri":"https://radio.example/one"},
+             "relay-two":{"Genre":["Rock"],"Name":"Relay","StreamUri":"https://radio.example/two"},
+             "unnamed-one":{"Genre":["Rock"],"StreamUri":"https://radio.example/three"},
+             "unnamed-two":{"Genre":["Rock"],"Name":"","StreamUri":"https://radio.example/four"}}
+            """.trimIndent(),
+            MediaIdBuilderDefault(),
+            Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        )
+
+        assertEquals(
+            mapOf(
+                "relay-one" to "https://radio.example/one",
+                "relay-two" to "https://radio.example/two",
+                "unnamed-one" to "https://radio.example/three",
+                "unnamed-two" to "https://radio.example/four"
+            ),
+            stations.associate { it.id to it.getStreamUrlFixed() }
+        )
+    }
+
     @Test
     fun countryCodesAreMappedByBothParsers() {
         val radioBrowserCountries = ParserLayerRadioBrowserImpl(FilterImpl()).getAllCountries(
