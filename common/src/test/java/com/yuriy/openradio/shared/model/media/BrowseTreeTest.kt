@@ -127,14 +127,16 @@ class BrowseTreeTest {
     fun invalidatingEverythingKeepsThePlaylist() {
         val tree = BrowseTree()
         val queued = station("queued")
+        val sibling = station("sibling")
         val playlist = data(queued)
-        tree["parent"] = data(queued, station("sibling"))
+        tree["parent"] = data(queued, sibling)
         tree.setPlaylist(playlist)
 
         tree.invalidateAll()
 
         assertSame(playlist.children, tree.getMediaItemsByMediaId(queued.id))
         assertSame(queued, tree.getRadioStationByMediaId(queued.id))
+        assertSame(RadioStation.INVALID_INSTANCE, tree.getRadioStationByMediaId(sibling.id))
     }
 
     /**
