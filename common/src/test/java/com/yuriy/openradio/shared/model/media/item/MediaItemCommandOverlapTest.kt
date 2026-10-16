@@ -157,7 +157,11 @@ class MediaItemCommandOverlapTest {
             mBeforeAnswer = {
                 if (providerCalls.getAndIncrement() == 0) {
                     firstCallHeld.countDown()
-                    released.await(RecordingCommandListener.AWAIT_MILLIS, TimeUnit.MILLISECONDS)
+                    // A hold that ran out would let this execution go before the other answered,
+                    // and the case would pass without the order it exists to force.
+                    check(released.await(RecordingCommandListener.AWAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+                        "The held execution was never released"
+                    }
                 }
             }
         )
@@ -231,7 +235,9 @@ class MediaItemCommandOverlapTest {
         val released = CountDownLatch(1)
         val presenter = presenterWith {
             bothAsked.countDown()
-            released.await(RecordingCommandListener.AWAIT_MILLIS, TimeUnit.MILLISECONDS)
+            check(released.await(RecordingCommandListener.AWAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+                "The held executions were never released"
+            }
         }
         val requests = listOf("first" to RecordingCommandListener(), "second" to RecordingCommandListener())
 
