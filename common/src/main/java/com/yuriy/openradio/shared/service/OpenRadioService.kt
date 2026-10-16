@@ -902,7 +902,7 @@ class OpenRadioService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<Void>> {
             AppLogger.d("$TAG [$browser] Search for '$query'")
             mCurrentSearchQuery = query
-            return callWhenSearchReady(query) {
+            return callWhenSearchReady(browser, query, params) {
                 mSession.notifySearchResultChanged(browser, query, it, params)
                 LibraryResult.ofVoid()
             }
@@ -932,7 +932,7 @@ class OpenRadioService : MediaLibraryService() {
             // This happens when Search involved from non Automotive UI (onSearch is skipped currently).
             // Maybe need to redesign?
             if (list.isEmpty()) {
-                return callWhenSearchReady(queryStr) {
+                return callWhenSearchReady(browser, queryStr, params) {
                     val found = mBrowseTree[queryStr] ?: emptyList()
                     mArtworkGrants.grant(browser, found)
                     LibraryResult.ofItemList(found, LibraryParams.Builder().build())
@@ -1186,7 +1186,8 @@ class OpenRadioService : MediaLibraryService() {
             if (isOtherCountry) {
                 mBrowseTree.invalidate(parentId)
             }
-            val held = mBrowseTree.getPagedList(parentId)
+            val mark = mBrowseTree.mark(parentId)
+            val held = mark.list
             val fetchedPage = if (page == 0) {
                 if (held != null
                     //  Do not cache these categories, always fetch fresh data.
@@ -1223,15 +1224,9 @@ class OpenRadioService : MediaLibraryService() {
 
                             AppLogger.d("$TAG loaded [$pageNumber:${items.size}] for $parentId")
                             val browseData = BrowseTree.BrowseData(items, radioStations)
-                            val children = if (pageNumber == 0) {
+                            val children = if (pageNumber == UrlLayer.FIRST_PAGE_INDEX) {
                                 val stored = mBrowseTree.store(parentId, browseData)
-                                // Marked only once the list is in the tree: marked before, a browse
-                                // in between would take the old country's list, still held, for
-                                // the new one's.
-                                if (parentId == MediaId.MEDIA_ID_COUNTRY_STATIONS) {
-                                    mCountryStationsCode = countryCode
-                                }
-                                mUiScope.launch { maybeCreateInitialPlaylist() }
+                                onFirstPageStored(parentId, countryCode)
                                 mClientPages.answerWhole(client, parentId, stored)
                             } else {
                                 // A later page is only fetched to continue the list held, so
@@ -1242,6 +1237,13 @@ class OpenRadioService : MediaLibraryService() {
 
                             future.set(action(children))
                         }
+                    }
+                },
+                object : ResultListener {
+
+                    override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
+                        val browseData = BrowseTree.BrowseData(items, radioStations)
+                        mExecutorService.submit { storeLatePage(parentId, countryCode, mark, pageNumber, browseData) }
                     }
                 }
             )
@@ -1259,8 +1261,62 @@ class OpenRadioService : MediaLibraryService() {
             return future
         }
 
+        /**
+         * What storing the first page of [parentId], fetched for [countryCode], sets off.
+         */
+        private fun onFirstPageStored(parentId: String, countryCode: String) {
+            // Marked only once the list is in the tree: marked before, a browse in between would
+            // take the old country's list, still held, for the new one's.
+            if (parentId == MediaId.MEDIA_ID_COUNTRY_STATIONS) {
+                mCountryStationsCode = countryCode
+            }
+            mUiScope.launch { maybeCreateInitialPlaylist() }
+        }
+
+        /**
+         * Stores [browseData], [pageNumber] of [parentId], which its provider gave after the
+         * deadline had answered the request empty, and tells the clients browsing [parentId] to
+         * ask again: the one that asked holds the empty answer and would not ask on its own
+         * (fnr-2r55y). Asking again, it is answered from the tree.
+         *
+         * A first page is stored only when nothing changed under [parentId] since [mark] was
+         * taken, as the request began, and a later page only continues the list it was fetched
+         * for, see [BrowseTree.append]. The clients are told all the same when the page is
+         * dropped for that, since the one that asked still holds nothing: asking again, it gets
+         * what the node holds now, or a fetch.
+         */
+        private fun storeLatePage(
+            parentId: String,
+            countryCode: String,
+            mark: BrowseTree.Mark,
+            pageNumber: Int,
+            browseData: BrowseTree.BrowseData
+        ) {
+            val stored = if (pageNumber == UrlLayer.FIRST_PAGE_INDEX) {
+                mBrowseTree.storeIfUnchanged(parentId, mark, browseData)?.also {
+                    onFirstPageStored(parentId, countryCode)
+                }
+            } else {
+                mark.list?.let { mBrowseTree.append(parentId, it, browseData) }
+            }
+            if (stored == null) {
+                AppLogger.w("$TAG dropped late [$pageNumber:${browseData.children.size}] for $parentId, it changed since")
+            } else {
+                AppLogger.i("$TAG stored late [$pageNumber:${browseData.children.size}] for $parentId")
+            }
+            mUiScope.launch { mSession.notifyChildrenChanged(parentId, Int.MAX_VALUE, null) }
+        }
+
+        /**
+         * Runs [action] on the number of stations found for [query] once the search is done,
+         * through a future that the result listener completes. A result its provider gives after
+         * the deadline answered the search empty is stored in its place, and [browser] is told of
+         * it, so that it asks for the result again (fnr-2r55y).
+         */
         private fun <V : Any> callWhenSearchReady(
+            browser: MediaSession.ControllerInfo,
             query: String,
+            params: LibraryParams?,
             action: (size: Int) -> LibraryResult<V>
         ): ListenableFuture<LibraryResult<V>> {
             val id = MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
@@ -1279,6 +1335,19 @@ class OpenRadioService : MediaLibraryService() {
                             val size = radioStations.size
                             val result = action(size)
                             future.set(result)
+                        }
+                    }
+                },
+                object : ResultListener {
+
+                    override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
+                        val browseData = BrowseTree.BrowseData(items, radioStations)
+                        mExecutorService.submit {
+                            AppLogger.i("$TAG stored late ${radioStations.size} stations for search '$query'")
+                            mBrowseTree[query] = browseData
+                            mUiScope.launch {
+                                mSession.notifySearchResultChanged(browser, query, radioStations.size, params)
+                            }
                         }
                     }
                 }

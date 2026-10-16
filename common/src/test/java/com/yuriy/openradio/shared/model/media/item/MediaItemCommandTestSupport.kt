@@ -146,7 +146,8 @@ internal fun dependencies(
     isSavedInstance: Boolean = false,
     options: Bundle = Bundle(),
     timeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS,
-    scope: CoroutineScope = listener.scope
+    scope: CoroutineScope = listener.scope,
+    lateListener: OpenRadioService.ResultListener = RecordingCommandListener()
 ): MediaItemCommandDependencies {
     return MediaItemCommandDependencies(
         testContext(),
@@ -158,6 +159,7 @@ internal fun dependencies(
         options,
         scope,
         listener,
+        lateListener,
         timeoutMillis
     )
 }

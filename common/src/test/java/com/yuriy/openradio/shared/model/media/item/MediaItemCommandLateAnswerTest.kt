@@ -16,9 +16,11 @@
 
 package com.yuriy.openradio.shared.model.media.item
 
+import android.os.Bundle
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.service.location.Country
+import com.yuriy.openradio.shared.utils.AppUtils
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -28,11 +30,14 @@ import org.junit.Test
 
 /**
  * Covers what a browse command does with an answer its provider gives after the deadline has
- * answered the request empty (fnr-3ktp). The late answer is dropped, so nothing it did may outlast
- * it: the next request for the page that was late has to get that page, and a node found empty
- * must not report "no data" for a request that was answered long before. That the service then
- * asks for the late page again, rather than for the one after it, is decided by
+ * answered the request empty (fnr-3ktp). The late answer does not answer the request, so nothing
+ * it did may outlast it: the next request for the page that was late has to get that page, and a
+ * node found empty must not report "no data" for a request that was answered long before. That
+ * the service then asks for the late page again, rather than for the one after it, is decided by
  * [com.yuriy.openradio.shared.model.media.ClientPages] and covered by its test.
+ *
+ * The late answer goes to the late listener instead, with the page and the stations the command
+ * built, which is what the service stores and pushes to the client (fnr-2r55y).
  *
  * Each case runs the command the way the service does, through
  * [MediaItemCommandDependencies.execute], holds the provider until the deadline has answered, then
@@ -105,6 +110,76 @@ class MediaItemCommandLateAnswerTest {
     }
 
     @Test
+    fun aLateFirstPageOfACountryGoesToTheLateListenerWithItsStations() {
+        val presenter = HeldPresenter { hold ->
+            RecordingPresenter(
+                mCountries = setOf(Country("Poland", "PL")),
+                mCountryStations = stations("first", "second"),
+                mBeforeAnswer = hold
+            )
+        }
+        val late = RecordingCommandListener()
+
+        presenter.runPastTheDeadline(MediaItemCountryStations(), MediaId.MEDIA_ID_COUNTRY_STATIONS, late = late)
+
+        assertEquals(1, late.results)
+        late.assertMediaIds("first")
+        assertEquals(listOf("first"), late.radioStations.map { it.id })
+        assertEquals(UrlLayer.FIRST_PAGE_INDEX, late.pageNumber)
+    }
+
+    @Test
+    fun aLateNextPageOfACategoryGoesToTheLateListenerWithItsPage() {
+        val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
+        val presenter = HeldPresenter { hold ->
+            RecordingPresenter(mCategoryStations = stations("first", "second"), mBeforeAnswer = hold)
+        }
+        val late = RecordingCommandListener()
+
+        presenter.runPastTheDeadline(
+            MediaItemChildCategories(), parentId, UrlLayer.FIRST_PAGE_INDEX + 1, late = late
+        )
+
+        assertEquals(1, late.results)
+        late.assertMediaIds("second")
+        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, late.pageNumber)
+    }
+
+    @Test
+    fun aLateSearchAnswerGoesToTheLateListener() {
+        val presenter = HeldPresenter { hold ->
+            RecordingPresenter(mSearchStations = stations("found"), mBeforeAnswer = hold)
+        }
+        val late = RecordingCommandListener()
+
+        presenter.runPastTheDeadline(
+            MediaItemSearchFromService(),
+            MediaId.MEDIA_ID_SEARCH_FROM_SERVICE,
+            options = AppUtils.makeSearchQueryBundle("jazz"),
+            late = late
+        )
+
+        assertEquals(listOf("jazz"), presenter.recording.searchRequests)
+        assertEquals(1, late.results)
+        late.assertMediaIds(MediaId.makeSearchId("found"))
+    }
+
+    /** A late empty second page reports no "no data", and has nothing to pass on either. */
+    @Test
+    fun aLateEmptyNextPageGoesNowhere() {
+        val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
+        val presenter = HeldPresenter { hold -> RecordingPresenter(mBeforeAnswer = hold) }
+        val late = RecordingCommandListener()
+
+        val listener = presenter.runPastTheDeadline(
+            MediaItemChildCategories(), parentId, UrlLayer.FIRST_PAGE_INDEX + 1, late = late
+        )
+
+        listener.assertNoError()
+        assertEquals(0, late.results)
+    }
+
+    @Test
     fun aLateEmptyListOfNewStationsReportsNothing() {
         assertLateEmptyNodeReportsNothing(MediaItemNewStations()) { hold -> RecordingPresenter(mBeforeAnswer = hold) }
     }
@@ -170,7 +245,9 @@ class MediaItemCommandLateAnswerTest {
         fun runPastTheDeadline(
             command: MediaItemCommand,
             parentId: String,
-            pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX
+            pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX,
+            options: Bundle = Bundle(),
+            late: RecordingCommandListener = RecordingCommandListener()
         ): RecordingCommandListener {
             val listener = RecordingCommandListener()
             val held = Held(listener)
@@ -181,7 +258,9 @@ class MediaItemCommandLateAnswerTest {
                     listener,
                     parentId = parentId,
                     pageNumber = pageNumber,
-                    timeoutMillis = DEADLINE_MILLIS
+                    options = options,
+                    timeoutMillis = DEADLINE_MILLIS,
+                    lateListener = late
                 ).execute(command, listener.playbackStateListener)
                 assertTrue(
                     "The command never asked its provider, so its answer says nothing about a late page",

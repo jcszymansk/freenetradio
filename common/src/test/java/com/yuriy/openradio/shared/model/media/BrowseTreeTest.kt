@@ -418,6 +418,115 @@ class BrowseTreeTest {
         assertNull(tree["parent"])
     }
 
+    /**
+     * A first page that arrives after its request was answered is stored only if nothing has been
+     * done to its node since the request looked at it (fnr-2r55y).
+     */
+    @Test
+    fun aFirstPageIsStoredIfNothingChangedSinceTheMark() {
+        val tree = BrowseTree()
+        val mark = tree.mark("parent")
+
+        val stored = tree.storeIfUnchanged("parent", mark, data(station("first")))
+
+        assertNull(mark.list)
+        assertNotNull(stored)
+        assertSame(stored, tree.getPagedList("parent"))
+        assertEquals(1, stored!!.pageCount)
+        assertEquals(listOf("first"), tree["parent"]?.map { it.mediaId })
+    }
+
+    /** The favorites and the local stations are fetched afresh with a list already held. */
+    @Test
+    fun aFirstPageReplacesTheListHeldAtTheMarkIfNothingChangedSince() {
+        val tree = BrowseTree()
+        val old = tree.store("parent", data(station("old")))
+        val mark = tree.mark("parent")
+
+        val stored = tree.storeIfUnchanged("parent", mark, data(station("fresh")))
+
+        assertSame(old, mark.list)
+        assertSame(stored, tree.getPagedList("parent"))
+        assertTrue("A replacement kept the stamp of the list it replaced", stored!!.stamp != old.stamp)
+        assertEquals(listOf("fresh"), tree["parent"]?.map { it.mediaId })
+        assertNull(tree.getMediaItemByMediaId("old"))
+    }
+
+    @Test
+    fun aFirstPageIsDroppedIfAListWasStoredSinceTheMark() {
+        val tree = BrowseTree()
+        val mark = tree.mark("parent")
+        val newer = tree.store("parent", data(station("newer")))
+
+        assertNull(tree.storeIfUnchanged("parent", mark, data(station("dropped"))))
+        assertSame(newer, tree.getPagedList("parent"))
+        assertNull(tree.getMediaItemByMediaId("dropped"))
+    }
+
+    @Test
+    fun aFirstPageIsDroppedIfAPageWasAddedSinceTheMark() {
+        val tree = BrowseTree()
+        val first = tree.store("parent", data(station("first")))
+        val mark = tree.mark("parent")
+        val extended = tree.append("parent", first, data(station("second")))
+
+        assertNull(tree.storeIfUnchanged("parent", mark, data(station("dropped"))))
+        assertSame(extended, tree.getPagedList("parent"))
+        assertNull(tree.getMediaItemByMediaId("dropped"))
+    }
+
+    /**
+     * An invalidated node holds nothing, as it did at the mark, but the page was fetched from
+     * whatever the invalidation said is out of date: a sort order, a source, a cleared profile.
+     */
+    @Test
+    fun aFirstPageIsDroppedIfItsNodeWasInvalidatedSinceTheMarkEvenWhenNothingWasHeld() {
+        val tree = BrowseTree()
+        val mark = tree.mark("parent")
+        tree.invalidate("parent")
+
+        assertNull(tree.storeIfUnchanged("parent", mark, data(station("dropped"))))
+        assertNull(tree.getPagedList("parent"))
+        assertNull(tree.getMediaItemByMediaId("dropped"))
+    }
+
+    @Test
+    fun aFirstPageIsDroppedIfEverythingWasInvalidatedSinceTheMark() {
+        val tree = BrowseTree()
+        tree.store("other", data(station("other")))
+        val mark = tree.mark("parent")
+        tree.invalidateAll()
+
+        assertNull(tree.storeIfUnchanged("parent", mark, data(station("dropped"))))
+        assertNull(tree.getPagedList("parent"))
+        assertNull(tree.getMediaItemByMediaId("dropped"))
+    }
+
+    @Test
+    fun aMarkIsKeptThroughChangesToOtherNodes() {
+        val tree = BrowseTree()
+        val mark = tree.mark("parent")
+        val other = tree.store("other", data(station("other")))
+        tree.append("other", other, data(station("more")))
+        tree.invalidate("another")
+        tree.setPlaylist(data(station("playing")))
+
+        val stored = tree.storeIfUnchanged("parent", mark, data(station("first")))
+
+        assertSame(stored, tree.getPagedList("parent"))
+    }
+
+    /** Two late pages taken against the same mark: the first changes the node, so the second is dropped. */
+    @Test
+    fun aMarkStoresOnce() {
+        val tree = BrowseTree()
+        val mark = tree.mark("parent")
+        val first = tree.storeIfUnchanged("parent", mark, data(station("first")))
+
+        assertNull(tree.storeIfUnchanged("parent", mark, data(station("second"))))
+        assertSame(first, tree.getPagedList("parent"))
+    }
+
     @Test
     fun aStoredListIsNotChangedByItsCaller() {
         val tree = BrowseTree()
