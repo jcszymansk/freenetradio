@@ -231,6 +231,34 @@ class OpenRadioServiceRecoveryTest {
     }
 
     /**
+     * A playlist may name a stream by an address without an extension that serves a playlist in
+     * its turn, HLS most often. The player can only guess such a stream is progressive, so when it
+     * fails, the service reads it the way it read the station url and plays what it names, rather
+     * than moving on as if the stream were broken.
+     */
+    @Test
+    fun aStreamAPlaylistNamesWithoutAnExtensionIsReadWhenThePlayerCannotRecogniseIt() {
+        val stream = mServer.serve(
+            "/fixture.wav", LoopbackHttpFixture.AUDIO_WAV, mAudio.wavBytes(seconds = 10)
+        )
+        val listen = mServer.serve(
+            "/live/listen", LoopbackHttpFixture.AUDIO_PLS, plsPointingAt(stream)
+        )
+        val playlist = mServer.serve(
+            "/nested.pls", LoopbackHttpFixture.AUDIO_PLS, plsPointingAt(listen)
+        )
+
+        selectAndPlay(mStations.seed(playlist).first())
+
+        mBrowser.awaitPlayback("the stream the nested playlist names to replace the station url") {
+            mBrowser.currentMediaItemUri() == stream
+        }
+        mBrowser.awaitPlaying()
+        assertEquals(READ_ONCE, requestsFor("/nested.pls"))
+        assertEquals("The player and the service should each have opened it once", 2, requestsFor("/live/listen"))
+    }
+
+    /**
      * Giving up ends one play request, not the station: asking for it again is a new request and
      * reads its playlist again, because the station may have been fixed in the meantime.
      */

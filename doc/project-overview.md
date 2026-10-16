@@ -152,6 +152,12 @@ URL found to serve HLS only by reading it, the station URL included, is answered
 the HLS MIME type. Each `ResolvedStream` carries its type to the player, because the player picks
 its media source from the type before the URL.
 
+The parsers do not read an entry without a playlist extension, because nearly all of them are
+plain streams. When the player cannot recognise one whose type is unknown, `PlaylistFallback`
+has the service read it the way it read the station URL, so an extensionless entry that serves
+HLS plays as HLS, and the streams it names are tried before the entries that followed it. One play
+request reads each such URL once and at most `PlaylistFallback.MAX_STREAM_READS` of them.
+
 Reading a station's playlist counts as playing it, so the mobile-network policy applies to it.
 `extractUrlsFromPlaylist` asks the policy before every request, redirect hops included, and,
 through `GatedInputStream`, before every read of a response, so a transfer already under way stops

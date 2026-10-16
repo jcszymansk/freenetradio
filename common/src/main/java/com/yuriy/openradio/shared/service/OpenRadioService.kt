@@ -387,17 +387,21 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     /**
-     * Reads the station url of the media item [resolution] names as a playlist, because the player
-     * could not recognise what it serves as a stream. The read is part of playing the station, so
-     * it does not start, and does not go on to the playlists it names, while the network may not
-     * be used for playback.
+     * Reads the url the source of [resolution] names as a playlist, because the player could not
+     * recognise what it serves as a stream: the station url of the media item [resolution] names,
+     * or a stream an earlier read of it named. The read is part of playing the station, so it does
+     * not start, and does not go on to the playlists it names, while the network may not be used
+     * for playback.
      */
     @MainThread
     private fun resolvePlaylist(resolution: PlaylistFallback.Resolution) {
         mPlayer.stopForReplacementStream()
-        val playlistUrl = getStationUrl(resolution.mediaId)
+        val playlistUrl = when (val source = resolution.source) {
+            PlaylistFallback.Source.Station -> getStationUrl(resolution.mediaId)
+            is PlaylistFallback.Source.Stream -> source.url
+        }
         if (playlistUrl.isEmpty()) {
-            AppLogger.e("$TAG no station url to resolve for $resolution")
+            AppLogger.e("$TAG no url to resolve for $resolution")
             advancePlaylistFallback(mPlaylistFallback.onResolved(resolution, emptyList()))
             return
         }

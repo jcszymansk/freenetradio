@@ -18,6 +18,8 @@ package com.yuriy.openradio.shared.utils
 
 import androidx.media3.common.MimeTypes
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 
@@ -57,6 +59,17 @@ class ResolvedStreamTest {
 
             assertEquals(url, ResolvedStream(url, MimeTypes.APPLICATION_M3U8), stream)
         }
+    }
+
+    /**
+     * A stream of unknown type is the one the player opens as progressive, and the one it may be
+     * worth reading as a playlist when that fails.
+     */
+    @Test
+    fun onlyAStreamNeitherItsEntryNorItsUrlTypedHasAnUnknownType() {
+        assertTrue(ResolvedStream.of(entry("https://example.com/live/listen")).hasUnknownType)
+        assertFalse(ResolvedStream.of(entry("https://example.com/stream.mp3")).hasUnknownType)
+        assertFalse(ResolvedStream.of(entry("https://example.com/live/listen", MimeTypes.APPLICATION_M3U8)).hasUnknownType)
     }
 
     private companion object {

@@ -23,6 +23,7 @@ import com.yuriy.openradio.shared.service.PlaylistFallback.Exhausted
 import com.yuriy.openradio.shared.service.PlaylistFallback.Idle
 import com.yuriy.openradio.shared.service.PlaylistFallback.Resolution
 import com.yuriy.openradio.shared.service.PlaylistFallback.Resolving
+import com.yuriy.openradio.shared.service.PlaylistFallback.Source
 import com.yuriy.openradio.shared.service.PlaylistFallback.Step
 import com.yuriy.openradio.shared.service.PlaylistFallback.Trying
 import com.yuriy.openradio.shared.utils.ResolvedStream
@@ -34,8 +35,8 @@ import org.junit.Test
 /**
  * The state machine that decides, for one play request, when a station playlist is read and which
  * of the streams it names is played next. A playlist is read at most once per request: a stream it
- * named failing never leads to reading it again, and a read only answers for the request that
- * asked for it.
+ * named failing never leads to reading it again, only, when nothing said what that stream is, to
+ * reading the stream, and a read only answers for the request that asked for it.
  */
 class PlaylistFallbackTest {
 
@@ -65,14 +66,14 @@ class PlaylistFallbackTest {
     fun resolvingPlaysTheFirstResolvedStreamAndKeepsTheRestInOrder() {
         val step = Resolving(FIRST_READ).onResolved(FIRST_READ, listOf(STREAM_A, STREAM_B, STREAM_C))
 
-        assertEquals(Step(Trying(STATION, listOf(STREAM_B, STREAM_C), 1), Action.Play(STATION, STREAM_A)), step)
+        assertEquals(Step(Trying(STATION, STREAM_A, listOf(STREAM_B, STREAM_C), 1), Action.Play(STATION, STREAM_A)), step)
     }
 
     @Test
     fun resolvingASingleStreamPlaysItWithNothingLeft() {
         val step = Resolving(FIRST_READ).onResolved(FIRST_READ, listOf(STREAM_A))
 
-        assertEquals(Step(Trying(STATION, emptyList(), 1), Action.Play(STATION, STREAM_A)), step)
+        assertEquals(Step(Trying(STATION, STREAM_A, emptyList(), 1), Action.Play(STATION, STREAM_A)), step)
     }
 
     @Test
@@ -159,7 +160,7 @@ class PlaylistFallbackTest {
             Resolved(latest, listOf(STREAM_B)),
         )
 
-        assertEquals(Trying(STATION, emptyList(), 3), state)
+        assertEquals(Trying(STATION, STREAM_B, emptyList(), 3), state)
         assertEquals(
             listOf(
                 Action.Resolve(FIRST_READ),
@@ -174,14 +175,14 @@ class PlaylistFallbackTest {
 
     @Test
     fun tryingPlaysTheNextStreamWhenThePlayedOneFails() {
-        val step = Trying(STATION, listOf(STREAM_B, STREAM_C), 1).onUnrecognized(STATION)
+        val step = Trying(STATION, STREAM_A, listOf(STREAM_B, STREAM_C), 1).onUnrecognized(STATION)
 
-        assertEquals(Step(Trying(STATION, listOf(STREAM_C), 1), Action.Play(STATION, STREAM_B)), step)
+        assertEquals(Step(Trying(STATION, STREAM_B, listOf(STREAM_C), 1), Action.Play(STATION, STREAM_B)), step)
     }
 
     @Test
     fun tryingGivesUpWhenNoStreamIsLeft() {
-        val step = Trying(STATION, emptyList(), 1).onUnrecognized(STATION)
+        val step = Trying(STATION, STREAM_A, emptyList(), 1).onUnrecognized(STATION)
 
         assertEquals(Step(Exhausted(STATION, 1), Action.GiveUp(STATION)), step)
     }
@@ -210,7 +211,7 @@ class PlaylistFallbackTest {
 
     @Test
     fun tryingIgnoresARepeatOfItsOwnRead() {
-        val trying = Trying(STATION, listOf(STREAM_B), 1)
+        val trying = Trying(STATION, STREAM_A, listOf(STREAM_B), 1)
 
         val step = trying.onResolved(FIRST_READ, listOf(STREAM_C))
 
@@ -219,7 +220,7 @@ class PlaylistFallbackTest {
 
     @Test
     fun tryingIgnoresTheReadOfAnotherStation() {
-        val trying = Trying(STATION, listOf(STREAM_B), 1)
+        val trying = Trying(STATION, STREAM_A, listOf(STREAM_B), 1)
 
         val step = trying.onResolved(Resolution(OTHER_STATION, 2), listOf(STREAM_C))
 
@@ -228,10 +229,182 @@ class PlaylistFallbackTest {
 
     @Test
     fun tryingStartsOverForAFailureOfAnotherStation() {
-        val step = Trying(STATION, listOf(STREAM_B), 1).onUnrecognized(OTHER_STATION)
+        val step = Trying(STATION, STREAM_A, listOf(STREAM_B), 1).onUnrecognized(OTHER_STATION)
 
         val read = Resolution(OTHER_STATION, 2)
         assertEquals(Step(Resolving(read), Action.Resolve(read)), step)
+    }
+
+    @Test
+    fun aPlayedStreamOfUnknownTypeIsReadBeforeTheNextIsTried() {
+        val step = Trying(STATION, UNTYPED_A, listOf(STREAM_B), 1).onUnrecognized(STATION)
+
+        val read = Resolution(STATION, 2, Source.Stream(UNTYPED_A.url))
+        assertEquals(Step(Resolving(read, listOf(STREAM_B), setOf(UNTYPED_A.url)), Action.Resolve(read)), step)
+    }
+
+    @Test
+    fun aPlayedStreamOfKnownTypeIsNotRead() {
+        val step = Trying(STATION, STREAM_B, listOf(STREAM_C), 1).onUnrecognized(STATION)
+
+        assertEquals(Step(Trying(STATION, STREAM_C, emptyList(), 1), Action.Play(STATION, STREAM_C)), step)
+    }
+
+    @Test
+    fun theStreamsAReadStreamNamesAreTriedBeforeTheOnesThatFollowedIt() {
+        val read = Resolution(STATION, 2, Source.Stream(UNTYPED_A.url))
+
+        val step = Resolving(read, listOf(STREAM_B), setOf(UNTYPED_A.url)).onResolved(read, listOf(STREAM_A, STREAM_C))
+
+        assertEquals(
+            Step(
+                Trying(STATION, STREAM_A, listOf(STREAM_C, STREAM_B), 2, setOf(UNTYPED_A.url)),
+                Action.Play(STATION, STREAM_A)
+            ),
+            step
+        )
+    }
+
+    @Test
+    fun aReadStreamThatNamesNothingMovesOnToTheStreamAfterIt() {
+        val read = Resolution(STATION, 2, Source.Stream(UNTYPED_A.url))
+
+        val step = Resolving(read, listOf(STREAM_B), setOf(UNTYPED_A.url)).onResolved(read, emptyList())
+
+        assertEquals(
+            Step(Trying(STATION, STREAM_B, emptyList(), 2, setOf(UNTYPED_A.url)), Action.Play(STATION, STREAM_B)),
+            step
+        )
+    }
+
+    @Test
+    fun aReadStreamThatNamesNothingWithNoStreamAfterItGivesUp() {
+        val read = Resolution(STATION, 2, Source.Stream(UNTYPED_A.url))
+
+        val step = Resolving(read, emptyList(), setOf(UNTYPED_A.url)).onResolved(read, emptyList())
+
+        assertEquals(Step(Exhausted(STATION, 2), Action.GiveUp(STATION)), step)
+    }
+
+    /**
+     * The case this was written for: a playlist names an address without an extension that serves
+     * HLS. The player opens it as a progressive stream and fails, and reading it answers with the
+     * address itself, typed as HLS, which the player then opens as HLS.
+     */
+    @Test
+    fun anHlsStreamAPlaylistNamesWithoutAnExtensionIsPlayedAsHlsOnceRead() {
+        val streamRead = Resolution(STATION, 2, Source.Stream(UNTYPED_A.url))
+        val hls = ResolvedStream(UNTYPED_A.url, MimeTypes.APPLICATION_M3U8)
+
+        val (state, actions) = fold(
+            Idle(),
+            Unrecognized(STATION),
+            Resolved(FIRST_READ, listOf(UNTYPED_A, STREAM_A)),
+            Unrecognized(STATION),
+            Resolved(streamRead, listOf(hls)),
+        )
+
+        assertEquals(Trying(STATION, hls, listOf(STREAM_A), 2, setOf(UNTYPED_A.url)), state)
+        assertEquals(
+            listOf(
+                Action.Resolve(FIRST_READ),
+                Action.Play(STATION, UNTYPED_A),
+                Action.Resolve(streamRead),
+                Action.Play(STATION, hls),
+            ),
+            actions,
+        )
+    }
+
+    /**
+     * A stream that names itself, untyped, is played once more, but not read again; and a stream
+     * that serves HLS and still fails is not read at all, because its type is known by then.
+     */
+    @Test
+    fun aStreamIsReadAtMostOncePerRequest() {
+        val streamRead = Resolution(STATION, 2, Source.Stream(UNTYPED_A.url))
+
+        val (state, actions) = fold(
+            Idle(),
+            Unrecognized(STATION),
+            Resolved(FIRST_READ, listOf(UNTYPED_A)),
+            Unrecognized(STATION),
+            Resolved(streamRead, listOf(UNTYPED_A)),
+            Unrecognized(STATION),
+            Unrecognized(STATION),
+        )
+
+        assertEquals(Exhausted(STATION, 2), state)
+        assertEquals(
+            listOf(
+                Action.Resolve(FIRST_READ),
+                Action.Play(STATION, UNTYPED_A),
+                Action.Resolve(streamRead),
+                Action.Play(STATION, UNTYPED_A),
+                Action.GiveUp(STATION),
+                Action.GiveUp(STATION),
+            ),
+            actions,
+        )
+    }
+
+    /**
+     * A server that answers every read with another address of unknown type would keep the request
+     * reading forever.
+     */
+    @Test
+    fun oneRequestReadsNoMoreStreamsThanTheLimit() {
+        val streams = List(PlaylistFallback.MAX_STREAM_READS + 2) {
+            ResolvedStream("http://stream.test/live/$it", MimeTypes.AUDIO_UNKNOWN)
+        }
+        var state: PlaylistFallback = Idle()
+        val actions = mutableListOf<Action>()
+        fun apply(step: Step) {
+            state = step.next
+            actions.add(step.action)
+        }
+        apply(state.onUnrecognized(STATION))
+        apply(state.onResolved(FIRST_READ, listOf(streams.first())))
+        for (next in streams.drop(1)) {
+            apply(state.onUnrecognized(STATION))
+            val pending = state
+            if (pending is Resolving) {
+                apply(pending.onResolved(pending.resolution, listOf(next)))
+            }
+        }
+
+        assertEquals(1 + PlaylistFallback.MAX_STREAM_READS, actions.count { it is Action.Resolve })
+        assertEquals(Action.GiveUp(STATION), actions.last())
+        assertEquals(Exhausted(STATION, 1L + PlaylistFallback.MAX_STREAM_READS), state)
+    }
+
+    @Test
+    fun anotherStationFailingWhileStreamsWereReadStartsWithNoneRead() {
+        val trying = Trying(STATION, UNTYPED_A, emptyList(), 2, setOf(UNTYPED_B.url))
+
+        val step = trying.onUnrecognized(OTHER_STATION)
+
+        val read = Resolution(OTHER_STATION, 3)
+        assertEquals(Step(Resolving(read), Action.Resolve(read)), step)
+    }
+
+    @Test
+    fun aBlockedReadOfAStreamPausesTheStationForThePolicyAndEndsIdle() {
+        val read = Resolution(STATION, 2, Source.Stream(UNTYPED_A.url))
+
+        val step = Resolving(read, listOf(STREAM_B), setOf(UNTYPED_A.url)).onReadBlocked(read)
+
+        assertEquals(Step(Idle(2), Action.PauseForNetworkPolicy(STATION)), step)
+    }
+
+    @Test
+    fun aReadOfTheStationDoesNotAnswerForAReadOfAStreamWithTheSameNumber() {
+        val streamRead = Resolution(STATION, 2, Source.Stream(UNTYPED_A.url))
+        val waiting = Resolving(streamRead, listOf(STREAM_B), setOf(UNTYPED_A.url))
+
+        val step = waiting.onResolved(Resolution(STATION, 2), listOf(STREAM_A))
+
+        assertEquals(Step(waiting, Action.Ignore), step)
     }
 
     @Test
@@ -261,7 +434,8 @@ class PlaylistFallbackTest {
         val states = listOf(
             Idle(4),
             Resolving(Resolution(STATION, 4)),
-            Trying(STATION, listOf(STREAM_A), 4),
+            Trying(STATION, STREAM_A, listOf(STREAM_B), 4),
+            Trying(STATION, UNTYPED_A, emptyList(), 4, setOf(UNTYPED_B.url)),
             Exhausted(STATION, 4),
         )
 
@@ -295,7 +469,7 @@ class PlaylistFallbackTest {
             Resolved(secondRead, listOf(STREAM_B)),
         )
 
-        assertEquals(Trying(STATION, emptyList(), 2), state)
+        assertEquals(Trying(STATION, STREAM_B, emptyList(), 2), state)
         assertEquals(
             listOf(Action.Resolve(secondRead), Action.Ignore, Action.Play(STATION, STREAM_B)),
             actions,
@@ -388,7 +562,7 @@ class PlaylistFallbackTest {
     fun aBlockedReadIsIgnoredWhenNoReadIsPending() {
         val states = listOf(
             Idle(1),
-            Trying(STATION, listOf(STREAM_A), 1),
+            Trying(STATION, STREAM_A, listOf(STREAM_B), 1),
             Exhausted(STATION, 1),
         )
 
@@ -401,7 +575,7 @@ class PlaylistFallbackTest {
     fun onlyResolvingHasAReadPending() {
         assertTrue(Resolving(FIRST_READ).isReadPending)
         assertFalse(Idle(1).isReadPending)
-        assertFalse(Trying(STATION, listOf(STREAM_A), 1).isReadPending)
+        assertFalse(Trying(STATION, STREAM_A, listOf(STREAM_B), 1).isReadPending)
         assertFalse(Exhausted(STATION, 1).isReadPending)
     }
 
@@ -418,7 +592,7 @@ class PlaylistFallbackTest {
     fun abandoningAReadKeepsEveryStateWithoutOne() {
         val states = listOf(
             Idle(1),
-            Trying(STATION, listOf(STREAM_A), 1),
+            Trying(STATION, STREAM_A, listOf(STREAM_B), 1),
             Exhausted(STATION, 1),
         )
 
@@ -444,7 +618,7 @@ class PlaylistFallbackTest {
             Resolved(secondRead, listOf(STREAM_B)),
         )
 
-        assertEquals(Trying(STATION, emptyList(), 2), state)
+        assertEquals(Trying(STATION, STREAM_B, emptyList(), 2), state)
         assertEquals(
             listOf(Action.Ignore, Action.Resolve(secondRead), Action.Play(STATION, STREAM_B)),
             actions,
@@ -463,7 +637,7 @@ class PlaylistFallbackTest {
             Resolved(secondRead, listOf(STREAM_A)),
         )
 
-        assertEquals(Trying(STATION, emptyList(), 2), state)
+        assertEquals(Trying(STATION, STREAM_A, emptyList(), 2), state)
         assertEquals(
             listOf(
                 Action.Resolve(FIRST_READ),
@@ -552,7 +726,14 @@ class PlaylistFallbackTest {
         const val OTHER_STATION = "station-2"
         val STREAM_A = ResolvedStream("http://stream.test/a", MimeTypes.AUDIO_MPEG)
         val STREAM_B = ResolvedStream("http://stream.test/b", MimeTypes.APPLICATION_M3U8)
-        val STREAM_C = ResolvedStream("http://stream.test/c", MimeTypes.AUDIO_UNKNOWN)
+        val STREAM_C = ResolvedStream("http://stream.test/c", MimeTypes.AUDIO_AAC)
+
+        /**
+         * Streams named by urls without an extension, which the player can only guess are
+         * progressive.
+         */
+        val UNTYPED_A = ResolvedStream("http://stream.test/live/a", MimeTypes.AUDIO_UNKNOWN)
+        val UNTYPED_B = ResolvedStream("http://stream.test/live/b", MimeTypes.AUDIO_UNKNOWN)
 
         val FIRST_READ = Resolution(STATION, 1)
     }
