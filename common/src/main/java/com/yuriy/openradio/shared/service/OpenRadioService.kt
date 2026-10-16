@@ -1312,6 +1312,11 @@ class OpenRadioService : MediaLibraryService() {
          * through a future that the result listener completes. A result its provider gives after
          * the deadline answered the search empty is stored in its place, and [browser] is told of
          * it, so that it asks for the result again (fnr-2r55y).
+         *
+         * The late result is stored only when nothing changed under [query] since the empty answer
+         * was stored, so one that comes after the tree was emptied, as by a source switch, is not
+         * served in place of a new search. [browser] is told all the same, as it still holds the
+         * empty answer.
          */
         private fun <V : Any> callWhenSearchReady(
             browser: MediaSession.ControllerInfo,
@@ -1321,6 +1326,8 @@ class OpenRadioService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<V>> {
             val id = MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
             val future = SettableFuture.create<LibraryResult<V>>()
+            // Written and read only on mExecutorService, whose one thread runs the late task after this one.
+            var answered: BrowseTree.Mark? = null
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, Country.COUNTRY_CODE_DEFAULT, id,
                 UrlLayer.FIRST_PAGE_INDEX, mIsRestoreState, AppUtils.makeSearchQueryBundle(query), mCommandScope,
@@ -1332,6 +1339,7 @@ class OpenRadioService : MediaLibraryService() {
                         mExecutorService.submit {
 
                             mBrowseTree[query] = BrowseTree.BrowseData(items, radioStations)
+                            answered = mBrowseTree.mark(query)
                             val size = radioStations.size
                             val result = action(size)
                             future.set(result)
@@ -1343,8 +1351,14 @@ class OpenRadioService : MediaLibraryService() {
                     override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
                         val browseData = BrowseTree.BrowseData(items, radioStations)
                         mExecutorService.submit {
-                            AppLogger.i("$TAG stored late ${radioStations.size} stations for search '$query'")
-                            mBrowseTree[query] = browseData
+                            val stored = answered?.let { mBrowseTree.storeIfUnchanged(query, it, browseData) }
+                            if (stored == null) {
+                                AppLogger.w(
+                                    "$TAG dropped late ${radioStations.size} stations for search '$query', it changed since"
+                                )
+                            } else {
+                                AppLogger.i("$TAG stored late ${radioStations.size} stations for search '$query'")
+                            }
                             mUiScope.launch {
                                 mSession.notifySearchResultChanged(browser, query, radioStations.size, params)
                             }

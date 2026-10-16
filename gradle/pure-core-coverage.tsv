@@ -70,6 +70,7 @@ com/yuriy/openradio/shared/model/media/PlaybackState	com.yuriy.openradio.shared.
 com/yuriy/openradio/shared/model/media/RadioStationToAdd	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/RadioStationManagerLayerImpl	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/Category	com.yuriy.openradio.shared.model.media.CategoryTest	:common
+com/yuriy/openradio/shared/model/media/ShownSearch	com.yuriy.openradio.shared.model.media.ShownSearchTest	:common
 com/yuriy/openradio/shared/model/media/item/IndexableMediaItemCommand	com.yuriy.openradio.shared.model.media.item.IndexableMediaItemCommandTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandImpl	com.yuriy.openradio.shared.model.media.item.MediaItemCommandImplTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandDependencies	com.yuriy.openradio.shared.model.media.item.MediaItemCommandDependenciesTest	:common
