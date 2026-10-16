@@ -105,17 +105,7 @@ internal class ServiceBrowser {
      * [isConnected] sees nothing to undo and the refusal stays the failure that is reported.
      */
     fun connect() {
-        val context = mInstrumentation.targetContext
-        val connecting = onMainThread {
-            MediaBrowser.Builder(
-                context,
-                SessionToken(context, ComponentName(context, OpenRadioService::class.java))
-            )
-                .setListener(mListener)
-                .buildAsync()
-        }
-        mBrowser = connecting.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        onMain { addListener(mPlayerEvents) }
+        connectUnchecked()
         if (canABrowseStartPlayback()) {
             val activeStationId = activeStationId()
             release()
@@ -127,6 +117,26 @@ internal class ServiceBrowser {
                     "for that failure first."
             )
         }
+    }
+
+    /**
+     * Connects without the [connect] precondition, for a test whose subject is the state it
+     * refuses: a service that holds an active station and an empty queue, as one created after a
+     * station was played does. Such a test seeds favorites before it browses page 0, so that the
+     * playlist the browse builds comes out of storage rather than from the provider.
+     */
+    fun connectUnchecked() {
+        val context = mInstrumentation.targetContext
+        val connecting = onMainThread {
+            MediaBrowser.Builder(
+                context,
+                SessionToken(context, ComponentName(context, OpenRadioService::class.java))
+            )
+                .setListener(mListener)
+                .buildAsync()
+        }
+        mBrowser = connecting.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        onMain { addListener(mPlayerEvents) }
     }
 
     /**

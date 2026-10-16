@@ -657,41 +657,43 @@ class OpenRadioService : MediaLibraryService() {
         if (mediaItemCount != 0) {
             return
         }
-        val rsPlayable = MediaItemBuilder.buildPlayable(rs)
-        val list = mutableListOf<MediaItem>()
-        val radioStations = TreeSet<RadioStation>()
-        // Create a NPL:
+        buildInitialPlaylist(rs) { playlist ->
+            mPlayer.setMediaItems(playlist.mediaItems, playlist.startIndex, playlist.startPositionMs)
+            handlePlayRequestUiThread()
+        }
+    }
+
+    /**
+     * Builds the playlist the service plays around [rs] when it has no queue of its own: the
+     * favorites, or the provider's new stations when there are none, with [rs] at the head when
+     * neither holds it. [onBuilt] gets it on the main thread, positioned on [rs].
+     */
+    private fun buildInitialPlaylist(
+        rs: RadioStation,
+        onBuilt: (MediaSession.MediaItemsWithStartPosition) -> Unit
+    ) {
         mScope.launch {
             AppLogger.d("$TAG create init npl")
-            var radios = mPresenter.getAllFavorites()
-            if (radios.isEmpty().not()) {
+            val radioStations = TreeSet<RadioStation>()
+            val favorites = mPresenter.getAllFavorites()
+            if (favorites.isEmpty().not()) {
                 AppLogger.d("$TAG create init npl fill with fav")
-                radioStations.addAll(radios)
+                radioStations.addAll(favorites)
             } else {
                 AppLogger.d("$TAG create init npl fill with new stations")
-                radios = mPresenter.getNewStations()
-                radioStations.addAll(radios)
+                radioStations.addAll(mPresenter.getNewStations())
             }
             AppLogger.d("$TAG create init npl with ${radioStations.size}")
-            var isActiveStationFound = false
-            for (item in radioStations) {
-                val playable = MediaItemBuilder.buildPlayable(item)
-                if (item.id == rs.id) {
-                    isActiveStationFound = true
-                }
-                list.add(playable)
+            val list = radioStations.map { MediaItemBuilder.buildPlayable(it) }.toMutableList()
+            if (radioStations.none { it.id == rs.id }) {
+                list.add(0, MediaItemBuilder.buildPlayable(rs))
             }
-            if (isActiveStationFound.not()) {
-                list.add(0, rsPlayable)
-            }
-        }.invokeOnCompletion {
+            val pos = list.indexOfFirst { it.mediaId == rs.id }
             mUiScope.launch {
                 // This is needed for Media Browser when framework will require media item by id and the view will contain
                 // Browsables only:
                 mBrowseTree.setPlaylist(BrowseTree.BrowseData(list, radioStations))
-                val pos = list.indexOf(rsPlayable)
-                mPlayer.setMediaItems(list, pos, C.TIME_UNSET)
-                handlePlayRequestUiThread()
+                onBuilt(MediaSession.MediaItemsWithStartPosition(list, pos, C.TIME_UNSET))
             }
         }
     }
@@ -768,16 +770,29 @@ class OpenRadioService : MediaLibraryService() {
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
         private val mSessionCmdSkipped = Futures.immediateFuture(SessionResult(SessionResult.RESULT_INFO_SKIPPED))
 
+        /**
+         * Answers a play request that finds the queue empty with the queue the player had before
+         * it was emptied. A service created since remembers none, as after the process was killed,
+         * and then the active station, which `onCreate` restores from the latest one, is what was
+         * playing: the answer is the playlist a page-0 browse would build around it.
+         */
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val resumption = mPlayer.getResumption()
-            AppLogger.d(
-                "$TAG [$controller] Playback Resumption of ${resumption.mediaItems.size} items " +
-                        "at ${resumption.startIndex}"
-            )
-            return Futures.immediateFuture(resumption)
+            val rs = mActiveRS
+            if (resumption.mediaItems.isNotEmpty() || rs.isInvalid()) {
+                AppLogger.d(
+                    "$TAG [$controller] Playback Resumption of ${resumption.mediaItems.size} items " +
+                            "at ${resumption.startIndex}"
+                )
+                return Futures.immediateFuture(resumption)
+            }
+            AppLogger.i("$TAG [$controller] Playback Resumption builds a playlist around ${rs.id}")
+            val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            buildInitialPlaylist(rs) { future.set(it) }
+            return future
         }
 
         override fun onPlayerCommandRequest(
