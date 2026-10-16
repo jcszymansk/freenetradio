@@ -186,9 +186,13 @@ class ParserLayerRadioBrowserImpl(private val mFilter: Filter) : ParserLayer {
         radioStation.lastCheckOk = JsonUtils.getIntValue(jsonObject, KEY_LAST_CHECK_OK)
         val streamUrl = JsonUtils.getStringValue(jsonObject, KEY_URL)
         if (streamUrl.isNotEmpty()) {
-            var bitrate = 0
-            if (jsonObject.has(KEY_BIT_RATE)) {
-                bitrate = jsonObject.getInt(KEY_BIT_RATE)
+            // The stream url alone makes the station playable and the bitrate is only shown, so an
+            // unreadable bitrate is read as a missing one rather than dropping the station.
+            val bitrate = try {
+                if (jsonObject.has(KEY_BIT_RATE)) jsonObject.getInt(KEY_BIT_RATE) else 0
+            } catch (e: JSONException) {
+                AppLogger.w("$TAG station $uuid with unreadable bitrate read as 0: ${e.message}")
+                0
             }
             radioStation.setVariant(bitrate, streamUrl)
         }

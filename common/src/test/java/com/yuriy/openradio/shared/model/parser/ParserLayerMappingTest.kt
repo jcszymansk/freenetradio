@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.model.parser
 
 import android.net.Uri
 import com.yuriy.openradio.shared.model.filter.FilterImpl
+import com.yuriy.openradio.shared.model.media.MediaStream
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamBitrate
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
@@ -285,6 +286,57 @@ class ParserLayerMappingTest {
 
         assertEquals(listOf("jazz", "rock", "folk"), categories.map { it.id })
         assertEquals(listOf(3, 2, 0), categories.map { it.stationsCount })
+    }
+
+    /**
+     * The bitrate is only shown next to the station, and the stream url alone makes it playable, so
+     * an unreadable bitrate is read as the one a station without the field gets: dropping the
+     * station would lose more than a wrong bitrate does.
+     */
+    @Test
+    fun aRadioBrowserStationWithAMalformedBitrateKeepsTheDefault() {
+        val stations = ParserLayerRadioBrowserImpl(FilterImpl()).getRadioStations(
+            """
+            [{"stationuuid":"word","name":"word","url":"https://radio.example/word","bitrate":"fast"},
+             {"stationuuid":"null","name":"null","url":"https://radio.example/null","bitrate":null},
+             {"stationuuid":"object","name":"object","url":"https://radio.example/object","bitrate":{}},
+             {"stationuuid":"text-number","name":"text-number","url":"https://radio.example/text-number","bitrate":"96"},
+             {"stationuuid":"number","name":"number","url":"https://radio.example/number","bitrate":128}]
+            """.trimIndent(),
+            MediaIdBuilderDefault(),
+            Uri.parse("")
+        )
+
+        assertEquals(
+            mapOf("word" to 0, "null" to 0, "object" to 0, "text-number" to 96, "number" to 128),
+            stations.associate { it.id to it.getStreamBitrate() }
+        )
+    }
+
+    @Test
+    fun aWebRadioStationWithAMalformedBitrateKeepsTheDefault() {
+        val stations = ParserLayerWebRadioImpl(emptySet()).getRadioStations(
+            """
+            {"word":{"Genre":["Rock"],"Name":"word","StreamUri":"https://radio.example/word","Bitrate":"fast"},
+             "null":{"Genre":["Rock"],"Name":"null","StreamUri":"https://radio.example/null","Bitrate":null},
+             "object":{"Genre":["Rock"],"Name":"object","StreamUri":"https://radio.example/object","Bitrate":{}},
+             "text-number":{"Genre":["Rock"],"Name":"text-number","StreamUri":"https://radio.example/text-number","Bitrate":"96"},
+             "number":{"Genre":["Rock"],"Name":"number","StreamUri":"https://radio.example/number","Bitrate":64}}
+            """.trimIndent(),
+            MediaIdBuilderDefault(),
+            Uri.parse("https://example.com?${UrlLayerWebRadioImpl.KEY_CATEGORY_ID}Rock")
+        )
+
+        assertEquals(
+            mapOf(
+                "word" to MediaStream.BIT_RATE_DEFAULT,
+                "null" to MediaStream.BIT_RATE_DEFAULT,
+                "object" to MediaStream.BIT_RATE_DEFAULT,
+                "text-number" to 96,
+                "number" to 64
+            ),
+            stations.associate { it.id to it.getStreamBitrate() }
+        )
     }
 
     @Test
