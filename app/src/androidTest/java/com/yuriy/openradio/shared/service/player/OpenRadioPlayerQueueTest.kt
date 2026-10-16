@@ -30,7 +30,7 @@ import org.junit.runner.RunWith
 
 /**
  * How [OpenRadioPlayer] keeps the queue it reports in step with the queue of the ExoPlayer it
- * wraps when a controller reorders it or replaces part of it.
+ * wraps when a controller reorders it, replaces part of it or removes part of it.
  *
  * The wrapper keeps its own copy of the queue, from which it reads the metadata it publishes, while
  * the wrapped player decides what plays. Each case reads both: the wrapped player's through
@@ -130,6 +130,52 @@ class OpenRadioPlayerQueueTest {
     @Test
     fun aRangeStartingPastTheEndIsIgnoredByBothQueues() {
         onMainThread { mPlayer.replaceMediaItems(7, 9, mutableListOf(station("x"))) }
+
+        assertQueues(STATIONS)
+    }
+
+    @Test
+    fun anItemRemovedIsRemovedFromBothQueues() {
+        onMainThread { mPlayer.removeMediaItem(2) }
+
+        assertQueues(listOf("a", "b", "d", "e"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.removeMediaItem] ignores an index past the end of the queue.
+     */
+    @Test
+    fun anItemPastTheEndIsIgnoredByBothQueues() {
+        onMainThread { mPlayer.removeMediaItem(5) }
+
+        assertQueues(STATIONS)
+    }
+
+    @Test
+    fun aRangeRemovedIsRemovedFromBothQueues() {
+        onMainThread { mPlayer.removeMediaItems(1, 3) }
+
+        assertQueues(listOf("a", "d", "e"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.removeMediaItems] removes a range that runs past the end of
+     * the queue as far as the end.
+     */
+    @Test
+    fun aRangeRunningPastTheEndIsRemovedAsFarAsTheEndFromBothQueues() {
+        onMainThread { mPlayer.removeMediaItems(3, 10) }
+
+        assertQueues(listOf("a", "b", "c"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.removeMediaItems] ignores a range that starts past the end of
+     * the queue.
+     */
+    @Test
+    fun aRemovedRangeStartingPastTheEndIsIgnoredByBothQueues() {
+        onMainThread { mPlayer.removeMediaItems(7, 9) }
 
         assertQueues(STATIONS)
     }
