@@ -149,6 +149,14 @@ class OpenRadioService : MediaLibraryService() {
 
     private val mStartIds: ConcurrentLinkedQueue<Int>
     private var mCurrentParentId = AppUtils.EMPTY_STRING
+
+    /**
+     * The country the list held under [MediaId.MEDIA_ID_COUNTRY_STATIONS] was built for. That id
+     * names no country and stands for whichever one is stored, so the browse tree alone cannot tell
+     * the list of the stored country from one built before the country changed.
+     */
+    @Volatile
+    private var mCountryStationsCode = AppUtils.EMPTY_STRING
     private var mIsRestoreState = false
     private lateinit var mPresenter: OpenRadioServicePresenter
     private lateinit var mDownloader: DownloaderLayer
@@ -1128,6 +1136,16 @@ class OpenRadioService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<V>> {
             val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
             mCurrentParentId = parentId
+            // If Parent Id contains Country Code - use it in the API.
+            val countryCode = MediaId.getCountryCode(parentId, mPresenter.getCountryCode())
+            // A country stations list built for a country no longer stored is not the node's list
+            // any more, and the new country's list starts at its first page, not at the page the
+            // old one had reached.
+            val isOtherCountry =
+                parentId == MediaId.MEDIA_ID_COUNTRY_STATIONS && countryCode != mCountryStationsCode
+            if (isOtherCountry) {
+                mBrowseTree.invalidate(parentId)
+            }
             if (page == 0
                 && mBrowseTree[parentId] != null
                 //  Do not cache these categories, always fetch fresh data.
@@ -1139,14 +1157,11 @@ class OpenRadioService : MediaLibraryService() {
             val id = MediaId.getId(parentId, AppUtils.EMPTY_STRING)
             val command = mPresenter.getMediaItemCommand(id)
             AppLogger.d("$TAG get source for $id by $command")
-            val defaultCountryCode = mPresenter.getCountryCode()
-            // If Parent Id contains Country Code - use it in the API.
-            val countryCode = MediaId.getCountryCode(parentId, defaultCountryCode)
             // Use this feature object to return response of the async nature in order it issued via this method.
             val future = SettableFuture.create<LibraryResult<V>>()
             val dependencies = MediaItemCommandDependencies(
                 applicationContext, mPresenter, countryCode, parentId,
-                isSameCatalogue, mIsRestoreState, Bundle(), mCommandScope,
+                isSameCatalogue && !isOtherCountry, mIsRestoreState, Bundle(), mCommandScope,
                 object : ResultListener {
 
                     override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
@@ -1161,6 +1176,12 @@ class OpenRadioService : MediaLibraryService() {
                             AppLogger.d("$TAG loaded [$pageNumber:${items.size}] for $parentId")
                             val position = if (pageNumber == 0) {
                                 mBrowseTree[parentId] = BrowseTree.BrowseData(items, radioStations)
+                                // Marked only once the list is in the tree: marked before, a browse
+                                // in between would take the old country's list, still held, for
+                                // the new one's.
+                                if (parentId == MediaId.MEDIA_ID_COUNTRY_STATIONS) {
+                                    mCountryStationsCode = countryCode
+                                }
                                 mUiScope.launch { maybeCreateInitialPlaylist() }
                                 0
                             } else {

@@ -28,6 +28,7 @@ import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.model.net.UrlLayerRadioBrowserImpl
+import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiCache
 import com.yuriy.openradio.shared.model.storage.cache.api.PersistentApiDb
@@ -35,6 +36,7 @@ import com.yuriy.openradio.shared.model.storage.images.Image
 import com.yuriy.openradio.shared.model.storage.images.ImagesDatabase
 import com.yuriy.openradio.shared.model.storage.makeStation
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
+import java.lang.ref.WeakReference
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -70,6 +72,11 @@ class OpenRadioServiceBrowseTest {
     private lateinit var mAppData: AppDataReset
 
     /**
+     * The stored country, which [ServiceStorages.clear] does not own.
+     */
+    private lateinit var mLocation: LocationStorage
+
+    /**
      * Builds the URLs a fixture has to be keyed to. Only the builders are used, and they run
      * before any DNS mirror is resolved, so nothing here touches the network.
      */
@@ -90,6 +97,7 @@ class OpenRadioServiceBrowseTest {
         mStorages = ServiceStorages(mContext)
         mStorages.clear()
         mAppData = AppDataReset(mContext)
+        mLocation = LocationStorage(WeakReference(mContext))
         mBrowser = ServiceBrowser()
         mActivitiesAliveAtConnect = mPresence.alive()
         mBrowser.connect()
@@ -107,6 +115,7 @@ class OpenRadioServiceBrowseTest {
     @After
     fun tearDown() {
         mStorages.clear()
+        mLocation.clear()
         PersistentApiCache(mContext, PersistentApiDb.DATABASE_DEFAULT_FILE_NAME).clear()
         InMemoryApiCache().clear()
         if (mBrowser.isConnected()) {
@@ -477,6 +486,69 @@ class OpenRadioServiceBrowseTest {
     }
 
     /**
+     * The root's country stations entry has one media id whichever country is stored, so the
+     * service cannot tell from the id that the list it holds for it belongs to the country stored
+     * before a change. A user who opened the entry once, chose another country in the general
+     * dialog and opened it again was shown the old country's stations for as long as the service
+     * lived.
+     *
+     * The change is made the way the general dialog makes it: the country is stored and the tree
+     * update command is sent. Both countries are seeded before the first browse, because seeding
+     * drops the node from the browse tree and would hide the stale list this case is about.
+     */
+    @Test
+    fun theCountryStationsEntryFollowsACountryChosenAfterItWasBrowsed() {
+        seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
+        seedCountryStations(SECOND_COUNTRY_CODE, SECOND_COUNTRY_STATIONS_RESPONSE)
+        chooseCountry(FIRST_COUNTRY_CODE)
+        assertEquals(
+            listOf("first-one", "first-two"),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        )
+        mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT)
+
+        chooseCountry(SECOND_COUNTRY_CODE)
+        val children = mBrowser.children(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+
+        assertEquals(
+            "The country stations entry answered with the country stored before the change",
+            listOf("second-one", "second-two"),
+            children.map { it.mediaId }
+        )
+        assertPlayable(children)
+    }
+
+    /**
+     * Same as [theCountryStationsEntryFollowsACountryChosenAfterItWasBrowsed], with the entry still
+     * the last node browsed when the country changes, as it is for a user who picks the country
+     * while its stations are on screen.
+     *
+     * The command behind the entry keeps a page index that a browse of the node browsed just
+     * before carries on from rather than resets, because that is how it serves the next page of
+     * one list. The list of another country has to start again at the first page: the second
+     * country is seeded at that page only, so a browse that carried on asks for a page nothing
+     * answers and comes back empty.
+     */
+    @Test
+    fun theCountryStationsEntryStartsOverForACountryChosenWhileItWasOpen() {
+        seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
+        seedCountryStations(SECOND_COUNTRY_CODE, SECOND_COUNTRY_STATIONS_RESPONSE)
+        chooseCountry(FIRST_COUNTRY_CODE)
+        assertEquals(
+            listOf("first-one", "first-two"),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        )
+
+        chooseCountry(SECOND_COUNTRY_CODE)
+
+        assertEquals(
+            "The country stations entry did not start the new country's list over",
+            listOf("second-one", "second-two"),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        )
+    }
+
+    /**
      * A provider node with nothing to offer still has to answer. This one fetches its children
      * rather than reading a store, so with networking off and nothing cached it comes back empty,
      * which is the ordinary offline case and not an exotic one.
@@ -592,6 +664,28 @@ class OpenRadioServiceBrowseTest {
     }
 
     /**
+     * Makes [response] the first page of stations the provider would have given for [countryCode].
+     */
+    private fun seedCountryStations(countryCode: String, response: String) {
+        seedResponse(
+            mUrls.getStationsByCountry(countryCode, UrlLayer.FIRST_PAGE_INDEX).toString(),
+            response,
+            MediaId.MEDIA_ID_COUNTRY_STATIONS
+        )
+    }
+
+    /**
+     * Stores [countryCode] and sends the command the general dialog sends after storing it.
+     */
+    private fun chooseCountry(countryCode: String) {
+        mLocation.setCountryCode(countryCode)
+        assertEquals(
+            SessionResult.RESULT_SUCCESS,
+            mBrowser.command(OpenRadioService.CMD_UPDATE_TREE).resultCode
+        )
+    }
+
+    /**
      * Drops whatever either API cache holds for [url], so a case reads its own fixture or nothing.
      *
      * The in-memory cache matters most: its map is static and outlives every test in the run, and
@@ -687,6 +781,18 @@ class OpenRadioServiceBrowseTest {
         val CATEGORY_STATIONS_RESPONSE = stationsResponse("category-one", "category-two")
 
         val COUNTRY_STATIONS_RESPONSE = stationsResponse("country-one", "country-two")
+
+        /**
+         * The countries stored one after the other by the country change cases. Neither is
+         * [SEEDED_COUNTRY_CODE], whose stations URL another case seeds.
+         */
+        const val FIRST_COUNTRY_CODE = "FR"
+
+        const val SECOND_COUNTRY_CODE = "IT"
+
+        val FIRST_COUNTRY_STATIONS_RESPONSE = stationsResponse("first-one", "first-two")
+
+        val SECOND_COUNTRY_STATIONS_RESPONSE = stationsResponse("second-one", "second-two")
 
         /**
          * A station needs a uuid and a stream url to survive the parse; everything else is
