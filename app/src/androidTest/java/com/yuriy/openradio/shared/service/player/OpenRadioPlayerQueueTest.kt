@@ -17,6 +17,8 @@
 package com.yuriy.openradio.shared.service.player
 
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -33,9 +35,10 @@ import org.junit.runner.RunWith
  * wraps when a controller reorders it, replaces part of it or removes part of it.
  *
  * The wrapper keeps its own copy of the queue, from which it reads the metadata it publishes, while
- * the wrapped player decides what plays. Each case reads both: the wrapped player's through
- * [OpenRadioPlayer.getMediaItemAt], which forwards, and the wrapper's through
- * [OpenRadioPlayer.getPlaylist]. Nothing is prepared, so no url is ever opened.
+ * the wrapped player decides what plays. Each case reads both through the [Player] interface: the
+ * wrapped player's through [OpenRadioPlayer.getMediaItemAt], which forwards, and the wrapper's
+ * through the metadata it publishes to a [Player.Listener] for each item made current in turn,
+ * every station carrying its id as its title. Nothing is prepared, so no url is ever opened.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
@@ -43,11 +46,20 @@ class OpenRadioPlayerQueueTest {
 
     private lateinit var mPlayer: OpenRadioPlayer
 
+    /**
+     * The metadata published since the wrapper was last asked to publish it. Touched only on the
+     * main thread.
+     */
+    private val mPublished = arrayListOf<MediaMetadata>()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         mPlayer = onMainThread { newOpenRadioPlayer(context) }
-        onMainThread { mPlayer.setMediaItems(STATIONS.map(::station).toMutableList()) }
+        onMainThread {
+            mPlayer.addListener(Recorder())
+            mPlayer.setMediaItems(STATIONS.map(::station).toMutableList())
+        }
     }
 
     @After
@@ -181,10 +193,31 @@ class OpenRadioPlayerQueueTest {
     }
 
     private fun assertQueues(expected: List<String>) {
+        val played = onMainThread {
+            (0 until mPlayer.mediaItemCount).map { mPlayer.getMediaItemAt(it).mediaId }
+        }
+        assertEquals("The wrapped player's queue", expected, played)
+        assertEquals("The wrapper's queue", expected, expected.indices.map(::publishedTitleAt))
+    }
+
+    /**
+     * The title the wrapper publishes when asked to while the item at [index] is current, read from
+     * its own copy of the queue; null when the copy has no item there. The publication is posted to
+     * the main thread, so the block that reads it, posted after, runs once it is done.
+     */
+    private fun publishedTitleAt(index: Int): String? {
+        onMainThread { mPlayer.seekToDefaultPosition(index) }
         onMainThread {
-            val played = (0 until mPlayer.mediaItemCount).map { mPlayer.getMediaItemAt(it).mediaId }
-            assertEquals("The wrapped player's queue", expected, played)
-            assertEquals("The wrapper's queue", expected, mPlayer.getPlaylist().map { it.mediaId })
+            mPublished.clear()
+            mPlayer.invalidateMetaData()
+        }
+        return onMainThread { mPublished.firstOrNull()?.title?.toString() }
+    }
+
+    private inner class Recorder : Player.Listener {
+
+        override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+            mPublished.add(mediaMetadata)
         }
     }
 
@@ -196,6 +229,7 @@ class OpenRadioPlayerQueueTest {
             return MediaItem.Builder()
                 .setMediaId(id)
                 .setUri("$UNREACHABLE_ORIGIN/$id")
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(id).build())
                 .build()
         }
     }

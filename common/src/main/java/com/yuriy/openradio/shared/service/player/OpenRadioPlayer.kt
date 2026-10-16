@@ -201,10 +201,6 @@ class OpenRadioPlayer(
         mEqualizerLayer.init((mExoPlayer as ExoPlayer).audioSessionId)
     }
 
-    fun getPlaylist() : List<MediaItem> {
-        return ArrayList(mPlaylist)
-    }
-
     /**
      * What a play request that finds the queue empty loads: the queue as it stood just before it
      * was emptied, at the item that was current then, which is what was playing. Media3 asks only
