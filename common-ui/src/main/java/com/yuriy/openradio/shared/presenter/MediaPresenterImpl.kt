@@ -32,6 +32,7 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.RelativeLayout
 import android.widget.TextView
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentTransaction
@@ -594,7 +595,15 @@ class MediaPresenterImpl(
         return mMediaItemsStack.last
     }
 
-    override fun getMediaItemsStack(): List<String> {
+    /**
+     * Not on [MediaPresenter], because nothing in the app reads the stack: the tests use it to
+     * check and restore the node stack the registry's presenter keeps across Activities.
+     *
+     * @return a copy of the node stack, bottom first, so that whoever reads it can decide what to
+     *   do with the stack without the stack changing under that decision.
+     */
+    @VisibleForTesting
+    fun getMediaItemsStack(): List<String> {
         return mMediaItemsStack.toList()
     }
 

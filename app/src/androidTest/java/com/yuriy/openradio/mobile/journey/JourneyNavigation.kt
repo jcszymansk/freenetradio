@@ -23,6 +23,7 @@ import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.presenter.MediaPresenter
+import com.yuriy.openradio.shared.presenter.MediaPresenterImpl
 import com.yuriy.openradio.testing.withActivity
 
 /**
@@ -107,9 +108,11 @@ internal class JourneyNavigation(private val mScenario: ActivityScenario<MainAct
 
 /**
  * @return the registry's own presenter, the one [MainActivity] is driving, reached through the
- *   single-method hook that is the supported way to it.
+ *   single-method hook that is the supported way to it. It is handed out as the implementation
+ *   because the node stack the journeys check and restore is read only there, not through
+ *   [MediaPresenter].
  */
-internal fun registryPresenter(): MediaPresenter {
+internal fun registryPresenter(): MediaPresenterImpl {
     lateinit var result: MediaPresenter
     DependencyRegistryCommonUi.inject(
         object : MediaPresenterDependency {
@@ -119,5 +122,6 @@ internal fun registryPresenter(): MediaPresenter {
             }
         }
     )
-    return result
+    return result as? MediaPresenterImpl
+        ?: throw AssertionError("The registry's presenter is a ${result.javaClass.name}, not a MediaPresenterImpl")
 }
