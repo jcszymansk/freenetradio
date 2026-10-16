@@ -32,7 +32,7 @@ import org.junit.runner.RunWith
 
 /**
  * How [OpenRadioPlayer] keeps the queue it reports in step with the queue of the ExoPlayer it
- * wraps when a controller reorders it, replaces part of it or removes part of it.
+ * wraps when a controller adds to it, reorders it, replaces part of it or removes part of it.
  *
  * The wrapper keeps its own copy of the queue, from which it reads the metadata it publishes, while
  * the wrapped player decides what plays. Each case reads both through the [Player] interface: the
@@ -108,6 +108,64 @@ class OpenRadioPlayerQueueTest {
         onMainThread { mPlayer.moveMediaItem(0, 3) }
 
         assertQueues(listOf("b", "c", "d", "a", "e"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.moveMediaItem] moves an item whose new index is past the end
+     * of the queue to the end.
+     */
+    @Test
+    fun anItemMovedPastTheEndEndsBothQueues() {
+        onMainThread { mPlayer.moveMediaItem(1, 10) }
+
+        assertQueues(listOf("a", "c", "d", "e", "b"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.moveMediaItem] ignores an item index past the end of the
+     * queue.
+     */
+    @Test
+    fun anItemMovedFromPastTheEndIsIgnoredByBothQueues() {
+        onMainThread { mPlayer.moveMediaItem(7, 0) }
+
+        assertQueues(STATIONS)
+    }
+
+    @Test
+    fun anItemAddedAtAnIndexIsAddedToBothQueues() {
+        onMainThread { mPlayer.addMediaItem(2, station("x")) }
+
+        assertQueues(listOf("a", "b", "x", "c", "d", "e"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.addMediaItem] adds an item whose index is past the end of the
+     * queue at the end.
+     */
+    @Test
+    fun anItemAddedPastTheEndEndsBothQueues() {
+        onMainThread { mPlayer.addMediaItem(10, station("x")) }
+
+        assertQueues(listOf("a", "b", "c", "d", "e", "x"))
+    }
+
+    @Test
+    fun itemsAddedAtAnIndexAreAddedToBothQueues() {
+        onMainThread { mPlayer.addMediaItems(1, mutableListOf(station("x"), station("y"))) }
+
+        assertQueues(listOf("a", "x", "y", "b", "c", "d", "e"))
+    }
+
+    /**
+     * [androidx.media3.common.Player.addMediaItems] adds items whose index is past the end of the
+     * queue at the end.
+     */
+    @Test
+    fun itemsAddedPastTheEndEndBothQueues() {
+        onMainThread { mPlayer.addMediaItems(10, mutableListOf(station("x"), station("y"))) }
+
+        assertQueues(listOf("a", "b", "c", "d", "e", "x", "y"))
     }
 
     @Test

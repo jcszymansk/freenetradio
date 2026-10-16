@@ -337,9 +337,7 @@ class OpenRadioPlayer(
     }
 
     override fun addMediaItem(index: Int, mediaItem: MediaItem) {
-        AppLogger.d("$TAG addMediaItem $index $mediaItem")
-        mPlayer.addMediaItem(index, mediaItem)
-        mPlaylist.add(index, mediaItem)
+        addMediaItems(index, mutableListOf(mediaItem))
     }
 
     override fun addMediaItems(mediaItems: MutableList<MediaItem>) {
@@ -351,17 +349,19 @@ class OpenRadioPlayer(
     override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) {
         AppLogger.d("$TAG addMediaItems $index ${mediaItems.size}")
         mPlayer.addMediaItems(index, mediaItems)
-        mPlaylist.addAll(index, mediaItems)
+        // The player adds items given an index past the end of the queue at the end, so the copy
+        // does too.
+        mPlaylist.addAll(min(index, mPlaylist.size), mediaItems)
     }
 
     override fun moveMediaItem(currentIndex: Int, newIndex: Int) {
-        mPlayer.moveMediaItem(currentIndex, newIndex)
-        mPlaylist.add(min(newIndex, mPlaylist.size), mPlaylist.removeAt(currentIndex))
+        moveMediaItems(currentIndex, currentIndex + 1, newIndex)
     }
 
     override fun moveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int) {
         mPlayer.moveMediaItems(fromIndex, toIndex, newIndex)
-        // The player clamps a range that runs past the end of the queue, so the copy does too.
+        // The player ignores a range that starts past the end of the queue and clamps one that runs
+        // past it, so the copy does too.
         val range = mPlaylist.subList(min(fromIndex, mPlaylist.size), min(toIndex, mPlaylist.size))
         val movedItems = range.toList()
         range.clear()
