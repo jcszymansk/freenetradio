@@ -19,7 +19,6 @@ package com.yuriy.openradio.shared.presenter
 import android.os.Bundle
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.service.OpenRadioStore
-import com.yuriy.openradio.shared.utils.MediaItemBuilder
 import com.yuriy.openradio.shared.view.list.TestMediaItemsAdapter
 import com.yuriy.openradio.shared.view.list.TestMediaItemsAdapter.Companion.mediaItem
 import org.junit.Assert.assertEquals
@@ -66,13 +65,15 @@ class MediaPresenterChildrenLoadedTest {
         assertEquals(MediaId.MEDIA_ID_COUNTRIES_LIST, mAdapter.parentId)
     }
 
+    /**
+     * Pagination ends on an empty page: the next page of the shown node brings nothing, and the rows
+     * already loaded stay where they are.
+     */
     @Test
-    fun endOfListPageLeavesTheLoadedRowsAndTheirNodeAlone() {
+    fun anEmptyNextPageEndsTheListAndKeepsItsRows() {
         mPresenter.handleChildrenLoaded(COUNTRY_STATIONS, listOf(mediaItem("a"), mediaItem("b")), false)
 
-        mPresenter.handleChildrenLoaded(
-            MediaId.MEDIA_ID_COUNTRIES_LIST, listOf(MediaItemBuilder.buildMediaItemListEnded()), true
-        )
+        mPresenter.handleChildrenLoaded(COUNTRY_STATIONS, emptyList(), false)
 
         assertEquals(listOf("a", "b"), mAdapter.mediaIds())
         assertEquals(COUNTRY_STATIONS, mAdapter.parentId)
@@ -80,21 +81,18 @@ class MediaPresenterChildrenLoadedTest {
     }
 
     /**
-     * An ended page for a node the list is not showing yet must not make the presenter believe it
-     * is showing that node: otherwise the node's first real page counts as a further page of the
-     * same catalogue and is appended to the rows of the node the user came from.
+     * An empty first page is a real answer, a node with no children, so it must not leave the rows
+     * of the node the user came from on screen.
      */
     @Test
-    fun firstRealPageAfterAnEndedPageForAnotherNodeReplacesTheRows() {
+    fun anEmptyFirstPageOfAnotherNodeReplacesTheRows() {
         mPresenter.handleChildrenLoaded(MediaId.MEDIA_ID_COUNTRIES_LIST, listOf(mediaItem("pl")), false)
-        mPresenter.handleChildrenLoaded(
-            COUNTRY_STATIONS, listOf(MediaItemBuilder.buildMediaItemListEnded()), false
-        )
 
-        mPresenter.handleChildrenLoaded(COUNTRY_STATIONS, listOf(mediaItem("a")), false)
+        mPresenter.handleChildrenLoaded(COUNTRY_STATIONS, emptyList(), true)
 
-        assertEquals(listOf("a"), mAdapter.mediaIds())
+        assertEquals(emptyList<String>(), mAdapter.mediaIds())
         assertEquals(COUNTRY_STATIONS, mAdapter.parentId)
+        assertEquals(COUNTRY_STATIONS, savedParentId())
     }
 
     /**
