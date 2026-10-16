@@ -23,6 +23,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class BrowseTreeTest {
 
@@ -211,7 +215,126 @@ class BrowseTreeTest {
         assertSame(kept.children, tree.getMediaItemsByMediaId(shared.id))
     }
 
+    @Test
+    fun appendAnswersWhereThePageStarts() {
+        val tree = BrowseTree()
+        tree["parent"] = data(station("first"), station("second"))
+
+        assertEquals(2, tree.append("parent", data(station("third"))))
+        assertEquals(3, tree.append("parent", data(station("fourth"))))
+        assertEquals(0, tree.append("missing", data(station("dropped"))))
+        assertNull(tree["missing"])
+        assertNull(tree.getMediaItemByMediaId("dropped"))
+    }
+
+    @Test
+    fun aStoredListIsNotChangedByItsCaller() {
+        val tree = BrowseTree()
+        val first = station("first")
+        val children = mutableListOf(item(first))
+        val radioStations = mutableSetOf(first)
+        tree["parent"] = BrowseTree.BrowseData(children, radioStations)
+
+        val later = station("later")
+        children.add(item(later))
+        radioStations.add(later)
+
+        assertEquals(listOf(first.id), tree["parent"]?.map { it.mediaId })
+        assertNull(tree.getMediaItemByMediaId(later.id))
+        assertSame(RadioStation.INVALID_INSTANCE, tree.getRadioStationByMediaId(later.id))
+    }
+
+    /**
+     * The session hands a list a lookup returned to its client after the lookup, while the
+     * executor may already be storing the next page of the same node.
+     */
+    @Test
+    fun aListALookupReturnedIsNotChangedByALaterPage() {
+        val tree = BrowseTree()
+        val first = station("first")
+        tree["parent"] = data(first, station("second"))
+        val byParent = tree["parent"]!!.iterator()
+        val byChild = tree.getMediaItemsByMediaId(first.id, "parent").iterator()
+        byParent.next()
+        byChild.next()
+
+        tree.append("parent", data(station("third")))
+
+        assertEquals("second", byParent.next().mediaId)
+        assertEquals(false, byParent.hasNext())
+        assertEquals("second", byChild.next().mediaId)
+        assertEquals(false, byChild.hasNext())
+    }
+
+    @Test
+    fun aLookupThatWalksTheListsDoesNotThrowWhileListsAreStored() {
+        val tree = BrowseTree()
+        val failures = runConcurrently(
+            { i -> tree["list-$i"] = data(station("station-$i")) },
+            { _ ->
+                check(tree.getMediaItemsByMediaId("missing").isEmpty())
+                check(tree.getMediaItemsByMediaId("missing", "list-0").isEmpty())
+            }
+        )
+
+        assertEquals(emptyList<Throwable>(), failures)
+    }
+
+    /**
+     * The executor stores pages while the main thread replaces the playlist; neither may install
+     * an index that misses what the other stored.
+     */
+    @Test
+    fun concurrentWritersKeepEveryListIndexed() {
+        val tree = BrowseTree()
+        val failures = runConcurrently(
+            { i -> tree["list-$i"] = data(station("station-$i")) },
+            { i -> tree.setPlaylist(data(station("playlist-$i"))) }
+        )
+
+        assertEquals(emptyList<Throwable>(), failures)
+        for (i in 0 until ROUNDS) {
+            assertNotNull("list-$i", tree["list-$i"])
+            assertEquals("station-$i", tree.getRadioStationByMediaId("station-$i").id)
+            assertNotNull("station-$i", tree.getMediaItemByMediaId("station-$i"))
+        }
+        assertEquals("playlist-${ROUNDS - 1}", tree.getRadioStationByMediaId("playlist-${ROUNDS - 1}").id)
+    }
+
+    /**
+     * Runs [first] and [second] for [ROUNDS] rounds each on two threads released together.
+     *
+     * @return what either of them threw.
+     */
+    private fun runConcurrently(first: (Int) -> Unit, second: (Int) -> Unit): List<Throwable> {
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val futures = listOf(first, second).map { body ->
+                executor.submit {
+                    start.await()
+                    for (i in 0 until ROUNDS) {
+                        body(i)
+                    }
+                }
+            }
+            start.countDown()
+            return futures.mapNotNull {
+                try {
+                    it.get(1, TimeUnit.MINUTES)
+                    null
+                } catch (exception: ExecutionException) {
+                    exception.cause
+                }
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
     private fun station(id: String) = RadioStation.makeDefaultInstance(id)
+
+    private fun item(station: RadioStation) = MediaItem.Builder().setMediaId(station.id).build()
 
     /**
      * @return browse data holding one item per station, under the station's id, the way the
@@ -219,8 +342,13 @@ class BrowseTreeTest {
      */
     private fun data(vararg stations: RadioStation): BrowseTree.BrowseData {
         return BrowseTree.BrowseData(
-            stations.map { MediaItem.Builder().setMediaId(it.id).build() }.toMutableList(),
-            stations.toMutableSet()
+            stations.map { item(it) },
+            stations.toSet()
         )
+    }
+
+    private companion object {
+        /** Enough overlapping writes that an unguarded tree fails on the first run. */
+        const val ROUNDS = 2000
     }
 }

@@ -879,7 +879,7 @@ class OpenRadioService : MediaLibraryService() {
                 mCurrentSearchQuery = query
                 query
             }
-            val list = mBrowseTree[queryStr] ?: mutableListOf()
+            val list = mBrowseTree[queryStr] ?: emptyList()
             // TODO:
             //val fromIndex = max(page * pageSize, list.size - 1)
             //val toIndex = max(fromIndex + pageSize, list.size)
@@ -888,7 +888,7 @@ class OpenRadioService : MediaLibraryService() {
             // Maybe need to redesign?
             if (list.isEmpty()) {
                 return callWhenSearchReady(queryStr) {
-                    val found = mBrowseTree[queryStr] ?: mutableListOf()
+                    val found = mBrowseTree[queryStr] ?: emptyList()
                     mArtworkGrants.grant(browser, found)
                     LibraryResult.ofItemList(found, LibraryParams.Builder().build())
                 }
@@ -916,7 +916,7 @@ class OpenRadioService : MediaLibraryService() {
                 )
             }
             return Futures.immediateFuture(
-                mBrowseTree.getMediaItemsByMediaId(mediaItems[0].mediaId, mCurrentParentId)
+                mBrowseTree.getMediaItemsByMediaId(mediaItems[0].mediaId, mCurrentParentId).toMutableList()
             )
         }
 
@@ -1103,14 +1103,13 @@ class OpenRadioService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<V>> {
             val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
             mCurrentParentId = parentId
-            var position = 0
             if (page == 0
                 && mBrowseTree[parentId] != null
                 //  Do not cache these categories, always fetch fresh data.
                 && parentId != MediaId.MEDIA_ID_FAVORITES_LIST
                 && parentId != MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
             ) {
-                return Futures.immediateFuture(action(position))
+                return Futures.immediateFuture(action(0))
             }
             val id = MediaId.getId(parentId, AppUtils.EMPTY_STRING)
             val command = mPresenter.getMediaItemCommand(id)
@@ -1135,16 +1134,12 @@ class OpenRadioService : MediaLibraryService() {
                         mExecutorService.submit {
 
                             AppLogger.d("$TAG loaded [$pageNumber:${items.size}] for $parentId")
-                            if (pageNumber == 0) {
-                                mBrowseTree[parentId] =
-                                    BrowseTree.BrowseData(ArrayList(items), radioStations.toMutableSet())
+                            val position = if (pageNumber == 0) {
+                                mBrowseTree[parentId] = BrowseTree.BrowseData(items, radioStations)
                                 mUiScope.launch { maybeCreateInitialPlaylist() }
+                                0
                             } else {
-                                position = mBrowseTree[parentId]?.size ?: 0
-                                mBrowseTree.append(
-                                    parentId,
-                                    BrowseTree.BrowseData(ArrayList(items), radioStations.toMutableSet())
-                                )
+                                mBrowseTree.append(parentId, BrowseTree.BrowseData(items, radioStations))
                             }
 
                             future.set(action(position))
@@ -1182,7 +1177,7 @@ class OpenRadioService : MediaLibraryService() {
 
                         mExecutorService.submit {
 
-                            mBrowseTree[query] = BrowseTree.BrowseData(ArrayList(items), radioStations.toMutableSet())
+                            mBrowseTree[query] = BrowseTree.BrowseData(items, radioStations)
                             val size = radioStations.size
                             val result = action(size)
                             future.set(result)

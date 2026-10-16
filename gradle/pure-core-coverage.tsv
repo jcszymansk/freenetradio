@@ -60,6 +60,7 @@ com/yuriy/openradio/shared/model/parser/ParserLayerWebRadioImpl	com.yuriy.openra
 com/yuriy/openradio/shared/model/ModelLayerImpl	com.yuriy.openradio.shared.model.ModelLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/MediaId	com.yuriy.openradio.shared.model.media.MediaIdTest	:common
 com/yuriy/openradio/shared/model/media/BrowseTree	com.yuriy.openradio.shared.model.media.BrowseTreeTest	:common
+com/yuriy/openradio/shared/model/media/BrowseTree$State	com.yuriy.openradio.shared.model.media.BrowseTreeTest	:common
 com/yuriy/openradio/shared/model/media/RadioStation	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
 com/yuriy/openradio/shared/model/media/MediaStream	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
 com/yuriy/openradio/shared/model/media/MediaStream$Variant	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
