@@ -412,8 +412,9 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     /**
-     * The url the station of [mediaId] was listed with. The browse tree holds every station of the
-     * player's queue, but not always the active station, so that one answers when the tree cannot.
+     * The url the station of [mediaId] was listed with. The browse tree holds every station of a
+     * queue built from browse items, but not the last played station the service restores at the
+     * head of its initial playlist, so the active station answers when the tree cannot.
      */
     private fun getStationUrl(mediaId: String): String {
         val station = mBrowseTree.getRadioStationByMediaId(mediaId)
@@ -1224,8 +1225,9 @@ class OpenRadioService : MediaLibraryService() {
             val mediaId = OpenRadioStore.extractMediaId(args).ifEmpty { mActiveRS.id }
             var rs = getRadioStationByMediaId(mediaId)
             // The active station is not always one the browse tree holds: the last played station
-            // the service restores when it starts is held by no list and no queue until one is
-            // built around it. It is still the station the button concerns.
+            // the service restores when it starts is held by no list, and the initial playlist
+            // built around it holds it only when it is a favorite or a new station. It is still
+            // the station the button concerns.
             if (rs.isInvalid() && mediaId == mActiveRS.id) {
                 rs = RadioStation.makeCopyInstance(mActiveRS)
             }

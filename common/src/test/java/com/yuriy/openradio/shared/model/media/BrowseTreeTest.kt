@@ -164,6 +164,27 @@ class BrowseTreeTest {
     }
 
     /**
+     * A selection of a browse node plays that node's own list, not the list that shows the node
+     * as one of its items.
+     */
+    @Test
+    fun aSelectionOfAHeldListsOwnIdIsThatList() {
+        val tree = BrowseTree()
+        val favorite = station("favorite")
+        val favorites = data(favorite)
+        tree["root"] = BrowseTree.BrowseData(
+            listOf(MediaItem.Builder().setMediaId("favorites").build()),
+            emptySet()
+        )
+        tree["favorites"] = favorites
+
+        val selection = tree.getSelection("favorites", "unrelated")
+
+        assertSame(favorites, selection)
+        assertEquals(setOf(favorite), selection.radioStations)
+    }
+
+    /**
      * fnr-tzth: a list selected to play is the player's queue from then on, so the service makes
      * it the playlist, and its stations have to resolve after the list itself is invalidated.
      */
