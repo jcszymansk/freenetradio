@@ -46,7 +46,7 @@ class MediaItemPopularStations : MediaItemCommandImpl() {
         )
     }
 
-    override fun doLoadNoDataReceived(): Boolean {
+    override fun doLoadNoDataReceived(pageNumber: Int): Boolean {
         return true
     }
 }

@@ -35,19 +35,70 @@ import androidx.media3.common.MediaItem
  * immutable snapshot: a write builds the next one under a lock, so two writers cannot install
  * indexes that miss each other's lists, and a read answers from a single snapshot, so it never
  * sees a half-made update. A list a lookup returned never changes, however long its reader holds it.
+ *
+ * A browse list is held as a [PagedList], so that a later page is added only to the list it was
+ * fetched to continue: the provider numbers pages from the start of the list, and the tree is what
+ * knows how many of them the list has.
  */
 class BrowseTree {
 
     private val mLock = Any()
 
     @Volatile
-    private var mState = State(emptyMap(), EMPTY)
+    private var mState = State(emptyMap(), EMPTY, emptyMap(), 0L)
+
+    /**
+     * The stamp handed out last, to a stored list (see [PagedList.stamp]) or to a change of a
+     * node (see [Mark]). Written under [mLock].
+     */
+    private var mLastStamp = 0L
 
     operator fun get(mediaId: String): List<MediaItem>? = mState.lists[mediaId]?.children
 
     operator fun set(mediaId: String, browseData: BrowseData) {
-        update { it.withList(mediaId, browseData) }
+        store(mediaId, browseData)
     }
+
+    /**
+     * Holds [browseData] under [mediaId] as a new list of one page, in place of whatever was held.
+     *
+     * @return the list as stored.
+     */
+    fun store(mediaId: String, browseData: BrowseData): PagedList {
+        synchronized(mLock) {
+            return storeLocked(mediaId, browseData)
+        }
+    }
+
+    /**
+     * Holds [browseData] under [mediaId] as a new list of one page, as [store] does, but only if
+     * nothing has been stored, added or invalidated under [mediaId] since [since] was taken. This
+     * is how a first page that arrives after its request was answered is stored (fnr-2r55y): its
+     * request has been answered without it, so any change to the node since came from something
+     * newer than the page, and the page must not undo it.
+     *
+     * @return the list as stored, or null when the page was dropped.
+     */
+    fun storeIfUnchanged(mediaId: String, since: Mark, browseData: BrowseData): PagedList? {
+        synchronized(mLock) {
+            if (mState.changeOf(mediaId) != since.change) {
+                return null
+            }
+            return storeLocked(mediaId, browseData)
+        }
+    }
+
+    /**
+     * @return what is held under [mediaId] now, to be told apart from what is held there later,
+     *   see [storeIfUnchanged].
+     */
+    fun mark(mediaId: String): Mark {
+        val state = mState
+        return Mark(state.lists[mediaId], state.changeOf(mediaId))
+    }
+
+    /** @return the list held under [mediaId] with its pages, or null when none is held. */
+    fun getPagedList(mediaId: String): PagedList? = mState.lists[mediaId]
 
     /**
      * Replaces the playlist with the queue the player has just been handed. Its items and stations
@@ -55,7 +106,7 @@ class BrowseTree {
      * browse list that holds the same item takes precedence over it in [getMediaItemsByMediaId].
      */
     fun setPlaylist(browseData: BrowseData) {
-        update { State(it.lists, browseData) }
+        update { it.withPlaylist(browseData) }
     }
 
     /**
@@ -63,8 +114,7 @@ class BrowseTree {
      */
     fun addToPlaylist(browseData: BrowseData) {
         update {
-            State(
-                it.lists,
+            it.withPlaylist(
                 BrowseData(
                     it.playlist.children + browseData.children,
                     it.playlist.radioStations + browseData.radioStations
@@ -74,19 +124,37 @@ class BrowseTree {
     }
 
     /**
-     * Adds a page to the end of the list held under [mediaId]. A page for a list that is not held,
-     * because it was never stored or was invalidated since, is dropped.
+     * Adds [browseData] to the list held under [mediaId] as the page that follows [after], the
+     * list as it was when the page was asked for.
      *
-     * @return the position of the page's first item in the list, 0 when the page was dropped.
+     * A page for a list that is not held any more, because it was invalidated or stored again
+     * since, is dropped: it continues a list nobody holds. A page that another request has
+     * already added to the list is not added again, so two requests that fetched the same page
+     * leave it in the list once.
+     *
+     * @return the list with the page in it, which is what a request for the page is answered
+     *   from, or null when the page was dropped. The answer does not read the list again, as the
+     *   list may be invalidated as soon as the page is in it.
      */
-    fun append(mediaId: String, browseData: BrowseData): Int {
+    fun append(mediaId: String, after: PagedList, browseData: BrowseData): PagedList? {
         synchronized(mLock) {
-            val held = mState.lists[mediaId] ?: return 0
-            mState = mState.withList(
-                mediaId,
-                BrowseData(held.children + browseData.children, held.radioStations + browseData.radioStations)
+            val held = mState.lists[mediaId]
+            if (held == null || held.stamp != after.stamp) {
+                return null
+            }
+            if (held.pageCount > after.pageCount) {
+                return held
+            }
+            val extended = PagedList(
+                BrowseData(
+                    held.children + browseData.children,
+                    held.data.radioStations + browseData.radioStations
+                ),
+                held.pageCount + 1,
+                held.stamp
             )
-            return held.children.size
+            mState = mState.withList(mediaId, extended, ++mLastStamp)
+            return extended
         }
     }
 
@@ -116,7 +184,9 @@ class BrowseTree {
     fun getRadioStationByMediaId(mediaId: String) = mState.radioStations[mediaId] ?: RadioStation.INVALID_INSTANCE
 
     fun invalidate(mediaId: String) {
-        update { it.withList(mediaId, null) }
+        synchronized(mLock) {
+            mState = mState.withList(mediaId, null, ++mLastStamp)
+        }
     }
 
     /**
@@ -128,9 +198,17 @@ class BrowseTree {
     fun invalidateAll(): Set<String> {
         synchronized(mLock) {
             val dropped = mState.lists.keys
-            mState = State(emptyMap(), mState.playlist)
+            mState = State(emptyMap(), mState.playlist, emptyMap(), ++mLastStamp)
             return dropped
         }
+    }
+
+    /** [store] under [mLock], which the caller holds. */
+    private fun storeLocked(mediaId: String, browseData: BrowseData): PagedList {
+        val stamp = ++mLastStamp
+        val stored = PagedList(browseData, 1, stamp)
+        mState = mState.withList(mediaId, stored, stamp)
+        return stored
     }
 
     private fun update(next: (State) -> State) {
@@ -143,8 +221,17 @@ class BrowseTree {
      * One version of the tree. The id indexes are built from everything it holds rather than
      * patched: removing the entries of a list that went away would also drop ids another list, or
      * the playlist, still holds.
+     *
+     * @property changes The stamp of the last change to each node changed since [cleared], see
+     *   [changeOf].
+     * @property cleared The stamp of the last [invalidateAll], which changed every node.
      */
-    private class State(val lists: Map<String, BrowseData>, val playlist: BrowseData) {
+    private class State(
+        val lists: Map<String, PagedList>,
+        val playlist: BrowseData,
+        val changes: Map<String, Long>,
+        val cleared: Long
+    ) {
 
         val mediaItems: Map<String, MediaItem>
         val radioStations: Map<String, RadioStation>
@@ -152,7 +239,7 @@ class BrowseTree {
         init {
             val mediaItemIndex = mutableMapOf<String, MediaItem>()
             val radioStationIndex = mutableMapOf<String, RadioStation>()
-            for (browseData in listOf(playlist) + lists.values) {
+            for (browseData in listOf(playlist) + lists.values.map { it.data }) {
                 for (mediaItem in browseData.children) {
                     mediaItemIndex[mediaItem.mediaId] = mediaItem
                 }
@@ -165,18 +252,27 @@ class BrowseTree {
         }
 
         /**
-         * @return this state with [browseData] held under [mediaId], or nothing held under it when
-         *   [browseData] is null. A replaced list keeps its place in the search order.
+         * @return this state with [list] held under [mediaId], or nothing held under it when
+         *   [list] is null, the node marked as changed at [stamp]. A replaced list keeps its
+         *   place in the search order.
          */
-        fun withList(mediaId: String, browseData: BrowseData?): State {
+        fun withList(mediaId: String, list: PagedList?, stamp: Long): State {
             val next = LinkedHashMap(lists)
-            if (browseData == null) {
+            if (list == null) {
                 next.remove(mediaId)
             } else {
-                next[mediaId] = browseData
+                next[mediaId] = list
             }
-            return State(next, playlist)
+            return State(next, playlist, changes + (mediaId to stamp), cleared)
         }
+
+        fun withPlaylist(browseData: BrowseData) = State(lists, browseData, changes, cleared)
+
+        /**
+         * @return the stamp of the last change to [mediaId], which is [cleared] when nothing
+         *   changed it since the last [invalidateAll], and 0 when nothing ever did.
+         */
+        fun changeOf(mediaId: String): Long = changes[mediaId] ?: cleared
 
         fun getMediaItemsByMediaId(mediaId: String): List<MediaItem> {
             lists[mediaId]?.let { return it.children }
@@ -186,9 +282,9 @@ class BrowseTree {
         fun getSelection(mediaId: String, parentId: String): BrowseData? {
             val browsed = lists[parentId]
             if (browsed != null && browsed.children.holds(mediaId)) {
-                return browsed
+                return browsed.data
             }
-            lists[mediaId]?.let { return it }
+            lists[mediaId]?.let { return it.data }
             return findHolder(mediaId)
         }
 
@@ -202,9 +298,9 @@ class BrowseTree {
          *   holds one.
          */
         private fun findHolder(mediaId: String): BrowseData? {
-            for (browseData in lists.values) {
-                if (browseData.children.holds(mediaId)) {
-                    return browseData
+            for (list in lists.values) {
+                if (list.children.holds(mediaId)) {
+                    return list.data
                 }
             }
             if (playlist.children.holds(mediaId)) {
@@ -214,6 +310,28 @@ class BrowseTree {
         }
 
         private fun List<MediaItem>.holds(mediaId: String) = any { it.mediaId == mediaId }
+    }
+
+    /**
+     * What the tree held under one node at one moment, for a request that may store a page of the
+     * node long after it looked, see [storeIfUnchanged].
+     *
+     * @property list The list held, or null when none was.
+     */
+    class Mark internal constructor(val list: PagedList?, internal val change: Long)
+
+    /**
+     * A browse list as the tree held it at one moment.
+     *
+     * @property data The items of the list and the stations behind them.
+     * @property pageCount How many pages the list was built from, which is the number of the page
+     *   that continues it, as pages are numbered from zero.
+     * @property stamp Tells this list from one stored under the same id before or after it. Every
+     *   [store] makes a new list with a stamp of its own, and every page added to it keeps it.
+     */
+    class PagedList internal constructor(val data: BrowseData, val pageCount: Int, val stamp: Long) {
+        val children: List<MediaItem>
+            get() = data.children
     }
 
     /**

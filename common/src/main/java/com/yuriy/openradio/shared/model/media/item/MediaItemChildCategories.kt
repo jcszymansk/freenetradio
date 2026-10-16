@@ -39,13 +39,7 @@ class MediaItemChildCategories : IndexableMediaItemCommand() {
         }
         val childMenuId = dependencies.parentId
             .replace(MediaId.MEDIA_ID_CHILD_CATEGORIES, AppUtils.EMPTY_STRING)
-        val pageNumber = pageNumber
-        val set = dependencies.presenter.getStationsInCategory(childMenuId, pageNumber)
-        handleDataLoaded(
-            playbackStateListener,
-            dependencies,
-            set,
-            pageNumber
-        ) { advancePast(pageNumber) }
+        val set = dependencies.presenter.getStationsInCategory(childMenuId, dependencies.pageNumber)
+        handleDataLoaded(playbackStateListener, dependencies, set)
     }
 }

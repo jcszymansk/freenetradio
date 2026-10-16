@@ -37,14 +37,7 @@ class MediaItemCountryStations : IndexableMediaItemCommand() {
         }
         // Call this API to make sure countries are cached.
         dependencies.presenter.getAllCountries()
-        // Load all categories into menu
-        val pageNumber = pageNumber
-        val set = dependencies.presenter.getStationsByCountry(dependencies.countryCode, pageNumber)
-        handleDataLoaded(
-            playbackStateListener,
-            dependencies,
-            set,
-            pageNumber
-        ) { advancePast(pageNumber) }
+        val set = dependencies.presenter.getStationsByCountry(dependencies.countryCode, dependencies.pageNumber)
+        handleDataLoaded(playbackStateListener, dependencies, set)
     }
 }

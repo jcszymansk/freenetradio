@@ -16,44 +16,23 @@
 
 package com.yuriy.openradio.shared.model.media.item
 
-import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
 import com.yuriy.openradio.shared.model.net.UrlLayer
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Created by Chernyshov Yurii
  * At Android Studio
  * On 14/01/18
  * E-Mail: chernyshov.yuriy@gmail.com
+ *
+ * A command whose node the provider serves in pages. It fetches the page its request names,
+ * [MediaItemCommandDependencies.pageNumber], and keeps no page index of its own: the presenter
+ * shares one instance of each command among all clients and all nodes it serves, so an index on
+ * it would be moved by every one of them (fnr-1557f).
  */
 abstract class IndexableMediaItemCommand internal constructor() : MediaItemCommandImpl() {
 
-    /**
-     * Index of the current page of the Radio Stations List.
-     */
-    private val mPageIndex = AtomicInteger(UrlLayer.FIRST_PAGE_INDEX)
-
-    override fun execute(playbackStateListener: IUpdatePlaybackState, dependencies: MediaItemCommandDependencies) {
-        super.execute(playbackStateListener, dependencies)
-        if (dependencies.isSameCatalogue.not()) {
-            mPageIndex.set(UrlLayer.FIRST_PAGE_INDEX)
-        }
-    }
-
-    override fun doLoadNoDataReceived(): Boolean {
+    /** The second page coming back empty is reported, the first is not. */
+    override fun doLoadNoDataReceived(pageNumber: Int): Boolean {
         return pageNumber == UrlLayer.FIRST_PAGE_INDEX + 1
-    }
-
-    val pageNumber: Int
-        get() = mPageIndex.get()
-
-    /**
-     * Moves the index past [fetchedPage], the page an execution asked for, if the index is still
-     * there. Call it only once that page answers its request: a page the deadline dropped is then
-     * asked for again rather than skipped, and two executions that overlapped on one page move the
-     * index on once between them.
-     */
-    fun advancePast(fetchedPage: Int) {
-        mPageIndex.compareAndSet(fetchedPage, fetchedPage + 1)
     }
 }

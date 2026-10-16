@@ -32,6 +32,12 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * @param contextRef Weak reference to the application context, for the stored timer state.
  * @param mClock Wall clock milliseconds. The timer measures its delay from the same clock, so the
  * model and the timer agree about which timestamps are in the future.
+ *
+ * [init], [setEnabled] and [updateTimer] hold this model's monitor for their whole run. Each reads
+ * or writes the stored flag and then drives the timer, and the timer's own lock covers only the
+ * second step: [init] on a background thread could read the flag as on, a disable on the main
+ * thread could store off and cancel nothing, and [init] would then arm a timer storage says is off.
+ * Holding the monitor across both steps makes the call that runs last the one that wins.
  */
 class SleepTimerModelImpl(
     contextRef: WeakReference<Context>,
@@ -54,6 +60,7 @@ class SleepTimerModelImpl(
      * current time, and storing that would turn it into an alarm nobody set. An enabled alarm whose
      * time has passed is turned off instead, since nothing will ever count down to it.
      */
+    @Synchronized
     override fun init() {
         if (!mTimer.handle(mSleepTimerStorage.loadDate().time, isEnabled())) {
             disableUnlessArmed()
@@ -76,6 +83,7 @@ class SleepTimerModelImpl(
      *
      * @param value True if enabled, false otherwise.
      */
+    @Synchronized
     override fun setEnabled(value: Boolean) {
         mSleepTimerStorage.saveEnabled(value)
         if (!value) {
@@ -106,6 +114,7 @@ class SleepTimerModelImpl(
      *
      * @return False when the timer refused [time], true otherwise.
      */
+    @Synchronized
     override fun updateTimer(time: Long, enabled: Boolean): Boolean {
         if (!mTimer.handle(time, enabled)) {
             disableUnlessArmed()

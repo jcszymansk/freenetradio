@@ -142,22 +142,24 @@ internal fun dependencies(
     listener: RecordingCommandListener,
     parentId: String = AppUtils.EMPTY_STRING,
     countryCode: String = DEFAULT_COUNTRY_CODE,
-    isSameCatalogue: Boolean = false,
+    pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX,
     isSavedInstance: Boolean = false,
     options: Bundle = Bundle(),
     timeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS,
-    scope: CoroutineScope = listener.scope
+    scope: CoroutineScope = listener.scope,
+    lateListener: OpenRadioService.ResultListener = RecordingCommandListener()
 ): MediaItemCommandDependencies {
     return MediaItemCommandDependencies(
         testContext(),
         presenter,
         countryCode,
         parentId,
-        isSameCatalogue,
+        pageNumber,
         isSavedInstance,
         options,
         scope,
         listener,
+        lateListener,
         timeoutMillis
     )
 }

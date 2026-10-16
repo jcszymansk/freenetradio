@@ -61,6 +61,7 @@ com/yuriy/openradio/shared/model/ModelLayerImpl	com.yuriy.openradio.shared.model
 com/yuriy/openradio/shared/model/media/MediaId	com.yuriy.openradio.shared.model.media.MediaIdTest	:common
 com/yuriy/openradio/shared/model/media/BrowseTree	com.yuriy.openradio.shared.model.media.BrowseTreeTest	:common
 com/yuriy/openradio/shared/model/media/BrowseTree$State	com.yuriy.openradio.shared.model.media.BrowseTreeTest	:common
+com/yuriy/openradio/shared/model/media/ClientPages	com.yuriy.openradio.shared.model.media.ClientPagesTest	:common
 com/yuriy/openradio/shared/model/media/RadioStation	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
 com/yuriy/openradio/shared/model/media/MediaStream	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
 com/yuriy/openradio/shared/model/media/MediaStream$Variant	com.yuriy.openradio.shared.model.media.RadioStationTest	:common
@@ -69,6 +70,7 @@ com/yuriy/openradio/shared/model/media/PlaybackState	com.yuriy.openradio.shared.
 com/yuriy/openradio/shared/model/media/RadioStationToAdd	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/RadioStationManagerLayerImpl	com.yuriy.openradio.shared.model.media.RadioStationManagerLayerImplTest	:common
 com/yuriy/openradio/shared/model/media/Category	com.yuriy.openradio.shared.model.media.CategoryTest	:common
+com/yuriy/openradio/shared/model/media/ShownSearch	com.yuriy.openradio.shared.model.media.ShownSearchTest	:common
 com/yuriy/openradio/shared/model/media/item/IndexableMediaItemCommand	com.yuriy.openradio.shared.model.media.item.IndexableMediaItemCommandTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandImpl	com.yuriy.openradio.shared.model.media.item.MediaItemCommandImplTest	:common
 com/yuriy/openradio/shared/model/media/item/MediaItemCommandDependencies	com.yuriy.openradio.shared.model.media.item.MediaItemCommandDependenciesTest	:common

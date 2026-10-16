@@ -17,7 +17,6 @@
 package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.model.net.UrlLayer
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -25,46 +24,11 @@ import org.junit.Test
 class IndexableMediaItemCommandTest {
 
     @Test
-    fun pageAdvancesAndResetsForNewCatalogue() {
-        val command = object : IndexableMediaItemCommand() {}
-        val presenter = RecordingPresenter()
-        val listener = RecordingCommandListener()
-
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX, command.pageNumber)
-        assertFalse(command.doLoadNoDataReceived())
-
-        command.advancePast(UrlLayer.FIRST_PAGE_INDEX)
-
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, command.pageNumber)
-        assertTrue(command.doLoadNoDataReceived())
-        command.execute(
-            listener.playbackStateListener,
-            dependencies(presenter, listener, parentId = "parent", isSameCatalogue = true)
-        )
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, command.pageNumber)
-
-        command.execute(
-            listener.playbackStateListener,
-            dependencies(presenter, listener, parentId = "parent", isSameCatalogue = false)
-        )
-
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX, command.pageNumber)
-        assertFalse(command.doLoadNoDataReceived())
-        listener.assertNoError()
-        assertEquals("The page counter delivered a result of its own", 0, listener.results)
-    }
-
-    /**
-     * Two executions that fetched the same page both answer with it, and the second has to leave the
-     * index where the first one put it rather than skip the page after.
-     */
-    @Test
-    fun aPageTheIndexHasLeftDoesNotMoveItAgain() {
+    fun onlyAnEmptySecondPageIsReportedAsNoData() {
         val command = object : IndexableMediaItemCommand() {}
 
-        command.advancePast(UrlLayer.FIRST_PAGE_INDEX)
-        command.advancePast(UrlLayer.FIRST_PAGE_INDEX)
-
-        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, command.pageNumber)
+        assertFalse(command.doLoadNoDataReceived(UrlLayer.FIRST_PAGE_INDEX))
+        assertTrue(command.doLoadNoDataReceived(UrlLayer.FIRST_PAGE_INDEX + 1))
+        assertFalse(command.doLoadNoDataReceived(UrlLayer.FIRST_PAGE_INDEX + 2))
     }
 }

@@ -223,12 +223,21 @@ class RadioStation : Serializable, Comparable<RadioStation> {
         return result
     }
 
+    /**
+     * Orders by [sortId], then [name], then [id]. Stations live in sorted sets, which treat a zero
+     * comparison as a duplicate, and many different stations share a name or have none, so the id
+     * decides between them.
+     */
     override fun compareTo(other: RadioStation): Int {
         val sortIdValue = sortId.compareTo(other.sortId)
         if (sortIdValue != 0) {
             return sortIdValue
         }
-        return name.compareTo(other.name)
+        val nameValue = name.compareTo(other.name)
+        if (nameValue != 0) {
+            return nameValue
+        }
+        return mId.compareTo(other.mId)
     }
 
     override fun toString(): String {

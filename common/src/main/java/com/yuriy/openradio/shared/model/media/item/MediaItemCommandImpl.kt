@@ -33,38 +33,32 @@ abstract class MediaItemCommandImpl internal constructor() : MediaItemCommand {
 
     }
 
-    abstract fun doLoadNoDataReceived(): Boolean
+    /**
+     * @return Whether a request for [pageNumber] that found nothing reports "no data" besides
+     * answering empty.
+     */
+    abstract fun doLoadNoDataReceived(pageNumber: Int): Boolean
 
     /**
      * Answers the browse request with the stations of [set], or with nothing when [set] is empty.
-     *
-     * @param onAnswering Runs when [set] is not empty and answers the request, before the client
-     * can see it; see [MediaItemCommandDependencies.answer].
      */
     fun handleDataLoaded(
         playbackStateListener: IUpdatePlaybackState,
         dependencies: MediaItemCommandDependencies,
-        set: Set<RadioStation>,
-        pageNumber: Int = 0,
-        onAnswering: () -> Unit = {}
+        set: Set<RadioStation>
     ) {
         if (set.isEmpty()) {
-            if (doLoadNoDataReceived()) {
+            if (doLoadNoDataReceived(dependencies.pageNumber)) {
                 dependencies.reportNoData(playbackStateListener)
             } else {
-                dependencies.answer(dependencies.getMediaItems(), pageNumber = pageNumber)
+                dependencies.answer(dependencies.getMediaItems())
             }
             return
         }
-        deliverResult(dependencies, set, pageNumber, onAnswering)
+        deliverResult(dependencies, set)
     }
 
-    fun deliverResult(
-        dependencies: MediaItemCommandDependencies,
-        set: Set<RadioStation> = TreeSet(),
-        pageNumber: Int = 0,
-        onAnswering: () -> Unit = {}
-    ) {
+    fun deliverResult(dependencies: MediaItemCommandDependencies, set: Set<RadioStation> = TreeSet()) {
         for (radioStation in set) {
             dependencies.addMediaItem(
                 MediaItemBuilder.buildPlayable(
@@ -72,6 +66,6 @@ abstract class MediaItemCommandImpl internal constructor() : MediaItemCommand {
                 )
             )
         }
-        dependencies.answer(dependencies.getMediaItems(), set, pageNumber, onAnswering)
+        dependencies.answer(dependencies.getMediaItems(), set)
     }
 }

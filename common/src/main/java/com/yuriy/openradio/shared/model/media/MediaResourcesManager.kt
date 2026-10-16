@@ -82,6 +82,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
     private var mNowPlaying: MediaItem? = null
     private var mSubscribedParentId = AppUtils.EMPTY_STRING
     private var mSubscriptionCallback: MediaItemsSubscription? = null
+    private val mShownSearch = ShownSearch()
 
     /**
      * Constructor.
@@ -112,13 +113,8 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
         return if (parentId == MediaId.MEDIA_ID_SEARCH_FROM_APP ||
                     parentId == MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
         ) {
-            var query = AppUtils.getSearchQueryFromBundle(bundle)
-            if (query.trim().isEmpty()) {
-                // TODO: Investigate an empty search
-                query = "Jazz"
-            }
             mMediaBrowser?.getSearchResult(
-                query,
+                searchQuery(bundle),
                 page,
                 DependencyRegistryCommon.PAGE_SIZE,
                 null
@@ -146,6 +142,16 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
         }
     }
 
+    /**
+     * @return the query the service is asked for when searching with [bundle], which is also what
+     *   it names when it tells of a changed result for that search.
+     */
+    private fun searchQuery(bundle: Bundle): String {
+        val query = AppUtils.getSearchQueryFromBundle(bundle)
+        // TODO: Investigate an empty search
+        return if (query.trim().isEmpty()) "Jazz" else query
+    }
+
     suspend fun sendCommand(command: String, parameters: Bundle?): Boolean =
         sendCommand(command, parameters) { _, _ -> }
 
@@ -164,6 +170,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
     }
 
     fun clean() {
+        mShownSearch.clear()
         mMediaBrowser?.let {
             it.removeListener(mPlayerListener)
             it.release()
@@ -203,9 +210,11 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
             if (parentId == MediaId.MEDIA_ID_SEARCH_FROM_APP ||
                 parentId == MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
             ) {
+                mShownSearch.show(ShownSearch.Search(parentId, searchQuery(bundle), bundle, callback))
                 callback.onChildrenLoaded(parentId, getChildren(parentId, bundle = bundle).toMutableList(), true)
                 return@launch
             }
+            mShownSearch.clear()
             if (mSubscribedParentId == parentId) {
                 callback.onChildrenLoaded(parentId, getChildren(parentId, bundle = bundle).toMutableList(), true)
                 return@launch
@@ -321,7 +330,15 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
             itemCount: Int,
             params: MediaLibraryService.LibraryParams?
         ) {
-            AppLogger.d("TODO: BrowserListener Search Result Changed to $query")
+            AppLogger.d("$mClassName search result changed for '$query', count:$itemCount")
+            val search = mShownSearch.changed(query) ?: return
+            mScope.launch {
+                search.callback.onChildrenLoaded(
+                    search.parentId,
+                    getChildren(search.parentId, bundle = search.bundle).toMutableList(),
+                    true
+                )
+            }
         }
     }
 

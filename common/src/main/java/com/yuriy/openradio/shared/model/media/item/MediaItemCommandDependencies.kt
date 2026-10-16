@@ -55,7 +55,13 @@ class MediaItemCommandDependencies(
     val presenter: OpenRadioServicePresenter,
     val countryCode: String,
     val parentId: String,
-    val isSameCatalogue: Boolean,
+    /**
+     * The page of the node the request asks the provider for, counted from
+     * [UrlLayer.FIRST_PAGE_INDEX]. A paged command fetches this page and no other, and every
+     * answer carries it. The service decides it per request, from what the client asking already
+     * holds, so a command keeps no page of its own that another client could move.
+     */
+    val pageNumber: Int,
     val isSavedInstance: Boolean,
     val options: Bundle,
     /**
@@ -65,18 +71,27 @@ class MediaItemCommandDependencies(
     private val mScope: CoroutineScope,
     resultListener: ResultListener,
     /**
+     * Where the first non-empty result goes that a command delivers after [execute] answered the
+     * request empty without it, which is a page its provider gave after the deadline. The client
+     * holds the empty answer and asks for nothing more, so the page is what the service has to
+     * store and push to it (fnr-2r55y). It is passed on only once the empty answer has been
+     * delivered, so that the client cannot hear of the page before it hears of the answer.
+     */
+    lateResultListener: ResultListener,
+    /**
      * How long [execute] lets a command run before it answers the browse request without it. Only
      * tests choose anything but [MediaItemCommand.CMD_TIMEOUT_MS].
      */
     private val mTimeoutMillis: Long = MediaItemCommand.CMD_TIMEOUT_MS
 ) {
 
-    private val mResultListener = FirstResultListener(resultListener)
+    private val mResultListener = FirstResultListener(resultListener, lateResultListener)
 
     /**
      * Where a command delivers its result. Only the first result of an execution reaches the
      * listener these dependencies were made with, so an answer that arrives after [execute] has
-     * answered for it cannot leave the client with a second word.
+     * answered for it cannot leave the client with a second word. A result that arrives after
+     * [execute] answered empty goes to the late listener instead.
      */
     val resultListener: ResultListener = mResultListener
 
@@ -85,22 +100,14 @@ class MediaItemCommandDependencies(
     private val mExecuted = AtomicBoolean(false)
 
     /**
-     * Answers the browse request, unless it has been answered already, and tells whether it did.
-     *
-     * [onAnswering] runs only when this is the answer, and before the client can see it, so that
-     * whatever a command keeps for the requests after this one, such as the page it is at, moves on
-     * exactly when the client has the answer coming and never for an answer that was dropped.
+     * Answers the browse request for [pageNumber], unless it has been answered already, and tells
+     * whether it did.
      *
      * @return Whether this answered the request. False when the deadline, or an earlier result,
-     * answered it first and this one was dropped.
+     * answered it first, and this one went to the late listener or was dropped.
      */
-    fun answer(
-        items: List<MediaItem>,
-        radioStations: Set<RadioStation> = TreeSet(),
-        pageNumber: Int = UrlLayer.FIRST_PAGE_INDEX,
-        onAnswering: () -> Unit = {}
-    ): Boolean {
-        return mResultListener.offer(items, radioStations, pageNumber, onAnswering)
+    fun answer(items: List<MediaItem>, radioStations: Set<RadioStation> = TreeSet()): Boolean {
+        return mResultListener.offer(items, radioStations, pageNumber)
     }
 
     fun addMediaItem(item: MediaItem) {
@@ -123,7 +130,8 @@ class MediaItemCommandDependencies(
      * around them could only fire once they returned, and a provider stuck on the network would
      * leave the request unanswered for good. The request is answered empty as well when [command]
      * returns without answering, fails, or is cancelled with [mScope], so that every execution
-     * answers exactly once. Whatever [command] delivers after that is dropped. A failure of
+     * answers exactly once. Whatever [command] delivers after that goes to the late listener or is
+     * dropped, see [FirstResultListener]. A failure of
      * [command] still fails the execution's coroutine, so it ends wherever [mScope] puts it, which
      * for a scope from [newCommandScope] is the log.
      *
@@ -152,42 +160,77 @@ class MediaItemCommandDependencies(
     }
 
     /**
-     * Passes the first result to [mDelegate] and drops every later one. A browse request has a
-     * single future, and a second result would arrive at it after the first had settled it.
+     * Passes the first result to [mDelegate] and drops every later one, but for the first
+     * non-empty result after an empty answer [answerIfUnanswered] gave, which goes to [mLate]. A
+     * browse request has a single future, and a second result would arrive at it after the first
+     * had settled it.
+     *
+     * Every delivery is made under the lock, so the late result reaches [mLate] only after the
+     * empty answer has returned from [mDelegate].
      */
-    private class FirstResultListener(private val mDelegate: ResultListener) : ResultListener {
+    private class FirstResultListener(
+        private val mDelegate: ResultListener,
+        private val mLate: ResultListener
+    ) : ResultListener {
 
-        private val mAnswered = AtomicBoolean(false)
+        private val mLock = Any()
+
+        /** Written under [mLock]. */
+        private var mState = State.UNANSWERED
 
         override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
-            offer(items, radioStations, pageNumber) {}
+            offer(items, radioStations, pageNumber)
         }
 
         /**
-         * Passes the result to [mDelegate] if it is the first, running [onAnswering] just before.
+         * Passes the result to [mDelegate] if it is the first, or to [mLate] if it is the first
+         * with items after an empty answer from [answerIfUnanswered].
          *
-         * @return Whether the result was passed on.
+         * @return Whether the result answered the request, which is only when it went to
+         * [mDelegate].
          */
-        fun offer(
-            items: List<MediaItem>,
-            radioStations: Set<RadioStation>,
-            pageNumber: Int,
-            onAnswering: () -> Unit
-        ): Boolean {
-            if (mAnswered.compareAndSet(false, true).not()) {
-                AppLogger.w("$CLASS_NAME dropped a result of ${items.size} items for an answered request")
-                return false
+        fun offer(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int): Boolean {
+            synchronized(mLock) {
+                when {
+                    mState == State.UNANSWERED -> {
+                        mState = State.ANSWERED
+                        mDelegate.onResult(items, radioStations, pageNumber)
+                        return true
+                    }
+
+                    mState == State.ANSWERED_EMPTY && items.isNotEmpty() -> {
+                        mState = State.ANSWERED
+                        AppLogger.w("$CLASS_NAME passed on a late result of ${items.size} items for page $pageNumber")
+                        mLate.onResult(items, radioStations, pageNumber)
+                        return false
+                    }
+
+                    else -> {
+                        AppLogger.w("$CLASS_NAME dropped a result of ${items.size} items for an answered request")
+                        return false
+                    }
+                }
             }
-            onAnswering()
-            mDelegate.onResult(items, radioStations, pageNumber)
-            return true
         }
 
         /** Answers with an empty result, unless something has answered already. */
         fun answerIfUnanswered() {
-            if (mAnswered.compareAndSet(false, true)) {
-                mDelegate.onResult()
+            synchronized(mLock) {
+                if (mState == State.UNANSWERED) {
+                    mState = State.ANSWERED_EMPTY
+                    mDelegate.onResult()
+                }
             }
+        }
+
+        private enum class State {
+            UNANSWERED,
+
+            /** Answered empty by [answerIfUnanswered], and a late result with items is passed on. */
+            ANSWERED_EMPTY,
+
+            /** Answered, and nothing later is passed on. */
+            ANSWERED
         }
     }
 
