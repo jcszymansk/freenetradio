@@ -289,9 +289,8 @@ class OpenRadioService : MediaLibraryService() {
      * phone UI, Android Auto and any other browser each move it. A notification reaches only the
      * controllers subscribed to the node it names, so naming one nobody shows sends nothing.
      *
-     * The favorites list is told without being invalidated. A browse always rebuilds it, so it
-     * needs no invalidation to be fresh, and its browse tree entry is what keeps a queue played
-     * from it resolvable while no controller is subscribed to re-browse it.
+     * The favorites list is told without being invalidated: a browse always rebuilds it, so it
+     * needs no invalidation to be fresh.
      */
     private fun notifyFavoritesChanged() {
         notifyChildrenChanged(MediaId.MEDIA_ID_ROOT)
@@ -413,8 +412,8 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     /**
-     * The url the station of [mediaId] was listed with. The browse tree forgets a station when its
-     * list is invalidated, which may happen while it plays, so the active station answers then.
+     * The url the station of [mediaId] was listed with. The browse tree holds every station of the
+     * player's queue, but not always the active station, so that one answers when the tree cannot.
      */
     private fun getStationUrl(mediaId: String): String {
         val station = mBrowseTree.getRadioStationByMediaId(mediaId)
@@ -902,22 +901,23 @@ class OpenRadioService : MediaLibraryService() {
             )
         }
 
+        /**
+         * What a controller adds joins the queue, so it joins the browse tree's playlist as well
+         * and stays resolvable after the list it came from is invalidated.
+         */
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<MutableList<MediaItem>> {
             AppLogger.d("$TAG AddMediaItems ${mediaItems.size}")
-            if (mediaItems.size != 1) {
-                return Futures.immediateFuture(
-                    mediaItems.mapNotNull {
-                        mBrowseTree.getMediaItemByMediaId(it.mediaId)
-                    }.toMutableList()
-                )
+            val added = if (mediaItems.size != 1) {
+                mBrowseTree.getQueue(mediaItems.map { it.mediaId })
+            } else {
+                mBrowseTree.getSelection(mediaItems[0].mediaId, mCurrentParentId)
             }
-            return Futures.immediateFuture(
-                mBrowseTree.getMediaItemsByMediaId(mediaItems[0].mediaId, mCurrentParentId).toMutableList()
-            )
+            mBrowseTree.addToPlaylist(added)
+            return Futures.immediateFuture(added.children.toMutableList())
         }
 
         override fun onConnect(
@@ -951,6 +951,12 @@ class OpenRadioService : MediaLibraryService() {
                 .build()
         }
 
+        /**
+         * The queue the player is handed becomes the browse tree's playlist, which keeps its
+         * stations resolvable after the list it came from is invalidated. The answer is built
+         * here rather than by the default implementation, which would pass it through
+         * [onAddMediaItems] and add the queue to the playlist a second time.
+         */
         override fun onSetMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
@@ -964,11 +970,16 @@ class OpenRadioService : MediaLibraryService() {
             //       there is additional configuration somewhere to specify to load a whole playlist.
 
             if (mediaItems.size != 1) {
-                return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
+                val queue = mBrowseTree.getQueue(mediaItems.map { it.mediaId })
+                mBrowseTree.setPlaylist(queue)
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(queue.children, startIndex, startPositionMs)
+                )
             }
             val mediaId = mediaItems[0].mediaId
             // The selection carries no parent, and the list the client browsed last is the one it was made from.
-            var items = mBrowseTree.getMediaItemsByMediaId(mediaId, mCurrentParentId)
+            val selection = mBrowseTree.getSelection(mediaId, mCurrentParentId)
+            var items = selection.children
 
             // This is a case when Google Assistant ask to play music but nothing selected.
             if (items.isEmpty()) {
@@ -999,6 +1010,8 @@ class OpenRadioService : MediaLibraryService() {
 //                }
                 mBrowseTree.setPlaylist(BrowseTree.BrowseData(items, radioStations))
                 mPlayer.setMediaItems(items, 0, C.TIME_UNSET)
+            } else {
+                mBrowseTree.setPlaylist(selection)
             }
 
             var pos = 0
@@ -1008,7 +1021,7 @@ class OpenRadioService : MediaLibraryService() {
                     break
                 }
             }
-            return super.onSetMediaItems(mediaSession, controller, items, pos, C.TIME_UNSET)
+            return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(items, pos, C.TIME_UNSET))
         }
 
         override fun onCustomCommand(
@@ -1213,9 +1226,9 @@ class OpenRadioService : MediaLibraryService() {
             // name a station is about that station and no other.
             val mediaId = OpenRadioStore.extractMediaId(args).ifEmpty { mActiveRS.id }
             var rs = getRadioStationByMediaId(mediaId)
-            // The now playing station can leave the browse tree while it plays, for instance when
-            // it is unmarked from the favorites list a controller is showing. It is still the
-            // station the button concerns.
+            // The active station is not always one the browse tree holds: the last played station
+            // the service restores when it starts is held by no list and no queue until one is
+            // built around it. It is still the station the button concerns.
             if (rs.isInvalid() && mediaId == mActiveRS.id) {
                 rs = RadioStation.makeCopyInstance(mActiveRS)
             }

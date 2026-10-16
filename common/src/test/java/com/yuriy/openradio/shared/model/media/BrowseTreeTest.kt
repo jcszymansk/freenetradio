@@ -155,11 +155,63 @@ class BrowseTreeTest {
         tree["country"] = country
         tree.setPlaylist(playlist)
 
-        assertSame(country.children, tree.getMediaItemsByMediaId(shared.id, "country"))
-        assertSame(favorites.children, tree.getMediaItemsByMediaId(shared.id, "favorites"))
-        assertSame(favorites.children, tree.getMediaItemsByMediaId(shared.id, "unrelated"))
-        assertSame(playlist.children, tree.getMediaItemsByMediaId(alone.id, "country"))
-        assertTrue(tree.getMediaItemsByMediaId("missing", "country").isEmpty())
+        assertSame(country, tree.getSelection(shared.id, "country"))
+        assertSame(favorites, tree.getSelection(shared.id, "favorites"))
+        assertSame(favorites, tree.getSelection(shared.id, "unrelated"))
+        assertSame(playlist, tree.getSelection(alone.id, "country"))
+        assertTrue(tree.getSelection("missing", "country").children.isEmpty())
+        assertTrue(tree.getSelection("missing", "country").radioStations.isEmpty())
+    }
+
+    /**
+     * fnr-tzth: a list selected to play is the player's queue from then on, so the service makes
+     * it the playlist, and its stations have to resolve after the list itself is invalidated.
+     */
+    @Test
+    fun aSelectionMadeThePlaylistStaysResolvableAfterItsListIsInvalidated() {
+        val tree = BrowseTree()
+        val playing = station("playing")
+        val next = station("next")
+        tree["locals"] = data(playing, next)
+
+        tree.setPlaylist(tree.getSelection(playing.id, "locals"))
+        tree.invalidate("locals")
+
+        assertSame(next, tree.getRadioStationByMediaId(next.id))
+        assertNotNull(tree.getMediaItemByMediaId(next.id))
+        assertEquals(listOf(playing.id, next.id), tree.getMediaItemsByMediaId(next.id).map { it.mediaId })
+    }
+
+    @Test
+    fun aQueueHoldsTheItemsTheTreeKnowsWithTheirStationsInTheOrderAsked() {
+        val tree = BrowseTree()
+        val first = station("first")
+        val second = station("second")
+        val queued = station("queued")
+        tree["parent"] = data(first, second)
+        tree.setPlaylist(data(queued))
+
+        val queue = tree.getQueue(listOf(queued.id, "missing", second.id))
+
+        assertEquals(listOf(queued.id, second.id), queue.children.map { it.mediaId })
+        assertSame(tree.getMediaItemByMediaId(second.id), queue.children[1])
+        assertEquals(setOf(queued, second), queue.radioStations)
+    }
+
+    @Test
+    fun addingToThePlaylistKeepsWhatItHeld() {
+        val tree = BrowseTree()
+        val playing = station("playing")
+        val added = station("added")
+        tree.setPlaylist(data(playing))
+        tree["locals"] = data(added)
+
+        tree.addToPlaylist(tree.getSelection(added.id, "locals"))
+        tree.invalidate("locals")
+
+        assertEquals(listOf(playing.id, added.id), tree.getMediaItemsByMediaId(added.id).map { it.mediaId })
+        assertSame(playing, tree.getRadioStationByMediaId(playing.id))
+        assertSame(added, tree.getRadioStationByMediaId(added.id))
     }
 
     @Test
@@ -254,7 +306,7 @@ class BrowseTreeTest {
         val first = station("first")
         tree["parent"] = data(first, station("second"))
         val byParent = tree["parent"]!!.iterator()
-        val byChild = tree.getMediaItemsByMediaId(first.id, "parent").iterator()
+        val byChild = tree.getSelection(first.id, "parent").children.iterator()
         byParent.next()
         byChild.next()
 
@@ -273,7 +325,7 @@ class BrowseTreeTest {
             { i -> tree["list-$i"] = data(station("station-$i")) },
             { _ ->
                 check(tree.getMediaItemsByMediaId("missing").isEmpty())
-                check(tree.getMediaItemsByMediaId("missing", "list-0").isEmpty())
+                check(tree.getSelection("missing", "list-0").children.isEmpty())
             }
         )
 
