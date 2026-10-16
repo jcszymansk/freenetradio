@@ -30,6 +30,12 @@ import androidx.media3.common.MediaItem
  * part of the list it has not been answered with, and only when it has the whole list does the
  * provider get asked for the page after it.
  *
+ * That part is cut to the page size the client asked with, and the client is recorded as holding
+ * only what it was answered with. A client that fell pages behind another would otherwise get all
+ * those pages in one answer, and Media3 rejects an answer larger than the page size: inline it
+ * only logs the rejection, but for an answer completed off the main thread it throws on the main
+ * looper and ends the process.
+ *
  * A client is recorded against the [BrowseTree.PagedList.stamp] of the list it was answered from,
  * and holds nothing of a list stored again since. Safe to use from any thread.
  */
@@ -55,36 +61,39 @@ class ClientPages {
 
     /**
      * Tells what a request of [client] for more of [list], the list held under [mediaId], needs.
-     * When the client lacks part of [list], it is answered with that part, and recorded as
-     * holding it. When it holds all of [list], the next page has to be fetched, and the client is
-     * answered with [answerRest] once the page is stored. A client that holds no part of [list],
-     * because it never asked for its first page or [list] is not the list it was answered from,
-     * or because no list is held, is answered with nothing.
+     * When the client lacks part of [list], it is answered with at most [pageSize] items of that
+     * part, and recorded as holding them. When it holds all of [list], the next page has to be
+     * fetched, and the client is answered with [answerRest] once the page is stored. A client
+     * that holds no part of [list], because it never asked for its first page or [list] is not
+     * the list it was answered from, or because no list is held, is answered with nothing.
      */
-    fun next(client: Any, mediaId: String, list: BrowseTree.PagedList?): Next {
+    fun next(client: Any, mediaId: String, list: BrowseTree.PagedList?, pageSize: Int): Next {
+        require(pageSize > 0) { "Page size $pageSize is not positive" }
         synchronized(mLock) {
             val held = list ?: return Next.Answer(emptyList())
             val position = positionIn(client, mediaId, held) ?: return Next.Answer(emptyList())
             if (position.size == held.children.size) {
                 return Next.Fetch(held.pageCount)
             }
-            return Next.Answer(answerFrom(client, mediaId, held, position))
+            return Next.Answer(answerFrom(client, mediaId, held, position, pageSize))
         }
     }
 
     /**
-     * Answers [client] with the part of [list] it has not been answered with, and records that it
-     * has it. That is the page fetched for it, or nothing when an earlier answer gave it that page
-     * already, or when it holds no part of [list] (see [next]).
+     * Answers [client] with at most [pageSize] items of the part of [list] it has not been
+     * answered with, and records that it has them. That is the page fetched for it, or the
+     * earliest page it lacks when other requests added pages meanwhile, or nothing when an earlier
+     * answer gave it that page already, or when it holds no part of [list] (see [next]).
      *
      * @param list The list held under [mediaId] once the fetched page was stored, or null when the
      *   page was dropped.
      */
-    fun answerRest(client: Any, mediaId: String, list: BrowseTree.PagedList?): List<MediaItem> {
+    fun answerRest(client: Any, mediaId: String, list: BrowseTree.PagedList?, pageSize: Int): List<MediaItem> {
+        require(pageSize > 0) { "Page size $pageSize is not positive" }
         synchronized(mLock) {
             val held = list ?: return emptyList()
             val position = positionIn(client, mediaId, held) ?: return emptyList()
-            return answerFrom(client, mediaId, held, position)
+            return answerFrom(client, mediaId, held, position, pageSize)
         }
     }
 
@@ -103,16 +112,21 @@ class ClientPages {
         return if (position.stamp == list.stamp) position else null
     }
 
-    /** Records that [client] holds all of [list], and returns what it lacked at [position]. */
+    /**
+     * Returns at most [pageSize] items of what [client] lacked of [list] at [position], and
+     * records that it holds them.
+     */
     private fun answerFrom(
         client: Any,
         mediaId: String,
         list: BrowseTree.PagedList,
-        position: Position
+        position: Position,
+        pageSize: Int
     ): List<MediaItem> {
         val children = list.children
-        mPositions[Key(client, mediaId)] = Position(list.stamp, children.size)
-        return children.subList(position.size, children.size).toList()
+        val end = minOf(children.size, position.size + pageSize)
+        mPositions[Key(client, mediaId)] = Position(list.stamp, end)
+        return children.subList(position.size, end).toList()
     }
 
     /** What a request for more of a paged list needs, see [next]. */

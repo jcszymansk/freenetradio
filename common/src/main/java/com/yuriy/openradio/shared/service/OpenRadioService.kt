@@ -870,7 +870,7 @@ class OpenRadioService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             AppLogger.d("$TAG [$browser] GetChildren for $parentId page $page pageSize $pageSize")
-            return callWhenSourceReady(browser, parentId, page) { children ->
+            return callWhenSourceReady(browser, parentId, page, pageSize) { children ->
                 AppLogger.d("$TAG GetChildren for $parentId page $page return ${children.size}")
                 mArtworkGrants.grant(browser, children)
                 LibraryResult.ofItemList(
@@ -1154,9 +1154,10 @@ class OpenRadioService : MediaLibraryService() {
          * are available, through a future that the result listener completes.
          *
          * The first page is the whole list the tree holds, or a list fetched anew. A later page is
-         * the part of the list [client] has not been answered with, and only a client that has
-         * the whole list has the page after it fetched: the clients share the list, not their
-         * place in it, which [mClientPages] keeps for each (fnr-1557f).
+         * at most [pageSize] items of the part of the list [client] has not been answered with,
+         * since Media3 rejects a larger answer, and only a client that has the whole list has the
+         * page after it fetched: the clients share the list, not their place in it, which
+         * [mClientPages] keeps for each (fnr-1557f).
          *
          * The children are taken from the list the page was stored in, not read from the tree
          * afterwards: the main thread may invalidate the node between the two, and a read then
@@ -1170,6 +1171,7 @@ class OpenRadioService : MediaLibraryService() {
             client: MediaSession.ControllerInfo,
             parentId: String,
             page: Int,
+            pageSize: Int,
             action: (children: List<MediaItem>) -> LibraryResult<V>
         ): ListenableFuture<LibraryResult<V>> {
             mCurrentParentId = parentId
@@ -1195,7 +1197,7 @@ class OpenRadioService : MediaLibraryService() {
                 }
                 UrlLayer.FIRST_PAGE_INDEX
             } else {
-                when (val next = mClientPages.next(client, parentId, held)) {
+                when (val next = mClientPages.next(client, parentId, held, pageSize)) {
                     is ClientPages.Next.Answer -> return Futures.immediateFuture(action(next.items))
                     is ClientPages.Next.Fetch -> next.page
                 }
@@ -1235,7 +1237,7 @@ class OpenRadioService : MediaLibraryService() {
                                 // A later page is only fetched to continue the list held, so
                                 // held is that list.
                                 val stored = held?.let { mBrowseTree.append(parentId, it, browseData) }
-                                mClientPages.answerRest(client, parentId, stored)
+                                mClientPages.answerRest(client, parentId, stored, pageSize)
                             }
 
                             future.set(action(children))

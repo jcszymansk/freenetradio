@@ -81,7 +81,7 @@ class MediaItemCommandLateAnswerTest {
     }
 
     @Test
-    fun aLateNextPageIsAskedForAgain() {
+    fun aRetryOfALateNextPageGetsThatPage() {
         val parentId = MediaId.MEDIA_ID_CHILD_CATEGORIES + "rock"
         val presenter = HeldPresenter { hold ->
             RecordingPresenter(mCategoryStations = stations("first", "second", "third"), mBeforeAnswer = hold)
