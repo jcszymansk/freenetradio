@@ -269,6 +269,60 @@ class OpenRadioServicePresenterImplTest {
         assertTrue(presenter(settingsContext = context).getAllFavorites().isEmpty())
     }
 
+    /**
+     * A search result names its station under a search id, and the favorites store keeps it under
+     * the plain one. Unmarking is asked of a new instance under the same search id, as a search
+     * that runs again after the favorites changed hands out, and of a second presenter, whose
+     * storage has remembered no answers. The marked instance keeps its search id: the browse tree
+     * indexes the search list's stations by the ids they had when the list was loaded.
+     */
+    @Test
+    fun aStationMarkedFromASearchResultIsUnmarkedFromIt() {
+        val context = preferencesContext()
+        val presenter = presenter(settingsContext = context)
+        val searchId = MediaId.makeSearchId("station")
+        val station = RadioStation.makeDefaultInstance(searchId).apply {
+            setVariant(128, "https://radio.example/station.mp3")
+        }
+
+        assertTrue(presenter.updateRadioStationFavorite(station, true))
+        assertEquals(searchId, station.id)
+        assertEquals(listOf("station"), presenter(settingsContext = context).getAllFavorites().map { it.id })
+
+        val again = RadioStation.makeCopyInstance(station)
+        assertTrue(presenter(settingsContext = context).isRadioStationFavorite(again))
+        assertTrue(presenter(settingsContext = context).updateRadioStationFavorite(again, false))
+        assertTrue(presenter(settingsContext = context).getAllFavorites().isEmpty())
+        assertFalse(presenter(settingsContext = context).isRadioStationFavorite(station))
+    }
+
+    /**
+     * A search result for a station that is already a favorite is one. Marking it changes nothing,
+     * which the stored name shows, as in [aFavoriteUpdateAnswersWhetherItChangedTheStore].
+     */
+    @Test
+    fun aFavoriteFoundBySearchIsRecognisedAsOne() {
+        val context = preferencesContext()
+        val presenter = presenter(settingsContext = context)
+        val station = RadioStation.makeDefaultInstance("station").apply {
+            name = "Stored"
+            setVariant(128, "https://radio.example/station.mp3")
+        }
+        assertTrue(presenter.updateRadioStationFavorite(station, true))
+        val found = RadioStation.makeCopyInstance(station).apply {
+            id = MediaId.makeSearchId("station")
+            name = "Found"
+        }
+
+        assertTrue(presenter.isRadioStationFavorite(found))
+        assertTrue(presenter(settingsContext = context).isRadioStationFavorite(found))
+        assertFalse(presenter.updateRadioStationFavorite(found, true))
+        assertEquals(
+            listOf("Stored"),
+            presenter(settingsContext = context).getAllFavorites().map { it.name }
+        )
+    }
+
     @Test
     fun clearingDropsEveryCacheAndTheLatestStation() {
         val images = RecordingImagesPersistenceLayer()
