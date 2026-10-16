@@ -581,6 +581,40 @@ class OpenRadioServiceBrowseTest {
     }
 
     /**
+     * A later page is answered with the stations that page added, taken from the page the
+     * service stored rather than read back from the node, which the main thread may invalidate
+     * in between (fnr-1bz3d). A browse of the node afterwards offers both pages.
+     */
+    @Test
+    fun aLaterPageAnswersWithTheStationsItAdded() {
+        seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
+        seedResponse(
+            mUrls.getStationsByCountry(FIRST_COUNTRY_CODE, UrlLayer.FIRST_PAGE_INDEX + 1).toString(),
+            FIRST_COUNTRY_SECOND_PAGE_RESPONSE,
+            MediaId.MEDIA_ID_COUNTRY_STATIONS
+        )
+        chooseCountry(FIRST_COUNTRY_CODE)
+        assertEquals(
+            listOf("first-one", "first-two"),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        )
+
+        val result = mBrowser.childrenResult(MediaId.MEDIA_ID_COUNTRY_STATIONS, page = 1)
+
+        assertEquals(LibraryResult.RESULT_SUCCESS, result.resultCode)
+        assertEquals(
+            "The second page did not answer with its own stations",
+            listOf("page-two-one", "page-two-two"),
+            result.value!!.map { it.mediaId }
+        )
+        assertEquals(
+            "The node did not hold both pages after the second was stored",
+            listOf("first-one", "first-two", "page-two-one", "page-two-two"),
+            mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
+        )
+    }
+
+    /**
      * A provider node with nothing to offer still has to answer. This one fetches its children
      * rather than reading a store, so with networking off and nothing cached it comes back empty,
      * which is the ordinary offline case and not an exotic one.
@@ -823,6 +857,8 @@ class OpenRadioServiceBrowseTest {
         const val SECOND_COUNTRY_CODE = "IT"
 
         val FIRST_COUNTRY_STATIONS_RESPONSE = stationsResponse("first-one", "first-two")
+
+        val FIRST_COUNTRY_SECOND_PAGE_RESPONSE = stationsResponse("page-two-one", "page-two-two")
 
         val SECOND_COUNTRY_STATIONS_RESPONSE = stationsResponse("second-one", "second-two")
 

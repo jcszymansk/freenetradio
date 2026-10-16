@@ -77,16 +77,18 @@ class BrowseTree {
      * Adds a page to the end of the list held under [mediaId]. A page for a list that is not held,
      * because it was never stored or was invalidated since, is dropped.
      *
-     * @return the position of the page's first item in the list, 0 when the page was dropped.
+     * @return the items the page added, which is what a request for the page is answered with,
+     *   or an empty list when the page was dropped. The answer does not read the list again, as
+     *   the list may be invalidated as soon as the page is in it.
      */
-    fun append(mediaId: String, browseData: BrowseData): Int {
+    fun append(mediaId: String, browseData: BrowseData): List<MediaItem> {
         synchronized(mLock) {
-            val held = mState.lists[mediaId] ?: return 0
+            val held = mState.lists[mediaId] ?: return emptyList()
             mState = mState.withList(
                 mediaId,
                 BrowseData(held.children + browseData.children, held.radioStations + browseData.radioStations)
             )
-            return held.children.size
+            return browseData.children
         }
     }
 

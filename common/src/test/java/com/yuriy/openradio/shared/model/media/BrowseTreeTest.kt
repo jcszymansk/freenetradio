@@ -331,15 +331,33 @@ class BrowseTreeTest {
     }
 
     @Test
-    fun appendAnswersWhereThePageStarts() {
+    fun appendAnswersWithThePageItAdded() {
         val tree = BrowseTree()
         tree["parent"] = data(station("first"), station("second"))
 
-        assertEquals(2, tree.append("parent", data(station("third"))))
-        assertEquals(3, tree.append("parent", data(station("fourth"))))
-        assertEquals(0, tree.append("missing", data(station("dropped"))))
+        assertEquals(listOf("third"), tree.append("parent", data(station("third"))).map { it.mediaId })
+        assertEquals(listOf("fourth"), tree.append("parent", data(station("fourth"))).map { it.mediaId })
+        assertEquals(listOf("first", "second", "third", "fourth"), tree["parent"]?.map { it.mediaId })
+        assertTrue(tree.append("missing", data(station("dropped"))).isEmpty())
         assertNull(tree["missing"])
         assertNull(tree.getMediaItemByMediaId("dropped"))
+    }
+
+    /**
+     * The service answers a page request with what append returned. The main thread may
+     * invalidate the node right after the page is stored, and the answer must not depend on
+     * reading the node again (fnr-1bz3d).
+     */
+    @Test
+    fun theAnswerForAPageOutlivesTheInvalidationOfItsList() {
+        val tree = BrowseTree()
+        tree["parent"] = data(station("first"), station("second"))
+
+        val page = tree.append("parent", data(station("third"), station("fourth")))
+        tree.invalidate("parent")
+
+        assertEquals(listOf("third", "fourth"), page.map { it.mediaId })
+        assertNull(tree["parent"])
     }
 
     @Test

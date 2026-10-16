@@ -866,13 +866,11 @@ class OpenRadioService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             AppLogger.d("$TAG [$browser] GetChildren for $parentId page $page pageSize $pageSize")
-            return callWhenSourceReady(parentId, page) {
-                val list = mBrowseTree[parentId] ?: ImmutableList.of()
-                val sublist = list.subList(it, list.size)
-                AppLogger.d("$TAG GetChildren for $parentId page $page return ${sublist.size}|${list.size} from pos:$it")
-                mArtworkGrants.grant(browser, sublist)
+            return callWhenSourceReady(parentId, page) { children ->
+                AppLogger.d("$TAG GetChildren for $parentId page $page return ${children.size}")
+                mArtworkGrants.grant(browser, children)
                 LibraryResult.ofItemList(
-                    sublist,
+                    children,
                     LibraryParams.Builder().build()
                 )
             }
@@ -1143,8 +1141,12 @@ class OpenRadioService : MediaLibraryService() {
         }
 
         /**
-         * Runs [action] once the children of [parentId] are available, through a future that the
-         * result listener completes.
+         * Runs [action] on the children that answer [page] of [parentId] once they are available,
+         * through a future that the result listener completes.
+         *
+         * The children are taken from what the page stored, not read from the tree afterwards: the
+         * main thread may invalidate the node between the two, and a read then would find no list
+         * to answer from (fnr-1bz3d).
          *
          * The return type is pinned to [LibraryResult] rather than left open so that a parent id
          * no command answers can be completed with an error. Leaving that future unset would hang
@@ -1153,7 +1155,7 @@ class OpenRadioService : MediaLibraryService() {
         private fun <V : Any> callWhenSourceReady(
             parentId: String,
             page: Int,
-            action: (position: Int) -> LibraryResult<V>
+            action: (children: List<MediaItem>) -> LibraryResult<V>
         ): ListenableFuture<LibraryResult<V>> {
             val isSameCatalogue = AppUtils.isSameCatalogue(parentId, mCurrentParentId)
             mCurrentParentId = parentId
@@ -1169,16 +1171,17 @@ class OpenRadioService : MediaLibraryService() {
                 // A later page extends the list the client holds, which is the old country's, so
                 // nothing of the new country may be appended to it.
                 if (page != 0) {
-                    return Futures.immediateFuture(action(0))
+                    return Futures.immediateFuture(action(emptyList()))
                 }
             }
+            val cached = mBrowseTree[parentId]
             if (page == 0
-                && mBrowseTree[parentId] != null
+                && cached != null
                 //  Do not cache these categories, always fetch fresh data.
                 && parentId != MediaId.MEDIA_ID_FAVORITES_LIST
                 && parentId != MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
             ) {
-                return Futures.immediateFuture(action(0))
+                return Futures.immediateFuture(action(cached))
             }
             val id = MediaId.getId(parentId, AppUtils.EMPTY_STRING)
             val command = mPresenter.getMediaItemCommand(id)
@@ -1193,15 +1196,16 @@ class OpenRadioService : MediaLibraryService() {
                     override fun onResult(items: List<MediaItem>, radioStations: Set<RadioStation>, pageNumber: Int) {
 
                         if (items.isEmpty()) {
-                            future.set(action(mBrowseTree[parentId]?.size ?: 0))
+                            future.set(action(emptyList()))
                             return
                         }
 
                         mExecutorService.submit {
 
                             AppLogger.d("$TAG loaded [$pageNumber:${items.size}] for $parentId")
-                            val position = if (pageNumber == 0) {
-                                mBrowseTree[parentId] = BrowseTree.BrowseData(items, radioStations)
+                            val browseData = BrowseTree.BrowseData(items, radioStations)
+                            val children = if (pageNumber == 0) {
+                                mBrowseTree[parentId] = browseData
                                 // Marked only once the list is in the tree: marked before, a browse
                                 // in between would take the old country's list, still held, for
                                 // the new one's.
@@ -1209,12 +1213,12 @@ class OpenRadioService : MediaLibraryService() {
                                     mCountryStationsCode = countryCode
                                 }
                                 mUiScope.launch { maybeCreateInitialPlaylist() }
-                                0
+                                browseData.children
                             } else {
-                                mBrowseTree.append(parentId, BrowseTree.BrowseData(items, radioStations))
+                                mBrowseTree.append(parentId, browseData)
                             }
 
-                            future.set(action(position))
+                            future.set(action(children))
                         }
                     }
                 }
