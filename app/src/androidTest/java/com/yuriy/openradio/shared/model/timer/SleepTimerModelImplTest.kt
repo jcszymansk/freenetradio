@@ -17,6 +17,8 @@
 package com.yuriy.openradio.shared.model.timer
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.storage.SleepTimerStorage
@@ -32,6 +34,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
@@ -413,6 +416,50 @@ class SleepTimerModelImplTest {
     }
 
     /**
+     * The application arms the stored alarm on a background thread at start while the user may be
+     * switching the timer off on the main thread. A disable that lands after [SleepTimerModelImpl.init]
+     * has read the stored flag as on, but before it arms, must still win: otherwise the timer is
+     * armed with storage saying off, and closes the service when it fires.
+     *
+     * The stored flag is read inside that window, so its read is where the arming thread parks: it
+     * lets the disabling thread go and waits for it to finish. A model whose read and arm are not
+     * atomic lets the disable run to the end in the window, and the arm that follows starts a timer
+     * the disable was meant to remove. An atomic one holds the disable back until init is done, so
+     * the wait runs out, init arms, and the disable then cancels what it armed.
+     */
+    @Test
+    fun aDisableIssuedWhileInitIsArmingWins() {
+        mStorage.saveDate(System.currentTimeMillis() + ARMED_DELAY_MS)
+        mStorage.saveEnabled(true)
+        val readingEnabled = CountDownLatch(1)
+        val disableDone = CountDownLatch(1)
+        val listener = RecordingListener()
+        val model = SleepTimerModelImpl(
+            WeakReference(
+                EnabledReadParkingContext(mContext) {
+                    readingEnabled.countDown()
+                    disableDone.await(WINDOW_MS, TimeUnit.MILLISECONDS)
+                }
+            )
+        )
+        model.addSleepTimerListener(listener)
+
+        val arming = thread { model.init() }
+        assertTrue(
+            "init never read the stored flag",
+            readingEnabled.await(COMPLETION_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        )
+        model.setEnabled(false)
+        disableDone.countDown()
+        arming.join()
+
+        assertFalse(mStorage.loadEnabled())
+        assertFalse(
+            "A timer was left armed after the disable", listener.awaitCompletionDuring(SILENCE_MS)
+        )
+    }
+
+    /**
      * Enabling only records the choice. The stored date may be unset, which reads as the current
      * time, so arming it here could fire at once; the dialog arms the time the user picked.
      */
@@ -465,6 +512,35 @@ class SleepTimerModelImplTest {
 
     private fun newModel(clock: () -> Long = System::currentTimeMillis): SleepTimerModelImpl {
         return SleepTimerModelImpl(WeakReference(mContext), clock)
+    }
+
+    /**
+     * Hands out the real sleep timer preferences, except that the first read of the enabled flag
+     * runs [mPark] after reading the value and before returning it, which is the moment a thread
+     * that has read the flag can be preempted before it acts on it.
+     */
+    private class EnabledReadParkingContext(
+        base: Context,
+        private val mPark: () -> Unit
+    ) : ContextWrapper(base) {
+
+        private val mParkPending = AtomicBoolean(true)
+
+        override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+            val preferences = super.getSharedPreferences(name, mode)
+            if (name != SLEEP_TIMER_FILE_NAME) {
+                return preferences
+            }
+            return object : SharedPreferences by preferences {
+                override fun getBoolean(key: String, defValue: Boolean): Boolean {
+                    val value = preferences.getBoolean(key, defValue)
+                    if (key == SLEEP_TIMER_ENABLED_KEY && mParkPending.compareAndSet(true, false)) {
+                        mPark()
+                    }
+                    return value
+                }
+            }
+        }
     }
 
     /**
@@ -532,6 +608,11 @@ class SleepTimerModelImplTest {
          */
         const val SLEEP_TIMER_FILE_NAME = "SleepTimerStorage"
 
+        /**
+         * Mirrors the private key of the enabled flag in [SleepTimerStorage].
+         */
+        const val SLEEP_TIMER_ENABLED_KEY = "ENABLED"
+
         const val DELAY_MS = 300L
 
         /**
@@ -549,5 +630,13 @@ class SleepTimerModelImplTest {
         const val COMPLETION_TIMEOUT_MS = 5_000L
 
         const val SILENCE_MS = 1_500L
+
+        /**
+         * How long a thread parked inside a race window waits for the other thread to finish. The
+         * other thread finishes at once when nothing holds it back, so this only has to outlast a
+         * slow device, and stays well under [ARMED_DELAY_MS] so the timer is still in the future
+         * once the wait runs out.
+         */
+        const val WINDOW_MS = 300L
     }
 }
