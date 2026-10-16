@@ -1003,11 +1003,8 @@ class OpenRadioService : MediaLibraryService() {
                 }
                 items = newItems
 
-                val radioStations = TreeSet<RadioStation>()
-                // TODO: Do we need Radio Stations as well?
-//                for (i in items) {
-//                    radioStations.add(***)
-//                }
+                // The default playable is no station, so the tree finds no station for it.
+                val radioStations = mBrowseTree.getQueue(items.map { it.mediaId }).radioStations
                 mBrowseTree.setPlaylist(BrowseTree.BrowseData(items, radioStations))
                 mPlayer.setMediaItems(items, 0, C.TIME_UNSET)
             } else {

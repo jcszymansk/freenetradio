@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.service
 
 import android.content.Context
 import android.os.Bundle
+import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
@@ -576,6 +577,18 @@ class OpenRadioServiceCommandTest {
     fun aQueueThePhoneHandsOverStaysResolvableAfterTheLocalsAreInvalidated() {
         val (first, second) = mStations.seed(mAudio.wav(WAV_NAME), mAudio.wav(WAV_NAME))
         mBrowser.setMediaItems(listOf(mStations.item(first), mStations.item(second)), 0)
+
+        playTheQueueAcrossAnInvalidation(listOf(first.id, second.id))
+    }
+
+    /**
+     * A selection the service finds in no list, the way Google Assistant can make one, plays the
+     * list browsed last, and that queue has to stay resolvable just the same.
+     */
+    @Test
+    fun aQueueForASelectionNoListHoldsStaysResolvableAfterTheLocalsAreInvalidated() {
+        val (first, second) = mStations.seed(mAudio.wav(WAV_NAME), mAudio.wav(WAV_NAME))
+        mBrowser.setMediaItem(MediaItem.Builder().setMediaId("not-listed").build())
 
         playTheQueueAcrossAnInvalidation(listOf(first.id, second.id))
     }
