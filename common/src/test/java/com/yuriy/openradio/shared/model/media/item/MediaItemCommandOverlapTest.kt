@@ -23,6 +23,7 @@ import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.utils.AppUtils
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -132,6 +133,62 @@ class MediaItemCommandOverlapTest {
                 DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX,
                 DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX,
                 DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX + 1
+            ),
+            presenter.countryRequests
+        )
+    }
+
+    /**
+     * Pins the interleaving behind the one failure of the case above (fnr-ku215): one execution is
+     * held at its first provider call, the country lookup, while the other runs to its answer, and
+     * only then asks for its page. The case above releases both at once, so it met this order only
+     * when the scheduler happened to delay one of them.
+     */
+    @Test
+    fun countryPageRequestHeldAtTheCountriesGetsItsPageAfterTheOtherIsAnswered() {
+        val parentId = MediaId.MEDIA_ID_COUNTRY_STATIONS
+        val command = MediaItemCountryStations()
+        val providerCalls = AtomicInteger()
+        val firstCallHeld = CountDownLatch(1)
+        val released = CountDownLatch(1)
+        val presenter = RecordingPresenter(
+            mCountries = setOf(Country("Poland", "PL")),
+            mCountryStations = stations("first", "second"),
+            mBeforeAnswer = {
+                if (providerCalls.getAndIncrement() == 0) {
+                    firstCallHeld.countDown()
+                    released.await(RecordingCommandListener.AWAIT_MILLIS, TimeUnit.MILLISECONDS)
+                }
+            }
+        )
+        val held = RecordingCommandListener()
+        val other = RecordingCommandListener()
+
+        dependencies(presenter, held, parentId = parentId).execute(command, held.playbackStateListener)
+        // Released in finally so that a failed check does not leave the held provider thread
+        // waiting into the next test.
+        try {
+            assertTrue(
+                "The held execution never reached the provider",
+                firstCallHeld.await(RecordingCommandListener.AWAIT_MILLIS, TimeUnit.MILLISECONDS)
+            )
+            dependencies(presenter, other, parentId = parentId).execute(command, other.playbackStateListener)
+            assertTrue("The other request was not answered while the first was held", other.awaitDelivery())
+        } finally {
+            released.countDown()
+        }
+
+        for ((name, listener) in listOf("held" to held, "other" to other)) {
+            listener.awaitResult()
+            assertEquals("The $name request was not answered exactly once", 1, listener.results)
+            assertEquals("The $name request did not get the page it asked for", listOf("first"), listener.mediaIds)
+            assertEquals(UrlLayer.FIRST_PAGE_INDEX, listener.pageNumber)
+            listener.assertNoError()
+        }
+        assertEquals(
+            listOf(
+                DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX,
+                DEFAULT_COUNTRY_CODE to UrlLayer.FIRST_PAGE_INDEX
             ),
             presenter.countryRequests
         )
