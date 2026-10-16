@@ -352,6 +352,9 @@ sealed class PlaylistFallback {
             return Step(Exhausted(mediaId, resolutions), Action.GiveUp(mediaId))
         }
         val first = streams.first()
-        return Step(Trying(mediaId, first, streams.drop(1), resolutions, streamsRead), Action.Play(mediaId, first))
+        return Step(
+            Trying(mediaId, first, streams.drop(1), resolutions, streamsRead),
+            Action.Play(mediaId, first)
+        )
     }
 }
