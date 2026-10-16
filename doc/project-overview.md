@@ -99,7 +99,7 @@ The children it fetches reach the Activity only through `MediaPresenterImpl`, wh
 
 Content generation uses a command pattern. Separate `MediaItemCommand` implementations produce major nodes such as `MediaItemFavoritesList`, `MediaItemCountriesList`, `MediaItemCountryStations`, and `MediaItemSearchFromService`. When the process starts in car mode, `OpenRadioServicePresenterImpl` answers the root with `MediaItemRootCar`, which keeps the top level short, and moves the remaining entries under `MediaItemBrowseCar`.
 
-`BrowseTree.kt` is an in-memory cache mapping parent IDs to child `MediaItem` lists, corresponding `RadioStation` sets, and individual item lookups. Nodes are invalidated when favorites, sorting, source selection, or local stations change.
+`BrowseTree.kt` is an in-memory cache mapping parent IDs to child `MediaItem` lists, corresponding `RadioStation` sets, and individual item lookups. Nodes are invalidated when favorites, sorting, source selection, or local stations change. Clearing the app data drops every node.
 
 ## Station providers and parsing
 

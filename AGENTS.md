@@ -82,8 +82,8 @@ OkHttp is pinned to 3.12.x and `androidx.media` to 1.6.0 — do not bump either 
   and the same browse tree; there is no separate car Activity. A change to browse or playback affects both.
 - **Browsing is a command pattern.** Each node under `model/media/item/` (`MediaItemRoot`, `MediaItemCountriesList`,
   …) produces its children via `OpenRadioServicePresenterImpl`; `BrowseTree` caches the result and is invalidated
-  on favorites, sorting, source, and local-station changes. Adding a browse node means adding a `MediaItemCommand`
-  and a `MediaId` entry, not UI code.
+  on favorites, sorting, source, and local-station changes, and emptied when the app data is cleared. Adding a
+  browse node means adding a `MediaItemCommand` and a `MediaId` entry, not UI code.
 - **Two providers behind one `SourcesLayer`.** Radio Browser paginates server-side (page size 250, in
   `DependencyRegistryCommon.PAGE_SIZE`) and discovers mirrors over DNS; WebRadioDB downloads whole JSON datasets
   and filters while parsing. Provider work usually touches a `UrlLayer*Impl` and its matching `ParserLayer*Impl`.
