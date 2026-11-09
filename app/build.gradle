@@ -1,5 +1,4 @@
 apply plugin: "com.android.application"
-apply plugin: "kotlin-android"
 apply from: "../constants.gradle"
 apply from: "../sign.gradle"
 
@@ -19,18 +18,14 @@ android {
 
     buildTypes {
         debug {
-            enableUnitTestCoverage true
-            enableAndroidTestCoverage true
+            enableUnitTestCoverage = true
+            enableAndroidTestCoverage = true
         }
     }
 
     compileOptions {
         sourceCompatibility project.ext.javaVersion
         targetCompatibility project.ext.javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = project.ext.kotlinJvmTarget
     }
 
     testOptions {
@@ -60,14 +55,17 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(project.ext.kotlinJvmTarget))
+    }
+}
+
 dependencies {
     implementation project(':common')
     implementation project(':common-ui')
 
-    androidTestImplementation(
-            "androidx.test.espresso:espresso-core:$espressoVersion",
-            {exclude group: "com.android.support", module: "support-annotations"}
-    )
+    androidTestImplementation "androidx.test.espresso:espresso-core:$espressoVersion"
     androidTestImplementation "androidx.test.ext:junit:$junitAndroidXVersion"
     // The Room API cache is exercised through its DAO, which :common keeps off the app classpath.
     androidTestImplementation "androidx.room:room-runtime:$roomVersion"

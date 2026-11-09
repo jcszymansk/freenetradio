@@ -122,7 +122,7 @@ class LoggingLayerImpl(private val mContext: Context) : LoggingLayer {
         val packageName: String = context.packageName
         try {
             val packageInfo: PackageInfo = packageManager.getPackageInfo(packageName, 0)
-            val versionName: String = packageInfo.versionName
+            val versionName: String = packageInfo.versionName ?: return "Application Build Information: Not available"
             val versionCode: Int = packageInfo.versionCode
             return """
             Application Build Information:

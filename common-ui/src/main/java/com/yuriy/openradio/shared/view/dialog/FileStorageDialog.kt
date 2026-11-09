@@ -75,6 +75,8 @@ class FileStorageDialog : BaseDialogFragment(), FileStoreManagerDependency {
         return createAlertDialog(view)
     }
 
+    @Suppress("DEPRECATION")
+    @Deprecated("Overrides the deprecated Fragment.onActivityResult")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         mFileStoreManager.onActivityResult(

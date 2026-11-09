@@ -5,6 +5,7 @@
 /.envrc
 *.iml
 sign.properties
+.kotlin/
 
 # Review loop artifacts
 

@@ -2,7 +2,6 @@ plugins {
     id("com.google.devtools.ksp")
 }
 apply plugin: "com.android.library"
-apply plugin: "kotlin-android"
 apply from: "../constants.gradle"
 
 android {
@@ -18,18 +17,14 @@ android {
 
     buildTypes {
         debug {
-            enableUnitTestCoverage true
-            enableAndroidTestCoverage true
+            enableUnitTestCoverage = true
+            enableAndroidTestCoverage = true
         }
     }
 
     compileOptions {
         sourceCompatibility project.ext.javaVersion
         targetCompatibility project.ext.javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = project.ext.kotlinJvmTarget
     }
 
     packagingOptions {
@@ -59,30 +54,36 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(project.ext.kotlinJvmTarget))
+    }
+}
+
 dependencies {
     api "com.google.android.material:material:$materialVersion"
     implementation "androidx.media:media:$androidxMediaVersion"
-    implementation group: "androidx.exifinterface", name: "exifinterface", version: "$exifinterfaceVersion"
+    implementation "androidx.exifinterface:exifinterface:$exifinterfaceVersion"
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation "androidx.room:room-runtime:$roomVersion"
     implementation "androidx.room:room-ktx:$roomVersion"
     implementation "androidx.concurrent:concurrent-futures-ktx:$concurrentFuturesVersion"
     implementation "androidx.core:core-ktx:$kotlinCoreKtx"
     implementation "androidx.activity:activity-ktx:$kotlinActivityKtx"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlinxCoroutinesAndroid"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinxCoroutinesCore"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$kotlinxCoroutinesVersion"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinxCoroutinesVersion"
     api "androidx.media3:media3-exoplayer:$media3Version"
     implementation "androidx.media3:media3-datasource:$media3Version"
     implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
     implementation "androidx.media3:media3-exoplayer-dash:$media3Version"
     implementation "androidx.media3:media3-session:$media3Version"
     // https://mvnrepository.com/artifact/org.jdom/jdom2
-    implementation group: "org.jdom", name: "jdom2", version: "$jdom2Version"
+    implementation "org.jdom:jdom2:$jdom2Version"
     // https://mvnrepository.com/artifact/com.google.http-client/google-http-client-apache-v2
-    implementation group: 'com.google.http-client', name: 'google-http-client-apache-v2', version: '1.43.3'
+    implementation "com.google.http-client:google-http-client-apache-v2:1.43.3"
 
     // https://mvnrepository.com/artifact/junit/junit
-    testImplementation group: "junit", name: "junit", version: "$junitVersion"
-    testImplementation group: "org.json", name: "json", version: "$jsonTestVersion"
+    testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.json:json:$jsonTestVersion"
     testRuntimeOnly project(":android-jvm-stubs")
 }

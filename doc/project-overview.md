@@ -276,16 +276,17 @@ The shared application manifest enables cleartext traffic. `ImagesProvider` is n
 
 | Component | Version |
 | --- | ---: |
-| Gradle wrapper | 8.2 |
-| Android Gradle Plugin | 8.2.2 |
-| Kotlin | 1.9.10 |
-| KSP | 1.9.0-1.0.13 |
+| Gradle wrapper | 9.7.1 |
+| Android Gradle Plugin | 9.5.1 |
+| Kotlin | 2.4.21 |
+| KSP | 2.3.13 |
 | JVM target | Java 8 |
-| Compile and target SDK | 34 |
+| Compile SDK | 37 |
+| Target SDK | 34 |
 | Mobile minimum SDK | 26 |
 | Media3 | 1.2.1 |
 | `androidx.media` | 1.7.1 |
-| Room | 2.6.1 |
+| Room | 2.8.5 |
 
 The wrapper version comes from `gradle/wrapper/gradle-wrapper.properties`, KSP from the root
 `build.gradle`, and the rest from `constants.gradle`. `AGENTS.md` names the JDK and Android SDK a fresh clone builds with.

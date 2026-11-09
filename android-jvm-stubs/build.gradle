@@ -15,9 +15,14 @@ if (localProperties.exists()) {
 if (androidSdkDir == null) {
     throw new GradleException("Set ANDROID_HOME or local.properties sdk.dir to build :android-jvm-stubs")
 }
-def androidJar = file("$androidSdkDir/platforms/android-${project.ext.compileSdkVersion}/android.jar")
+def platformDir = "$androidSdkDir/platforms/android-${project.ext.compileSdkVersion}"
+def androidJar = file("$platformDir/android.jar")
 if (!androidJar.exists()) {
-    throw new GradleException("Missing $androidJar; install the API ${project.ext.compileSdkVersion} platform")
+    // Preview and minor-suffixed platforms install as android-<api>.<minor>.
+    androidJar = file("${platformDir}.0/android.jar")
+}
+if (!androidJar.exists()) {
+    throw new GradleException("Missing $platformDir/android.jar; install the API ${project.ext.compileSdkVersion} platform")
 }
 
 java {
@@ -25,13 +30,13 @@ java {
     targetCompatibility = project.ext.javaVersion
 }
 
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions {
-        jvmTarget = project.ext.kotlinJvmTarget
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(project.ext.kotlinJvmTarget))
     }
 }
 
 dependencies {
     compileOnly files(androidJar)
-    testImplementation group: "junit", name: "junit", version: "$junitVersion"
+    testImplementation "junit:junit:$junitVersion"
 }
