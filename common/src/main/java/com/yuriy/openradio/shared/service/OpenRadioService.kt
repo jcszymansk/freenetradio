@@ -799,6 +799,8 @@ class OpenRadioService : MediaLibraryService() {
             return future
         }
 
+        @Suppress("DEPRECATION")
+        @Deprecated("Overrides the deprecated MediaSession.Callback.onPlayerCommandRequest")
         override fun onPlayerCommandRequest(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,

@@ -592,7 +592,7 @@ class MediaPresenterImpl(
     }
 
     override fun getCurrentCategory(): String {
-        return mMediaItemsStack.last
+        return mMediaItemsStack.last()
     }
 
     /**
