@@ -19,7 +19,6 @@ package com.yuriy.openradio.shared.service
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.annotation.MainThread
 import androidx.media.utils.MediaConstants
@@ -250,8 +249,7 @@ class OpenRadioService : MediaLibraryService() {
                         this@OpenRadioService,
                         0,
                         sessionIntent,
-                        if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE
-                        else PendingIntent.FLAG_UPDATE_CURRENT
+                        PendingIntent.FLAG_IMMUTABLE
                     )
                 )
             }

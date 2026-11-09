@@ -282,15 +282,13 @@ The shared application manifest enables cleartext traffic. `ImagesProvider` is n
 | KSP | 1.9.0-1.0.13 |
 | JVM target | Java 8 |
 | Compile and target SDK | 34 |
-| Mobile minimum SDK | 17 |
+| Mobile minimum SDK | 26 |
 | Media3 | 1.2.1 |
-| `androidx.media` | 1.6.0 |
+| `androidx.media` | 1.7.1 |
 | Room | 2.6.1 |
-| OkHttp | 3.12.13 |
 
 The wrapper version comes from `gradle/wrapper/gradle-wrapper.properties`, KSP from the root
-`build.gradle`, and the rest from `constants.gradle`. OkHttp and `androidx.media` are pinned for API 17.
-`AGENTS.md` names the JDK and Android SDK a fresh clone builds with.
+`build.gradle`, and the rest from `constants.gradle`. `AGENTS.md` names the JDK and Android SDK a fresh clone builds with.
 
 The configured release version is `15.0.0`; `version.properties` contains version code `716`. The application ID is `com.github.jcszymansk.freenetradio` and the user-visible name is FreeNetRadio. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project creates its release signing key.
 

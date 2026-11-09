@@ -16,12 +16,11 @@
 
 package com.yuriy.openradio.shared
 
+import android.app.Application
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.multidex.MultiDex
-import androidx.multidex.MultiDexApplication
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import kotlinx.coroutines.CoroutineScope
@@ -35,14 +34,13 @@ import kotlinx.coroutines.launch
  * Date: 12/21/13
  * Time: 6:29 PM
  */
-open class MainAppCommon : MultiDexApplication() {
+open class MainAppCommon : Application() {
 
     private val mAppJob = SupervisorJob()
     protected val mAppScope = CoroutineScope(Dispatchers.Main + mAppJob)
 
     override fun onCreate() {
         super.onCreate()
-        MultiDex.install(applicationContext)
         DependencyRegistryCommon.init(applicationContext)
 
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true)

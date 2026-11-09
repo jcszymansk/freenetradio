@@ -16,7 +16,6 @@
 
 package com.yuriy.openradio.shared.utils
 
-import android.annotation.SuppressLint
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
@@ -41,11 +40,10 @@ object ImageFilePath {
      * @param uri     Uri of the File.
      * @return path of the selected image file from gallery
      */
-    @SuppressLint("NewApi")
     fun getPath(context: Context, uri: Uri): String {
 
         // DocumentProvider
-        if (AppUtils.hasVersionKitKat() && DocumentsContract.isDocumentUri(context, uri)) {
+        if (DocumentsContract.isDocumentUri(context, uri)) {
 
             // ExternalStorageProvider
             if (isExternalStorageDocument(uri)) {

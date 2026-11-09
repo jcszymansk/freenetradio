@@ -16,11 +16,11 @@
 
 package com.yuriy.openradio.shared.dependencies
 
+import android.app.Application
 import android.app.UiModeManager
 import android.content.Context
 import android.content.res.Configuration
 import android.net.ConnectivityManager
-import androidx.multidex.MultiDexApplication
 import com.yuriy.openradio.shared.model.ModelLayerImpl
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.eq.EqualizerLayerImpl
@@ -111,7 +111,7 @@ object DependencyRegistryCommon {
         } else {
             "Portrait"
         }
-        val uiModeManager = context.getSystemService(MultiDexApplication.UI_MODE_SERVICE) as UiModeManager
+        val uiModeManager = context.getSystemService(Application.UI_MODE_SERVICE) as UiModeManager
         AppLogger.d("CurrentModeType:${uiModeManager.currentModeType}")
         isTv = if (uiModeManager.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION) {
             AppLogger.d("Running on TV Device in $orientationStr")
