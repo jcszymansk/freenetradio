@@ -163,6 +163,10 @@ object MediaId {
      * @return `true` in case of Catalog is refreshable, `false` otherwise.
      */
     fun isRefreshable(categoryMediaId: String, sourcesLayer: SourcesLayer): Boolean {
+        // Safe on every source: the command answers a later page empty, whatever the provider.
+        if (categoryMediaId == MEDIA_ID_ALL_CATEGORIES) {
+            return true
+        }
         if (sourcesLayer.getActiveSource() == Source.WEB_RADIO) {
             return false
         }

@@ -23,21 +23,22 @@ import androidx.media3.common.MediaItem
  * for more gets what it lacks rather than whatever page another client has reached (fnr-1557f).
  *
  * The phone UI and an Android Auto head unit browse the same [BrowseTree], and both lists grow
- * from either one's requests. A client is answered with a list whole when it asks for the first
- * page, and from then on asks for more by asking for any later page: the page number a client
- * sends counts the pages it asked for, not the pages of the list it holds, which the first page
- * may have answered with several of at once. So a client that asks for more is answered with the
- * part of the list it has not been answered with, and only when it has the whole list does the
- * provider get asked for the page after it.
+ * from either one's requests. A client is answered with the first page of a list when it asks for
+ * the first page, and from then on asks for more by asking for any later page: the page number a
+ * client sends counts the pages it asked for, not the items of the list it holds. So a client that
+ * asks for more is answered with the part of the list it has not been answered with, and only when
+ * it has the whole list does the provider get asked for the page after it.
  *
- * That part is cut to the page size the client asked with, and the client is recorded as holding
- * only what it was answered with. A client that fell pages behind another would otherwise get all
- * those pages in one answer, and Media3 rejects an answer larger than the page size: inline it
- * only logs the rejection, but for an answer completed off the main thread it throws on the main
- * looper and ends the process.
+ * Every answer is cut to the page size the client asked with, the first page included, and the
+ * client is recorded as holding only what it was answered with. A first page longer than the page
+ * size is therefore answered in pieces, and so is a client that fell pages behind another, which
+ * would otherwise get all those pages in one answer. Media3 rejects an answer larger than the page
+ * size: inline it only logs the rejection, but for an answer completed off the main thread it
+ * throws on the main looper and ends the process (fnr-tiwys).
  *
  * A client is recorded against the [BrowseTree.PagedList.stamp] of the list it was answered from,
- * and holds nothing of a list stored again since. Safe to use from any thread.
+ * and holds nothing of a list stored again since. A client that asks for the first page again
+ * starts over at the start of the list. Safe to use from any thread.
  */
 class ClientPages {
 
@@ -47,16 +48,16 @@ class ClientPages {
     private val mPositions = HashMap<Key, Position>()
 
     /**
-     * Answers [client] with the whole of [list], which is what a request for the first page of
-     * [mediaId] gets, and records that it has it.
+     * Answers [client] with the first page of [list], which is what a request for the first page
+     * of [mediaId] gets: at most [pageSize] items of it, and records that it holds exactly those.
      *
      * @return the items to answer with.
      */
-    fun answerWhole(client: Any, mediaId: String, list: BrowseTree.PagedList): List<MediaItem> {
+    fun answerFirst(client: Any, mediaId: String, list: BrowseTree.PagedList, pageSize: Int): List<MediaItem> {
+        require(pageSize > 0) { "Page size $pageSize is not positive" }
         synchronized(mLock) {
-            mPositions[Key(client, mediaId)] = Position(list.stamp, list.children.size)
+            return answerFrom(client, mediaId, list, Position(list.stamp, 0), pageSize)
         }
-        return list.children
     }
 
     /**

@@ -19,6 +19,7 @@ package com.yuriy.openradio.shared.model.media.item
 import androidx.media3.common.MediaMetadata
 import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.MediaId
+import com.yuriy.openradio.shared.model.net.UrlLayer
 import java.util.TreeSet
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -106,6 +107,34 @@ class MediaItemAllCategoriesTest {
         )
 
         listener.assertAnsweredFromCacheBeforeReturning()
+        assertEquals(0, presenter.categoriesRequests)
+        listener.assertNoError()
+    }
+
+    /**
+     * The categories arrive whole on the first page, so a client asking for a later page already
+     * holds them all. Answering it with the categories again would store them as a new first page
+     * over the ones held (fnr-tiwys).
+     */
+    @Test
+    fun aLaterPageIsAnsweredEmptyWithoutAskingTheProvider() {
+        val presenter = RecordingPresenter(mCategories = setOf(Category("rock", "Rock", 42)))
+        val listener = RecordingCommandListener()
+
+        MediaItemAllCategories().execute(
+            listener.playbackStateListener,
+            dependencies(
+                presenter,
+                listener,
+                parentId = MediaId.MEDIA_ID_ALL_CATEGORIES,
+                pageNumber = UrlLayer.FIRST_PAGE_INDEX + 1
+            )
+        )
+
+        listener.awaitResult()
+        assertEquals(1, listener.results)
+        assertTrue(listener.items.isEmpty())
+        assertEquals(UrlLayer.FIRST_PAGE_INDEX + 1, listener.pageNumber)
         assertEquals(0, presenter.categoriesRequests)
         listener.assertNoError()
     }
