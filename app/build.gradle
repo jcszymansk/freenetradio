@@ -13,8 +13,6 @@ android {
         targetSdkVersion project.ext.targetSdkVersion
         versionCode project.ext.versionCode
         versionName project.ext.versionName
-        multiDexEnabled true
-        vectorDrawables.useSupportLibrary = true
 
         testInstrumentationRunner "com.yuriy.openradio.testing.OfflineTestRunner"
     }

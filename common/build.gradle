@@ -12,7 +12,6 @@ android {
     defaultConfig {
         minSdkVersion project.ext.minSdkVersion
         targetSdkVersion project.ext.targetSdkVersion
-        multiDexEnabled true
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -61,7 +60,6 @@ android {
 }
 
 dependencies {
-    api "com.android.support:multidex:$multidexVersion"
     api "com.google.android.material:material:$materialVersion"
     implementation "androidx.media:media:$androidxMediaVersion"
     implementation group: "androidx.exifinterface", name: "exifinterface", version: "$exifinterfaceVersion"
