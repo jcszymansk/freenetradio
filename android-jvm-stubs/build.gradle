@@ -38,5 +38,5 @@ kotlin {
 
 dependencies {
     compileOnly files(androidJar)
-    testImplementation group: "junit", name: "junit", version: "$junitVersion"
+    testImplementation "junit:junit:$junitVersion"
 }
