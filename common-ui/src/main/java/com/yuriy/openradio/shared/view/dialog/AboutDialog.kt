@@ -57,6 +57,7 @@ class AboutDialog : BaseDialogFragment() {
         setOnClickOnText(context, view, R.id.about_web_radio_link_view, WEB_RADIO_URL)
         setOnClickOnText(context, view, R.id.about_playlist_parser_name_view, PLAY_LIST_PARSER_URL)
         setOnClickOnText(context, view, R.id.about_easy_swipe_name_view, SWIPE_EFFECT_URL)
+        setOnClickOnText(context, view, R.id.about_fonts_link_view, FONT_LICENSE_URL)
 
         return createAlertDialog(view)
     }
@@ -88,6 +89,8 @@ class AboutDialog : BaseDialogFragment() {
         private const val RADIO_BROWSER_URL = "https://www.radio-browser.info"
 
         private const val WEB_RADIO_URL = "https://jcorporation.github.io/webradiodb"
+
+        private const val FONT_LICENSE_URL = "https://openfontlicense.org"
 
         private fun setOnClickOnText(context: Context, view: View, viewId: Int, linkUrl: String) {
             view.findTextView(viewId).setOnClickListener {
