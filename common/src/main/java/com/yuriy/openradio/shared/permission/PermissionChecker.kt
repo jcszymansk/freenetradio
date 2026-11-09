@@ -132,9 +132,7 @@ object PermissionChecker {
      * **FALSE** otherwise.
      */
     private fun isGranted(context: Context, permission: String): Boolean {
-        return if (!AppUtils.hasVersionM()) {
-            true
-        } else permission.isNotEmpty() && (ActivityCompat.checkSelfPermission(context, permission)
+        return permission.isNotEmpty() && (ActivityCompat.checkSelfPermission(context, permission)
                 == PackageManager.PERMISSION_GRANTED)
     }
 }

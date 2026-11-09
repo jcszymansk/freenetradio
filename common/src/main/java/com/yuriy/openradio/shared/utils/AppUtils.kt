@@ -16,7 +16,6 @@
 
 package com.yuriy.openradio.shared.utils
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -193,21 +192,6 @@ object AppUtils {
         }
     }
 
-    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.KITKAT)
-    fun hasVersionKitKat(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT
-    }
-
-    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.LOLLIPOP)
-    fun hasVersionLollipop(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
-    }
-
-    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.M)
-    fun hasVersionM(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-    }
-
     @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.P)
     fun hasVersionP(): Boolean {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
@@ -244,11 +228,7 @@ object AppUtils {
      * Being on the power allowlist means that the system will not apply most power saving features to the app.
      * Guardrails for extreme cases may still be applied.
      */
-    @SuppressLint("NewApi")
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
-        if (hasVersionM().not()) {
-            return true
-        }
 //        val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
 //            .setData(Uri.parse("package:$packageName"))
 //        getContext().startActivity(settingsIntent)

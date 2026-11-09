@@ -71,9 +71,6 @@ class LocationService : JobIntentService() {
         const val MSG_ID_ON_LOCATION = 100
 
         fun doCancelWork(context: Context) {
-            if (!AppUtils.hasVersionM()) {
-                return
-            }
             context.getSystemService(JobScheduler::class.java)?.let {
                 AppLogger.i("$TAG cancelling the job.")
                 it.cancel(JOB_ID)
