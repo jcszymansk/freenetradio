@@ -286,7 +286,7 @@ The shared application manifest enables cleartext traffic. `ImagesProvider` is n
 | Mobile minimum SDK | 26 |
 | Media3 | 1.2.1 |
 | `androidx.media` | 1.7.1 |
-| Room | 2.6.1 |
+| Room | 2.8.5 |
 
 The wrapper version comes from `gradle/wrapper/gradle-wrapper.properties`, KSP from the root
 `build.gradle`, and the rest from `constants.gradle`. `AGENTS.md` names the JDK and Android SDK a fresh clone builds with.

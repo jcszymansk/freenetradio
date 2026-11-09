@@ -79,7 +79,7 @@ abstract class PersistentApiDb : RoomDatabase() {
                 context,
                 PersistentApiDb::class.java, dbFileName
             )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = false)
                 .build()
         }
 
