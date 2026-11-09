@@ -19,8 +19,10 @@ Read these before non-trivial work; do not duplicate their content here:
 
 The build needs JDK 17: the Gradle wrapper cannot run on 21. From the Android SDK it needs the platform
 named by `compileSdkVersion` in `constants.gradle` and the build tools version that the Android Gradle
-Plugin defaults to. A fresh clone builds with nothing else: no `sign.properties`, `local.properties` or
-`google-services.json`.
+Plugin defaults to. The repository has one git submodule, `console-design`: clone with
+`git clone --recurse-submodules`, or run `git submodule update --init` after cloning. Without it the build
+fails with `Project with path ':design' not found`. Apart from the submodule, a fresh clone builds with
+nothing else: no `sign.properties`, `local.properties` or `google-services.json`.
 
 The Android SDK must be reachable; `local.properties` is git-ignored and usually absent, so export the SDK path:
 
@@ -29,10 +31,12 @@ export ANDROID_HOME=$HOME/Android/Sdk
 ```
 
 ```sh
-./gradlew test                                  # all JVM unit tests (:android-jvm-stubs, :common, :common-ui)
+./gradlew test                                  # all JVM unit tests (:android-jvm-stubs, :common, :common-ui, :app)
 ./gradlew :common:testDebugUnitTest --tests "*MediaIdTest*"   # one JVM test class or method
 ./gradlew assembleDebug                         # debug APK, signed with Android's debug key
 ./gradlew :app:assembleDebugAndroidTest         # compile instrumentation tests without a device
+./gradlew :app:recordRoborazziDebug             # record screenshot baselines in app/src/test/screenshots
+./gradlew :app:verifyRoborazziDebug             # compare screenshots with the baselines
 ./gradlew localCoverageReport                   # JaCoCo for :common and :common-ui unit tests
 ./gradlew instrumentedCoverageReport            # JaCoCo for :app instrumentation tests
 ./gradlew verifyPureCoreCoverage                # the pure-core coverage gate; ./gradlew check runs it too
@@ -74,6 +78,19 @@ Release builds are unsigned — no release signing key exists yet, and `sign.pro
 `./gradlew signReleaseBundle` increments `VERSION_CODE` in the tracked `version.properties` as a side effect.
 
 Toolchain versions live in `constants.gradle`, not in the module build files. `minSdkVersion` is 26.
+
+## UI work
+
+Follow `console-design/DESIGN.md`. Build screens with the console-design package: `ConsoleTheme`,
+`Console.colors`, `Console.type` and its components. Before calling a changed screen done, compare it in dark
+and light with the images in `console-design/design-reference/png/`. Files under `console-design/` are never
+edited in this repository: changes go to the console-design repository, and this one only moves the submodule
+to a new commit.
+
+Screenshot tests live in `app/src/test` and run under Robolectric on SDK 34 (Robolectric needs Java 21 for
+newer SDKs and the build uses JDK 17). Baselines are `app/src/test/screenshots/*.png`. `./gradlew check` runs
+`:app:verifyRoborazziDebug` and fails on any pixel difference. An intended visual change is re-recorded with
+`recordRoborazziDebug`, checked by eye, and the new PNGs are committed with the change that caused them.
 
 ## Architecture notes that are easy to get wrong
 

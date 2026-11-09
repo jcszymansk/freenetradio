@@ -1,4 +1,8 @@
+import com.android.build.api.variant.HostTestBuilder
+
 apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.plugin.compose"
+apply plugin: "io.github.takahirom.roborazzi"
 apply from: "../constants.gradle"
 apply from: "../sign.gradle"
 
@@ -28,8 +32,13 @@ android {
         targetCompatibility project.ext.javaVersion
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     testOptions {
         unitTests.returnDefaultValues = true
+        unitTests.includeAndroidResources = true
     }
     packagingOptions {
         resources {
@@ -61,9 +70,33 @@ kotlin {
     }
 }
 
+// The recorded screenshots in src/test/screenshots are the baselines: check verifies every
+// screenshot against them, so a visual change fails the build until it is recorded on purpose.
+tasks.named("check") {
+    dependsOn "verifyRoborazziDebug"
+}
+
+// ui-test-manifest declares the ComponentActivity that createComposeRule launches; keep it out of
+// the release APK, so the release unit tests are disabled.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        variant.hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = false
+    }
+}
+
 dependencies {
     implementation project(':common')
     implementation project(':common-ui')
+    implementation "com.github.jcszymansk.console:design"
+
+    testImplementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.robolectric:robolectric:$robolectricVersion"
+    testImplementation "io.github.takahirom.roborazzi:roborazzi:$roborazziVersion"
+    testImplementation "io.github.takahirom.roborazzi:roborazzi-compose:$roborazziVersion"
+    testImplementation "androidx.compose.ui:ui-test-junit4"
+    debugImplementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    debugImplementation "androidx.compose.ui:ui-test-manifest"
 
     androidTestImplementation "androidx.test.espresso:espresso-core:$espressoVersion"
     androidTestImplementation "androidx.test.ext:junit:$junitAndroidXVersion"
