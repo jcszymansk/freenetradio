@@ -90,9 +90,9 @@ object AppUtils {
      * @return Application Version name.
      */
     fun getApplicationVersion(context: Context): String {
-        val packageInfo = getPackageInfo(context)
-        return if (packageInfo != null) {
-            packageInfo.versionName
+        val versionName = getPackageInfo(context)?.versionName
+        return if (versionName != null) {
+            versionName
         } else {
             AppLogger.w("$CLASS_NAME Can't get application version")
             "?"

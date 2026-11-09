@@ -281,7 +281,8 @@ The shared application manifest enables cleartext traffic. `ImagesProvider` is n
 | Kotlin | 2.4.21 |
 | KSP | 2.3.13 |
 | JVM target | Java 8 |
-| Compile and target SDK | 34 |
+| Compile SDK | 37 |
+| Target SDK | 34 |
 | Mobile minimum SDK | 26 |
 | Media3 | 1.2.1 |
 | `androidx.media` | 1.7.1 |
