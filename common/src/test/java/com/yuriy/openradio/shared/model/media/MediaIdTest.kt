@@ -98,6 +98,16 @@ class MediaIdTest {
         assertFalse(MediaId.isRefreshable(MediaId.MEDIA_ID_COUNTRY_STATIONS, webRadio))
     }
 
+    /**
+     * The phone UI asks for more of All Categories at its end on every source, and the command
+     * answers that request empty whatever the provider (fnr-tiwys).
+     */
+    @Test
+    fun allCategoriesIsRefreshableOnEverySource() {
+        assertTrue(MediaId.isRefreshable(MediaId.MEDIA_ID_ALL_CATEGORIES, FixedSourcesLayer(Source.RADIO_BROWSER)))
+        assertTrue(MediaId.isRefreshable(MediaId.MEDIA_ID_ALL_CATEGORIES, FixedSourcesLayer(Source.WEB_RADIO)))
+    }
+
     private class FixedSourcesLayer(private val activeSource: Source) : SourcesLayer {
         override fun getAllSources() = Source.entries.toSet()
 

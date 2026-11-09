@@ -1153,11 +1153,11 @@ class OpenRadioService : MediaLibraryService() {
          * Runs [action] on the children that answer [page] of [parentId] for [client] once they
          * are available, through a future that the result listener completes.
          *
-         * The first page is the whole list the tree holds, or a list fetched anew. A later page is
-         * at most [pageSize] items of the part of the list [client] has not been answered with,
-         * since Media3 rejects a larger answer, and only a client that has the whole list has the
-         * page after it fetched: the clients share the list, not their place in it, which
-         * [mClientPages] keeps for each (fnr-1557f).
+         * The first page is at most [pageSize] items of the list the tree holds, or of a list
+         * fetched anew, and a later page is at most [pageSize] items of the part of the list
+         * [client] has not been answered with, since Media3 rejects a larger answer. Only a client
+         * that has the whole list has the page after it fetched: the clients share the list, not
+         * their place in it, which [mClientPages] keeps for each (fnr-1557f).
          *
          * The children are taken from the list the page was stored in, not read from the tree
          * afterwards: the main thread may invalidate the node between the two, and a read then
@@ -1194,7 +1194,7 @@ class OpenRadioService : MediaLibraryService() {
                     && parentId != MediaId.MEDIA_ID_FAVORITES_LIST
                     && parentId != MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
                 ) {
-                    return Futures.immediateFuture(action(mClientPages.answerWhole(client, parentId, held)))
+                    return Futures.immediateFuture(action(mClientPages.answerFirst(client, parentId, held, pageSize)))
                 }
                 UrlLayer.FIRST_PAGE_INDEX
             } else {
@@ -1227,7 +1227,7 @@ class OpenRadioService : MediaLibraryService() {
                             val children = if (pageNumber == UrlLayer.FIRST_PAGE_INDEX) {
                                 val stored = mBrowseTree.store(parentId, browseData)
                                 onFirstPageStored(parentId, countryCode)
-                                mClientPages.answerWhole(client, parentId, stored)
+                                mClientPages.answerFirst(client, parentId, stored, pageSize)
                             } else {
                                 // A later page is only fetched to continue the list held, so
                                 // held is that list.

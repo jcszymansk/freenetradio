@@ -34,7 +34,7 @@ class ClientPagesTest {
     @Test
     fun aClientWithTheWholeListHasTheNextPageFetched() {
         val list = mTree.store(NODE, data("first"))
-        assertIds(listOf("first"), mPages.answerWhole(PHONE, NODE, list))
+        assertIds(listOf("first"), mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE))
 
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
     }
@@ -42,7 +42,7 @@ class ClientPagesTest {
     @Test
     fun aFetchedPageIsAnsweredWithWhatItAdded() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
 
         val stored = mTree.append(NODE, list, data("second"))
 
@@ -57,9 +57,9 @@ class ClientPagesTest {
     @Test
     fun aClientIsNotMovedOnByAnotherClient() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
-        mPages.answerWhole(CAR, NODE, list)
-        mPages.answerWhole(CAR, OTHER_NODE, mTree.store(OTHER_NODE, data("other")))
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
+        mPages.answerFirst(CAR, NODE, list, PAGE_SIZE)
+        mPages.answerFirst(CAR, OTHER_NODE, mTree.store(OTHER_NODE, data("other")), PAGE_SIZE)
 
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
         val stored = mTree.append(NODE, list, data("second"))
@@ -75,8 +75,8 @@ class ClientPagesTest {
     @Test
     fun aPageAnotherClientFetchedIsAnsweredFromTheList() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
-        mPages.answerWhole(CAR, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
+        mPages.answerFirst(CAR, NODE, list, PAGE_SIZE)
         val stored = mTree.append(NODE, list, data("second"))
         mPages.answerRest(PHONE, NODE, stored, PAGE_SIZE)
 
@@ -91,8 +91,8 @@ class ClientPagesTest {
     @Test
     fun twoClientsThatFetchedOnePageAtOnceEachGetItOnce() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
-        mPages.answerWhole(CAR, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
+        mPages.answerFirst(CAR, NODE, list, PAGE_SIZE)
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
         assertFetches(1, mPages.next(CAR, NODE, list, PAGE_SIZE))
 
@@ -111,7 +111,7 @@ class ClientPagesTest {
     @Test
     fun twoOverlappingRequestsOfOneClientGetThePageOnce() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
 
@@ -131,8 +131,8 @@ class ClientPagesTest {
     @Test
     fun aClientPagesBehindIsAnsweredOnePageAtATime() {
         val list = mTree.store(NODE, data("a1", "a2"))
-        mPages.answerWhole(PHONE, NODE, list)
-        mPages.answerWhole(CAR, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
+        mPages.answerFirst(CAR, NODE, list, PAGE_SIZE)
         val second = mTree.append(NODE, list, data("b1", "b2"))
         mPages.answerRest(CAR, NODE, second, PAGE_SIZE)
         val third = mTree.append(NODE, second!!, data("c1", "c2"))
@@ -151,8 +151,8 @@ class ClientPagesTest {
     @Test
     fun aPageArrivingAfterOtherPagesWereAddedIsAnsweredWithOnePage() {
         val list = mTree.store(NODE, data("a1", "a2"))
-        mPages.answerWhole(PHONE, NODE, list)
-        mPages.answerWhole(CAR, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
+        mPages.answerFirst(CAR, NODE, list, PAGE_SIZE)
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
         val second = mTree.append(NODE, list, data("b1", "b2"))
         mPages.answerRest(CAR, NODE, second, PAGE_SIZE)
@@ -173,23 +173,42 @@ class ClientPagesTest {
     @Test
     fun aPageThatNeverReachedTheClientIsFetchedAgain() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
 
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
     }
 
-    /** Coming back to a list the tree still holds answers it whole, and the client goes on after it. */
+    /**
+     * Coming back to the first page of a list the tree still holds starts the client over at the
+     * list's start, as any answer does, and the client goes on from there rather than fetching.
+     */
     @Test
-    fun theWholeListAnsweredAgainMovesTheClientToItsEnd() {
-        val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
-        val stored = mTree.append(NODE, list, data("second"))!!
-        mPages.answerWhole(CAR, NODE, stored)
+    fun theFirstPageAnsweredAgainMovesTheClientBackToItsStart() {
+        val list = mTree.store(NODE, data("first", "second", "third"))
+        assertIds(listOf("first", "second"), mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE))
+        assertAnswers(listOf("third"), mPages.next(PHONE, NODE, list, PAGE_SIZE))
 
-        assertIds(listOf("first", "second"), mPages.answerWhole(PHONE, NODE, stored))
-        assertFetches(2, mPages.next(PHONE, NODE, stored, PAGE_SIZE))
-        assertFetches(2, mPages.next(CAR, NODE, stored, PAGE_SIZE))
+        assertIds(listOf("first", "second"), mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE))
+        assertAnswers(listOf("third"), mPages.next(PHONE, NODE, list, PAGE_SIZE))
+    }
+
+    /** A first page longer than the page size is answered in pieces, never whole. */
+    @Test
+    fun aFirstPageLongerThanThePageSizeIsCutToIt() {
+        val list = mTree.store(NODE, data("1", "2", "3", "4", "5"))
+
+        assertIds(listOf("1", "2"), mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE))
+    }
+
+    @Test
+    fun theRestOfALongFirstPageIsAnsweredOnePageAtATime() {
+        val list = mTree.store(NODE, data("1", "2", "3", "4", "5"))
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
+
+        assertAnswers(listOf("3", "4"), mPages.next(PHONE, NODE, list, PAGE_SIZE))
+        assertAnswers(listOf("5"), mPages.next(PHONE, NODE, list, PAGE_SIZE))
+        assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
     }
 
     /**
@@ -201,10 +220,10 @@ class ClientPagesTest {
     @Test
     fun aClientHoldingAListTheTreeNoLongerHoldsIsAnsweredWithNothing() {
         val old = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, old)
-        mPages.answerWhole(CAR, NODE, old)
+        mPages.answerFirst(PHONE, NODE, old, PAGE_SIZE)
+        mPages.answerFirst(CAR, NODE, old, PAGE_SIZE)
         val replacement = mTree.store(NODE, data("replacement"))
-        mPages.answerWhole(CAR, NODE, replacement)
+        mPages.answerFirst(CAR, NODE, replacement, PAGE_SIZE)
         mTree.append(NODE, replacement, data("second"))
 
         assertAnswers(emptyList(), mPages.next(PHONE, NODE, mTree.getPagedList(NODE), PAGE_SIZE))
@@ -217,7 +236,7 @@ class ClientPagesTest {
     @Test
     fun aClientThatWasNeverAnsweredWithTheListIsAnsweredWithNothing() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
 
         assertAnswers(emptyList(), mPages.next(CAR, NODE, list, PAGE_SIZE))
         assertAnswers(emptyList(), mPages.next(PHONE, OTHER_NODE, list, PAGE_SIZE))
@@ -226,8 +245,8 @@ class ClientPagesTest {
     @Test
     fun aForgottenClientIsAnsweredWithNothingAndTheOthersAreKept() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
-        mPages.answerWhole(CAR, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
+        mPages.answerFirst(CAR, NODE, list, PAGE_SIZE)
 
         mPages.forget(PHONE)
 
@@ -239,10 +258,11 @@ class ClientPagesTest {
     @Test
     fun aPageSizeBelowOneIsRejected() {
         val list = mTree.store(NODE, data("first"))
-        mPages.answerWhole(PHONE, NODE, list)
+        mPages.answerFirst(PHONE, NODE, list, PAGE_SIZE)
 
         assertThrows(IllegalArgumentException::class.java) { mPages.next(PHONE, NODE, list, 0) }
         assertThrows(IllegalArgumentException::class.java) { mPages.answerRest(PHONE, NODE, list, 0) }
+        assertThrows(IllegalArgumentException::class.java) { mPages.answerFirst(PHONE, NODE, list, 0) }
         assertFetches(1, mPages.next(PHONE, NODE, list, PAGE_SIZE))
     }
 

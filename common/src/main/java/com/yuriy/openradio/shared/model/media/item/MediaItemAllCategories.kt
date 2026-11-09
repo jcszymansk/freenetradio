@@ -16,6 +16,7 @@
 package com.yuriy.openradio.shared.model.media.item
 
 import com.yuriy.openradio.shared.model.media.item.MediaItemCommand.IUpdatePlaybackState
+import com.yuriy.openradio.shared.model.net.UrlLayer
 import com.yuriy.openradio.shared.utils.MediaItemBuilder
 
 /**
@@ -32,6 +33,11 @@ class MediaItemAllCategories : MediaItemCommand {
     override fun execute(playbackStateListener: IUpdatePlaybackState, dependencies: MediaItemCommandDependencies) {
         if (dependencies.isSavedInstance) {
             dependencies.resultListener.onResult()
+            return
+        }
+        // The categories arrive whole on the first page, so a later page is the end of the list.
+        if (dependencies.pageNumber != UrlLayer.FIRST_PAGE_INDEX) {
+            dependencies.answer(emptyList())
             return
         }
         // Load all categories into menu
