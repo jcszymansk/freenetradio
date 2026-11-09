@@ -22,16 +22,18 @@ android {
         targetCompatibility project.ext.javaVersion
     }
 
-    kotlinOptions {
-        jvmTarget = project.ext.kotlinJvmTarget
-    }
-
     testOptions {
         unitTests.returnDefaultValues = true
     }
 
     lint {
         lintConfig = rootProject.file("lint.xml")
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(project.ext.kotlinJvmTarget))
     }
 }
 

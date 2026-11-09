@@ -25,9 +25,9 @@ java {
     targetCompatibility = project.ext.javaVersion
 }
 
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-    kotlinOptions {
-        jvmTarget = project.ext.kotlinJvmTarget
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(project.ext.kotlinJvmTarget))
     }
 }
 
