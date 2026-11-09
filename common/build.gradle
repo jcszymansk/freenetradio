@@ -2,7 +2,6 @@ plugins {
     id("com.google.devtools.ksp")
 }
 apply plugin: "com.android.library"
-apply plugin: "kotlin-android"
 apply from: "../constants.gradle"
 
 android {

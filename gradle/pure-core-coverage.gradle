@@ -30,7 +30,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'org.ow2.asm:asm-tree:9.8'
+        classpath 'org.ow2.asm:asm-tree:9.9'
         // Which member class is the companion object is recorded only in the
         // protobuf-encoded kotlin.Metadata, so the reader decodes it. The reader
         // ships with the Kotlin release, so its version follows kotlinVersion and
