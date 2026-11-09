@@ -73,9 +73,9 @@ it is the wrong one.
 Release builds are unsigned — no release signing key exists yet, and `sign.properties` must never be committed.
 `./gradlew signReleaseBundle` increments `VERSION_CODE` in the tracked `version.properties` as a side effect.
 
-Toolchain versions live in `constants.gradle`, not in the module build files. `minSdkVersion` is 26. OkHttp is
-still pinned to 3.12.x and `androidx.media` to 1.6.0, the versions chosen for the former minimum SDK; leave both
-pins alone unless the task at hand is removing them.
+Toolchain versions live in `constants.gradle`, not in the module build files. `minSdkVersion` is 26. `androidx.media` is
+still pinned to 1.6.0, the version chosen for the former minimum SDK; leave that pin alone unless the task at hand
+is removing it.
 
 ## Architecture notes that are easy to get wrong
 

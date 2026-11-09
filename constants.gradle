@@ -38,8 +38,6 @@ project.ext {
     constraintlayoutAndroidXVersion = "2.1.4"
     concurrentFuturesVersion = "1.1.0"
     media3Version = "1.2.1"
-    // Pinned for the former minSdkVersion; kept until the pin is removed
-    okhttp3Version = "3.12.13"
 
     /**
      * Test Libraries versions

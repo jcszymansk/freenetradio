@@ -76,8 +76,6 @@ dependencies {
     implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
     implementation "androidx.media3:media3-exoplayer-dash:$media3Version"
     implementation "androidx.media3:media3-session:$media3Version"
-    // https://mvnrepository.com/artifact/com.squareup.okhttp3/okhttp
-    implementation "com.squareup.okhttp3:okhttp:$okhttp3Version"
     // https://mvnrepository.com/artifact/org.jdom/jdom2
     implementation group: "org.jdom", name: "jdom2", version: "$jdom2Version"
     // https://mvnrepository.com/artifact/com.google.http-client/google-http-client-apache-v2
