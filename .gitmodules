@@ -1,0 +1,3 @@
+[submodule "console-design"]
+	path = console-design
+	url = https://github.com/jcszymansk/console-design.git

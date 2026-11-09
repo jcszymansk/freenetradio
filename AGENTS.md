@@ -19,8 +19,10 @@ Read these before non-trivial work; do not duplicate their content here:
 
 The build needs JDK 17: the Gradle wrapper cannot run on 21. From the Android SDK it needs the platform
 named by `compileSdkVersion` in `constants.gradle` and the build tools version that the Android Gradle
-Plugin defaults to. A fresh clone builds with nothing else: no `sign.properties`, `local.properties` or
-`google-services.json`.
+Plugin defaults to. The repository has one git submodule, `console-design`: clone with
+`git clone --recurse-submodules`, or run `git submodule update --init` after cloning. Without it the build
+fails with `Project with path ':design' not found`. Apart from the submodule, a fresh clone builds with
+nothing else: no `sign.properties`, `local.properties` or `google-services.json`.
 
 The Android SDK must be reachable; `local.properties` is git-ignored and usually absent, so export the SDK path:
 
@@ -74,6 +76,14 @@ Release builds are unsigned — no release signing key exists yet, and `sign.pro
 `./gradlew signReleaseBundle` increments `VERSION_CODE` in the tracked `version.properties` as a side effect.
 
 Toolchain versions live in `constants.gradle`, not in the module build files. `minSdkVersion` is 26.
+
+## UI work
+
+Follow `console-design/DESIGN.md`. Build screens with the console-design package: `ConsoleTheme`,
+`Console.colors`, `Console.type` and its components. Before calling a changed screen done, compare it in dark
+and light with the images in `console-design/design-reference/png/`. Files under `console-design/` are never
+edited in this repository: changes go to the console-design repository, and this one only moves the submodule
+to a new commit.
 
 ## Architecture notes that are easy to get wrong
 

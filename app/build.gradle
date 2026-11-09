@@ -1,4 +1,5 @@
 apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.plugin.compose"
 apply from: "../constants.gradle"
 apply from: "../sign.gradle"
 
@@ -26,6 +27,10 @@ android {
     compileOptions {
         sourceCompatibility project.ext.javaVersion
         targetCompatibility project.ext.javaVersion
+    }
+
+    buildFeatures {
+        compose = true
     }
 
     testOptions {
@@ -64,6 +69,7 @@ kotlin {
 dependencies {
     implementation project(':common')
     implementation project(':common-ui')
+    implementation "com.github.jcszymansk.console:design"
 
     androidTestImplementation "androidx.test.espresso:espresso-core:$espressoVersion"
     androidTestImplementation "androidx.test.ext:junit:$junitAndroidXVersion"

@@ -10,18 +10,23 @@ The `app` module is a UI shell over shared networking, persistence, media-sessio
 common
   └── common-ui
        └── app          phone/tablet and Android Auto
+                 ↑ depends on
+console-design          included build from a git submodule, not a module of this build
 
 android-jvm-stubs       test runtime only, never shipped
 ```
 
 `settings.gradle` declares those three shipped modules and `android-jvm-stubs`, which reaches no
-production artifact.
+production artifact. It also includes the `console-design` submodule as a composite build (`includeBuild`):
+`app` depends on `com.github.jcszymansk.console:design`, and Gradle substitutes it with that build's `:design`
+project.
 
 | Module | Responsibility |
 | --- | --- |
 | `common/` | Domain models, provider APIs, parsing, caching, persistence, playback, Media3 service, equalizer, location, timers, and broadcast receivers |
 | `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, file import/export, logging, and service-command glue |
 | `app/` | Phone/tablet UI and Android Auto metadata |
+| `console-design/` | Shared Compose design system: theme, colours, typography, and components. An included build from a git submodule, edited only in its own repository |
 | `android-jvm-stubs/` | Working JVM implementations of the Android types unit tests need — `Uri`, `Bundle`, `MimeTypeMap`, the resource lookups of `Context`, and the `android.database.Observable` behind `RecyclerView.Adapter` notifications. `:common` and `:common-ui` take it as `testRuntimeOnly`, so tests compile against the real Android API and only the implementation is swapped at run time |
 
 The application uses `applicationId` `com.github.jcszymansk.freenetradio`. Kotlin namespaces retain the recovered source package names; they do not define the installed application identity.
@@ -279,6 +284,7 @@ The shared application manifest enables cleartext traffic. `ImagesProvider` is n
 | Gradle wrapper | 9.7.1 |
 | Android Gradle Plugin | 9.5.1 |
 | Kotlin | 2.4.21 |
+| Compose compiler plugin | 2.4.21 |
 | KSP | 2.3.13 |
 | JVM target | Java 8 |
 | Compile SDK | 37 |
@@ -289,7 +295,8 @@ The shared application manifest enables cleartext traffic. `ImagesProvider` is n
 | Room | 2.8.5 |
 
 The wrapper version comes from `gradle/wrapper/gradle-wrapper.properties`, KSP from the root
-`build.gradle`, and the rest from `constants.gradle`. `AGENTS.md` names the JDK and Android SDK a fresh clone builds with.
+`build.gradle`, and the rest from `constants.gradle`; the Compose compiler plugin follows `kotlinVersion`.
+`AGENTS.md` names the JDK and Android SDK a fresh clone builds with, and the `console-design` submodule it needs.
 
 The configured release version is `15.0.0`; `version.properties` contains version code `716`. The application ID is `com.github.jcszymansk.freenetradio` and the user-visible name is FreeNetRadio. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project creates its release signing key.
 
