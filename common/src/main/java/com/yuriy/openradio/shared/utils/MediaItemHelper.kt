@@ -35,6 +35,8 @@ object MediaItemHelper {
     private const val KEY_IS_FAVORITE = "KEY_IS_FAVORITE"
     private const val KEY_SORT_ID = "KEY_SORT_ID"
     private const val KEY_BITRATE = "KEY_BITRATE"
+    private const val KEY_COUNTRY_CODE = "KEY_COUNTRY_CODE"
+    private const val KEY_CODEC = "KEY_CODEC"
     private const val KEY_DRAWABLE_ID = "DRAWABLE_ID"
 
     fun setDrawableId(bundle: Bundle?, drawableId: Int) {
@@ -56,6 +58,32 @@ object MediaItemHelper {
 
     fun getBitrateField(mediaItem: MediaItem?): Int {
         return mediaItem?.mediaMetadata?.extras?.getInt(KEY_BITRATE, 0) ?: 0
+    }
+
+    fun updateCountryCodeField(bundle: Bundle, countryCode: String) {
+        bundle.putString(KEY_COUNTRY_CODE, countryCode)
+    }
+
+    /**
+     * @return the ISO country code of the station [mediaItem] plays, or an empty string when the
+     *   item carries none, as every item built before the code was stored does.
+     */
+    fun getCountryCodeField(mediaItem: MediaItem?): String {
+        return mediaItem?.mediaMetadata?.extras?.getString(KEY_COUNTRY_CODE, AppUtils.EMPTY_STRING)
+            ?: AppUtils.EMPTY_STRING
+    }
+
+    fun updateCodecField(bundle: Bundle, codec: String) {
+        bundle.putString(KEY_CODEC, codec)
+    }
+
+    /**
+     * @return the stream codec the provider reported for [mediaItem], such as "MP3", or an empty
+     *   string when it reported none.
+     */
+    fun getCodecField(mediaItem: MediaItem?): String {
+        return mediaItem?.mediaMetadata?.extras?.getString(KEY_CODEC, AppUtils.EMPTY_STRING)
+            ?: AppUtils.EMPTY_STRING
     }
 
     /**

@@ -100,6 +100,34 @@ class MediaItemHelperTest {
     }
 
     @Test
+    fun aCountryCodeStoredInTheExtrasIsReadFromTheItem() {
+        val bundle = Bundle()
+        MediaItemHelper.updateCountryCodeField(bundle, "NL")
+
+        assertEquals("NL", MediaItemHelper.getCountryCodeField(item(bundle)))
+    }
+
+    @Test
+    fun aMissingCountryCodeReadsAsEmpty() {
+        assertEquals("", MediaItemHelper.getCountryCodeField(item(Bundle())))
+        assertEquals("", MediaItemHelper.getCountryCodeField(null))
+    }
+
+    @Test
+    fun aCodecStoredInTheExtrasIsReadFromTheItem() {
+        val bundle = Bundle()
+        MediaItemHelper.updateCodecField(bundle, "MP3")
+
+        assertEquals("MP3", MediaItemHelper.getCodecField(item(bundle)))
+    }
+
+    @Test
+    fun aMissingCodecReadsAsEmpty() {
+        assertEquals("", MediaItemHelper.getCodecField(item(Bundle())))
+        assertEquals("", MediaItemHelper.getCodecField(null))
+    }
+
+    @Test
     fun theFavoriteFlagSetThroughTheMetadataIsReadBackAndCanBeCleared() {
         val metadata = metadata(extras = Bundle())
 
