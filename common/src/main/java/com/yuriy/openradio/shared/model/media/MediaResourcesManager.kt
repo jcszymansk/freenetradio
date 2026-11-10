@@ -19,23 +19,20 @@ package com.yuriy.openradio.shared.model.media
 import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import androidx.concurrent.futures.await
-import androidx.core.os.ExecutorCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaBrowser
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
-import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
@@ -43,6 +40,7 @@ import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -61,7 +59,11 @@ import kotlinx.coroutines.launch
  * @param mListener Listener for the media resources events. Acts as proxy between this manager and callee Activity.
  */
 @UnstableApi
-class MediaResourcesManager(context: Context, className: String, private val mListener: MediaResourceManagerListener) {
+class MediaResourcesManager(
+    context: Context,
+    className: String,
+    private val mListener: MediaResourceManagerListener
+) : MediaLibraryClient {
     /**
      * Tag string to use in logging message.
      */
@@ -105,40 +107,45 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
         }
     }
 
-    private suspend fun getChildren(
-        parentId: String,
-        page: Int = 0,
-        bundle: Bundle = Bundle()
-    ): ImmutableList<MediaItem> {
-        return if (parentId == MediaId.MEDIA_ID_SEARCH_FROM_APP ||
-                    parentId == MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
+    /**
+     * @return the children of [parentId] on [page], or null when there is no browser, the service
+     *   answered with an error code, or the request failed. An empty list is a real answer: a node
+     *   with no children, or a page past the end.
+     */
+    private suspend fun fetch(parentId: String, page: Int = 0, bundle: Bundle = Bundle()): List<MediaItem>? {
+        val browser = mMediaBrowser ?: return null
+        val future = if (parentId == MediaId.MEDIA_ID_SEARCH_FROM_APP ||
+            parentId == MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
         ) {
-            mMediaBrowser?.getSearchResult(
-                searchQuery(bundle),
-                page,
-                DependencyRegistryCommon.PAGE_SIZE,
-                null
-            )
-                ?.await()?.value ?: ImmutableList.of()
+            browser.getSearchResult(searchQuery(bundle), page, DependencyRegistryCommon.PAGE_SIZE, null)
         } else {
-            val children = mMediaBrowser?.getChildren(
-                parentId,
-                page,
-                DependencyRegistryCommon.PAGE_SIZE,
-                null
-            )
-            children?.addListener(
-                {
-                    //TODO: Maybe evolve this case?
-//                    val result = children.get()!!
-//                    val children = result.value!!
-//                    subItemMediaList.addAll(children)
-//                    mediaListAdapter.notifyDataSetChanged()
-                },
-                ExecutorCompat.create(Handler(Looper.getMainLooper()))
-            )
+            browser.getChildren(parentId, page, DependencyRegistryCommon.PAGE_SIZE, null)
+        }
+        val result = try {
+            future.await()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            AppLogger.e("$mClassName fetch of $parentId page $page failed", failure)
+            return null
+        }
+        if (result.resultCode != LibraryResult.RESULT_SUCCESS) {
+            AppLogger.w("$mClassName fetch of $parentId page $page answered ${result.resultCode}")
+            return null
+        }
+        return result.value?.toList() ?: emptyList()
+    }
 
-            children?.await()?.value ?: ImmutableList.of()
+    private fun deliver(
+        callback: MediaItemsSubscription,
+        parentId: String,
+        children: List<MediaItem>?,
+        replace: Boolean
+    ) {
+        if (children == null) {
+            callback.onError(parentId)
+        } else {
+            callback.onChildrenLoaded(parentId, children, replace)
         }
     }
 
@@ -152,10 +159,10 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
         return if (query.trim().isEmpty()) "Jazz" else query
     }
 
-    suspend fun sendCommand(command: String, parameters: Bundle?): Boolean =
+    override suspend fun sendCommand(command: String, parameters: Bundle?): Boolean =
         sendCommand(command, parameters) { _, _ -> }
 
-    suspend fun sendCommand(
+    override suspend fun sendCommand(
         command: String,
         parameters: Bundle?,
         resultCallback: ((Int, Bundle?) -> Unit)
@@ -169,7 +176,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
         false
     }
 
-    fun clean() {
+    override fun clean() {
         mShownSearch.clear()
         mMediaBrowser?.let {
             it.removeListener(mPlayerListener)
@@ -184,11 +191,11 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
      * @param parentId The id of the parent media item whose list of children will be subscribed.
      * @param callback The callback to receive the list of children.
      */
-    fun subscribe(
+    override fun subscribe(
         parentId: String,
         callback: MediaItemsSubscription?,
-        page: Int = 0,
-        bundle: Bundle = Bundle()
+        page: Int,
+        bundle: Bundle
     ) {
         AppLogger.i("$mClassName subscribe:$parentId, page:$page")
         if (callback == null) {
@@ -197,7 +204,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
         }
         mScope.launch {
             if (page != 0) {
-                callback.onChildrenLoaded(parentId, getChildren(parentId, page, bundle).toMutableList(), false)
+                deliver(callback, parentId, fetch(parentId, page, bundle), false)
                 return@launch
             }
 
@@ -211,20 +218,25 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
                 parentId == MediaId.MEDIA_ID_SEARCH_FROM_SERVICE
             ) {
                 mShownSearch.show(ShownSearch.Search(parentId, searchQuery(bundle), bundle, callback))
-                callback.onChildrenLoaded(parentId, getChildren(parentId, bundle = bundle).toMutableList(), true)
+                deliver(callback, parentId, fetch(parentId, bundle = bundle), true)
                 return@launch
             }
             mShownSearch.clear()
             if (mSubscribedParentId == parentId) {
-                callback.onChildrenLoaded(parentId, getChildren(parentId, bundle = bundle).toMutableList(), true)
+                deliver(callback, parentId, fetch(parentId, bundle = bundle), true)
                 return@launch
             }
 
             mSubscribedParentId = parentId
             mSubscriptionCallback = callback
             browser.subscribe(parentId, null).await()
-            callback.onChildrenLoaded(parentId, getChildren(parentId, bundle = bundle).toMutableList(), true)
+            deliver(callback, parentId, fetch(parentId, bundle = bundle), true)
         }
+    }
+
+    override fun fetchChildren(parentId: String, callback: MediaItemsSubscription) {
+        AppLogger.i("$mClassName fetch once:$parentId")
+        mScope.launch { deliver(callback, parentId, fetch(parentId), true) }
     }
 
     /**
@@ -239,13 +251,13 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
     /**
      * @return Metadata.
      */
-    val mediaMetadata: MediaMetadata?
+    override val mediaMetadata: MediaMetadata?
         get() = mPlayer?.mediaMetadata
 
-    val currentMediaItem: MediaItem?
+    override val currentMediaItem: MediaItem?
         get() = mPlayer?.currentMediaItem
 
-    val isPlaying: Boolean
+    override val isPlaying: Boolean
         get()  {
             return mPlayer?.isPlaying ?: false
         }
@@ -266,7 +278,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
     /**
      *
      */
-    fun playFromMediaId(mediaItem: MediaItem, parentMediaId: String) {
+    override fun playFromMediaId(mediaItem: MediaItem, parentMediaId: String) {
         val player = mPlayer
         val isPrepared = player?.playbackState != Player.STATE_IDLE
         if (isPrepared && mediaItem.mediaId == mNowPlaying?.mediaId) {
@@ -275,11 +287,9 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
             )
         } else {
             mScope.launch {
-                val playlist = getChildren(parentMediaId).let { children ->
-                    children.filter {
-                        it.mediaMetadata.isPlayable ?: false
-                    }
-                }.toMutableList()
+                val playlist = (fetch(parentMediaId) ?: emptyList())
+                    .filter { it.mediaMetadata.isPlayable ?: false }
+                    .toMutableList()
                 if (playlist.isEmpty()) {
                     playlist.add(mediaItem)
                 }
@@ -292,6 +302,10 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
                 player?.play()
             }
         }
+    }
+
+    override fun play() {
+        mPlayer?.play()
     }
 
     private inner class BrowserListener : MediaBrowser.Listener {
@@ -320,7 +334,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
             }
             val callback = mSubscriptionCallback ?: return
             mScope.launch {
-                callback.onChildrenLoaded(parentId, getChildren(parentId).toMutableList(), true)
+                deliver(callback, parentId, fetch(parentId), true)
             }
         }
 
@@ -333,11 +347,7 @@ class MediaResourcesManager(context: Context, className: String, private val mLi
             AppLogger.d("$mClassName search result changed for '$query', count:$itemCount")
             val search = mShownSearch.changed(query) ?: return
             mScope.launch {
-                search.callback.onChildrenLoaded(
-                    search.parentId,
-                    getChildren(search.parentId, bundle = search.bundle).toMutableList(),
-                    true
-                )
+                deliver(search.callback, search.parentId, fetch(search.parentId, bundle = search.bundle), true)
             }
         }
     }
