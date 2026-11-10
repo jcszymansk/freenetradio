@@ -105,6 +105,8 @@ com/yuriy/openradio/shared/model/filter/FilterImpl	com.yuriy.openradio.shared.mo
 com/yuriy/openradio/shared/model/timer/SleepTimerImpl	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/model/timer/CoroutineTimerTask	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/model/logging/DiagnosticReportFiles	com.yuriy.openradio.shared.model.logging.DiagnosticReportFilesTest	:common-ui
+com/yuriy/openradio/shared/presenter/main/Tab	com.yuriy.openradio.shared.presenter.main.TabTest	:common-ui
+com/yuriy/openradio/shared/presenter/main/MainScreenRows	com.yuriy.openradio.shared.presenter.main.MainScreenRowsTest	:common-ui
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback$Exhausted	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
