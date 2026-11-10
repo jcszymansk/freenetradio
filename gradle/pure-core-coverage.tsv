@@ -154,6 +154,7 @@ com/yuriy/openradio/shared/model/storage/cache/api/PersistentApiDb	EXCLUDED	rule
 com/yuriy/openradio/shared/model/storage/cache/api/PersistentApiDb_Impl	EXCLUDED	rule 2: it is Room generated code.
 com/yuriy/openradio/shared/model/timer/SleepTimerModelImpl	EXCLUDED	rule 3: its state is read from and written to SleepTimerStorage, which is SharedPreferences.
 com/yuriy/openradio/shared/model/timer/SleepTimerModelImpl$SleepTimerListenerImpl	EXCLUDED	rule 3: it writes the timer state to SleepTimerStorage, which is SharedPreferences.
+com/yuriy/openradio/shared/presenter/main/CountrySettingImpl	EXCLUDED	rule 3: it asks SharedPreferences through LocationStorage for the stored country.
 com/yuriy/openradio/shared/service/OpenRadioService	EXCLUDED	rule 3: it is the Media3 MediaLibraryService and lives by the Service lifecycle.
 com/yuriy/openradio/shared/service/OpenRadioService$NetworkMonitorListenerImpl	EXCLUDED	rule 3: it pauses or resumes the service's player and shows a Toast on connectivity changes.
 com/yuriy/openradio/shared/service/OpenRadioService$PlayerListener	EXCLUDED	rule 3: it runs on the service's coroutine scopes and publishes the active station to the media session.

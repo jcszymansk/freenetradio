@@ -88,6 +88,7 @@ dependencies {
     implementation project(':common')
     implementation project(':common-ui')
     implementation "com.github.jcszymansk.console:design"
+    implementation "androidx.activity:activity-compose:$activityComposeVersion"
 
     testImplementation platform("androidx.compose:compose-bom:$composeBomVersion")
     testImplementation "junit:junit:$junitVersion"

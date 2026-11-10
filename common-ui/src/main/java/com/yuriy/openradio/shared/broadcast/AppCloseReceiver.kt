@@ -20,8 +20,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
-import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
-import com.yuriy.openradio.shared.presenter.MediaPresenter
+import com.yuriy.openradio.shared.dependencies.ScreenCloseDependency
+import com.yuriy.openradio.shared.presenter.main.ScreenClose
 import com.yuriy.openradio.shared.utils.AppLogger
 
 /**
@@ -29,18 +29,18 @@ import com.yuriy.openradio.shared.utils.AppLogger
  * At Android Studio
  * E-Mail: chernyshov.yuriy@gmail.com
  */
-class AppCloseReceiver : BroadcastReceiver(), MediaPresenterDependency {
+class AppCloseReceiver : BroadcastReceiver(), ScreenCloseDependency {
 
-    private lateinit var mMediaPresenter: MediaPresenter
+    private lateinit var mScreenClose: ScreenClose
 
-    override fun configureWith(mediaPresenter: MediaPresenter) {
-        mMediaPresenter = mediaPresenter
+    override fun configureWith(screenClose: ScreenClose) {
+        mScreenClose = screenClose
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         AppLogger.d("$CLASS_NAME [" + this.hashCode() + "]->onReceive(" + intent + ")")
-        DependencyRegistryCommonUi.inject(this)
-        mMediaPresenter.handleClosePresenter()
+        DependencyRegistryCommonUi.injectScreenClose(this)
+        mScreenClose.close()
     }
 
     companion object {

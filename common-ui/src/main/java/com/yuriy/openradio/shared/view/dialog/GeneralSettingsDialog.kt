@@ -29,13 +29,15 @@ import android.widget.ProgressBar
 import android.widget.SeekBar
 import androidx.core.content.FileProvider
 import com.yuriy.openradio.shared.R
+import com.yuriy.openradio.shared.dependencies.CountrySettingDependency
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.LoggingLayerDependency
-import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
+import com.yuriy.openradio.shared.dependencies.ServiceCommanderDependency
+import com.yuriy.openradio.shared.model.ServiceCommander
 import com.yuriy.openradio.shared.model.logging.LoggingLayer
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.permission.PermissionChecker
-import com.yuriy.openradio.shared.presenter.MediaPresenter
+import com.yuriy.openradio.shared.presenter.main.CountrySetting
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.OpenRadioStore
 import com.yuriy.openradio.shared.service.location.LocationService
@@ -61,14 +63,20 @@ import kotlinx.coroutines.launch
  * On 12/20/14
  * E-Mail: chernyshov.yuriy@gmail.com
  */
-class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, LoggingLayerDependency {
+class GeneralSettingsDialog : BaseDialogFragment(), ServiceCommanderDependency, CountrySettingDependency,
+    LoggingLayerDependency {
 
     private lateinit var mUserAgentEditView: EditText
-    private lateinit var mMediaPresenter: MediaPresenter
+    private lateinit var mServiceCommander: ServiceCommander
+    private lateinit var mCountrySetting: CountrySetting
     private lateinit var mLoggingLayer: LoggingLayer
 
-    override fun configureWith(mediaPresenter: MediaPresenter) {
-        mMediaPresenter = mediaPresenter
+    override fun configureWith(serviceCommander: ServiceCommander) {
+        mServiceCommander = serviceCommander
+    }
+
+    override fun configureWith(countrySetting: CountrySetting) {
+        mCountrySetting = countrySetting
     }
 
     override fun configureWith(loggingLayer: LoggingLayer) {
@@ -77,7 +85,8 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         DependencyRegistryCommonUi.injectLoggingLayer(this)
-        DependencyRegistryCommonUi.inject(this)
+        DependencyRegistryCommonUi.injectServiceCommander(this)
+        DependencyRegistryCommonUi.injectCountrySetting(this)
         val activity = requireActivity()
         val context = requireContext()
         val view = inflater.inflate(
@@ -127,8 +136,7 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
                 override fun onStopTrackingTouch(seekBar: SeekBar) {
                     CoroutineScope(Dispatchers.Main).launch {
                         val bundle = OpenRadioStore.makeMasterVolumeChangedBundle(seekBar.progress)
-                        mMediaPresenter.getServiceCommander()
-                            .sendCommand(OpenRadioService.CMD_MASTER_VOLUME_CHANGED, bundle)
+                        mServiceCommander.sendCommand(OpenRadioService.CMD_MASTER_VOLUME_CHANGED, bundle)
                     }
                 }
             }
@@ -149,11 +157,11 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
         val clearCache = view.findButton(R.id.clear_cache_btn)
         clearCache.setOnClickListener {
             CoroutineScope(Dispatchers.Main).launch {
-                mMediaPresenter.getServiceCommander().sendCommand(OpenRadioService.CMD_CLEAR_CACHE)
+                mServiceCommander.sendCommand(OpenRadioService.CMD_CLEAR_CACHE)
             }
         }
         val array = LocationService.getCountriesWithLocation(context)
-        val countryCode = mMediaPresenter.getCountryCode()
+        val countryCode = mCountrySetting.countryCode()
         var idx = 0
         for ((i, item) in array.withIndex()) {
             if (item.code == countryCode) {
@@ -168,7 +176,7 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
         spinner.setSelection(idx)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                mMediaPresenter.onLocationChanged(array[position].code)
+                mCountrySetting.setCountryCode(array[position].code)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
