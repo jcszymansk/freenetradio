@@ -256,8 +256,11 @@ replaces is left in the code.
 
 - Hidden until a station is chosen. Afterwards it stays visible; when playback stops it shows
   the station paused.
-- After an app restart, it shows the last played station, paused, when there is one; otherwise
-  it stays hidden.
+- After an app restart, it shows whatever the playback service holds, which the "last known
+  station" setting decides: with the setting on (the default), the service restores the last
+  played station and resumes it, and the mini player shows that station playing; with it off,
+  the mini player stays hidden. Amended by the owner on 2026-11-10 (decision 14, `fnr-yn3gp`):
+  showing the station paused would need a change to the service, which REQ-015 rules out.
 - Content as in the reference: the active tile, the station's name in bold, a `LIVE` tag
   followed by the track title in mono, and a square accent pause/play button.
 - Only the button acts: it toggles playback (resuming the last played station when paused).
@@ -362,7 +365,8 @@ replaces is left in the code.
 | REQ-007 long-press | Long-press a MINE row | Station settings dialog with edit, remove, sort position |
 | REQ-007 long-press | Long-press a POPULAR row | Nothing |
 | REQ-008 first start | Fresh install, nothing played | No mini player |
-| REQ-008 restart | Station played, app killed, reopened | Mini player shows that station, paused |
+| REQ-008 restart | Station played, app killed, reopened, last known station on | Mini player shows that station playing |
+| REQ-008 restart, setting off | As above, last known station off | No mini player |
 | REQ-008 tap outside button | Tap the mini player's name | Nothing |
 | REQ-009 empty | FAV with no favourites | "No favourites yet" |
 | REQ-009 empty | MINE with no stations | "No stations added" and "+ Add" |
@@ -391,8 +395,8 @@ replaces is left in the code.
    playing row tinted); tap plays, the heart toggles the favourite (REQ-006).
 7. Long-press on a FAV or MINE row opens the existing station settings dialog; other rows have
    no long-press action (REQ-007).
-8. The mini player is hidden until a station is chosen, then stays (paused when stopped; the last
-   played station shown paused after a restart); only its button acts (REQ-008).
+8. The mini player is hidden until a station is chosen, then stays (paused when stopped; after a
+   restart it shows what the service restored under the last known station setting); only its button acts (REQ-008).
 9. Loading shows a thin progress line under the tabs (at the list end while paging); empty is
    one line (with "+ Add" on MINE); error is one line plus "Retry" (REQ-009).
 10. "+ Add" appears on MINE only and opens the existing add dialog (REQ-010).

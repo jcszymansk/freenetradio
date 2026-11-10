@@ -147,8 +147,9 @@ follows the review.
 - **The instrumented suite has never run.** No lane had a device. The journeys compile but have not
   been executed against the Compose screen. Merging before `fnr-g76t3` closes risks breakage that
   only shows up on a device. This is the main blocker before merge.
-- **The REQ-008 restart behaviour is undecided** (`fnr-yn3gp`). The two restart journeys assert the
-  provisional reading, so their passing does not settle the decision.
+- **The REQ-008 restart behaviour was undecided** (`fnr-yn3gp`). The owner decided on 2026-11-10 to
+  keep the branch's reading and amended REQ-008 to match, so the two restart journeys now assert
+  the requirement.
 - **Visual check is the owner's** (REQ-014). Known nits, listed as M4 on `fnr-bfxtd`: initials differ
   slightly from the reference images, title and mini-player type are slightly lighter, and the mini
   player's button is 44dp where the plan says 48dp.
