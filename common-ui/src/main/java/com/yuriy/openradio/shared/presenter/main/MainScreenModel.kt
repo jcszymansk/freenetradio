@@ -82,7 +82,6 @@ class MainScreenModel(
      */
     private val mFavoriteOverrides = HashMap<String, Boolean>()
 
-    private val mArtworkRevisions = HashMap<String, Int>()
     private var mMiniPlayer: MiniPlayerState? = null
     private var mPlayingId: String? = null
     private var mClosed = false
@@ -388,15 +387,6 @@ class MainScreenModel(
         }
     }
 
-    /**
-     * The artwork store finished writing the image [imageId]; rows showing it load it again.
-     */
-    @MainThread
-    fun artworkChanged(imageId: String) {
-        mArtworkRevisions[imageId] = (mArtworkRevisions[imageId] ?: 0) + 1
-        emit()
-    }
-
     override fun close() {
         mStacks.clear()
         mStacks.putAll(rootStacks())
@@ -560,7 +550,6 @@ class MainScreenModel(
             isFavorite = mFavoriteOverrides[item.mediaId] ?: MediaItemHelper.isFavoriteField(item.mediaMetadata),
             isCurrent = isCurrent(item.mediaId),
             canLongPress = longPress,
-            artworkRevision = MainScreenRows.artworkId(item)?.let { mArtworkRevisions[it] } ?: 0,
         )
     }
 

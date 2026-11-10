@@ -22,7 +22,6 @@ import androidx.media3.common.Player
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.PlaybackState
 import com.yuriy.openradio.shared.model.media.RadioStation
-import com.yuriy.openradio.shared.model.storage.images.ImagesStore
 import com.yuriy.openradio.shared.service.OpenRadioService
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -171,21 +170,6 @@ class MainScreenModelPlaybackTest {
         m.client.answer(MediaId.MEDIA_ID_SEARCH_FROM_APP, listOf(station(MediaId.makeSearchId("s1"))))
 
         assertTrue((m.rows().single() as RowState.Station).isCurrent)
-    }
-
-    @Test
-    fun artworkThatArrivesLaterBumpsTheRowsRevision() {
-        val m = ModelUnderTest().startAndConnect()
-        val item = station("s1").let {
-            it.buildUpon().setMediaMetadata(
-                it.mediaMetadata.buildUpon().setArtworkUri(ImagesStore.buildImageUri("s1", "https://img.invalid/a.png")).build()
-            ).build()
-        }
-        m.client.answer(MediaId.MEDIA_ID_FAVORITES_LIST, listOf(item))
-
-        m.model.artworkChanged("s1")
-
-        assertEquals(1, (m.rows().single() as RowState.Station).artworkRevision)
     }
 
     @Test

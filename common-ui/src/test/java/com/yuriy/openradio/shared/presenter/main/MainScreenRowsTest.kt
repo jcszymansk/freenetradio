@@ -38,7 +38,6 @@ class MainScreenRowsTest {
             isFavorite = true,
             isCurrent = false,
             canLongPress = true,
-            artworkRevision = 0
         )
 
         assertEquals("s1", row.id)
@@ -75,13 +74,60 @@ class MainScreenRowsTest {
     }
 
     @Test
+    fun initialsOfNamesWithPunctuationAndDigits() {
+        assertEquals("1F", MainScreenRows.initials("1.FM - Jazz"))
+        assertEquals("RA", MainScreenRows.initials("--Radio--"))
+        assertEquals("R1", MainScreenRows.initials("radio 1"))
+    }
+
+    @Test
+    fun initialsOfNonLatinNames() {
+        assertEquals("ПМ", MainScreenRows.initials("Поп-музыка"))
+        assertEquals("РА", MainScreenRows.initials("Радио"))
+    }
+
+    @Test
+    fun initialsOfAnEmptyName() {
+        assertEquals("", MainScreenRows.initials(""))
+    }
+
+    @Test
+    fun initialsOfOneWordTakeItsFirstTwoCharactersUppercased() {
+        assertEquals("JA", MainScreenRows.initials("jazz"))
+        assertEquals("X", MainScreenRows.initials("x"))
+    }
+
+    @Test
     fun aStationWithoutALogoHasNoArtworkToLoad() {
         val item = station("s1", "Capital", "gb", "aac", 48, NO_LOGO)
 
-        val row = MainScreenRows.station(item, false, false, false, 0)
+        val row = MainScreenRows.station(item, false, false, false)
 
         assertNull("The browse tree gives a logo-less station an image uri with an empty url", row.artworkUri)
-        assertNull(MainScreenRows.artworkId(item))
+    }
+
+    @Test
+    fun artworkUriIsNullWithoutAUri() {
+        val item = station("s1", "Capital", "gb", "aac", 48)
+
+        assertNull(MainScreenRows.artworkUri(item))
+    }
+
+    @Test
+    fun artworkUriIsNullWhenTheUriHasNoImageUrl() {
+        assertNull(MainScreenRows.artworkUri(station("s1", "Capital", "gb", "aac", 48, NO_LOGO)))
+
+        val noUrlParameter = Uri.parse("content://com.github.jcszymansk.freenetradio.images?id=s1")
+        assertNull(MainScreenRows.artworkUri(station("s1", "Capital", "gb", "aac", 48, noUrlParameter)))
+    }
+
+    @Test
+    fun artworkUriIsTheUriWhenItHasAnImageUrl() {
+        val artwork = ImagesStore.buildImageUri("s1", "https://img.invalid/capital.png")
+
+        val uri = MainScreenRows.artworkUri(station("s1", "Capital", "gb", "aac", 48, artwork))
+
+        assertEquals(artwork.toString(), uri)
     }
 
     @Test
@@ -132,10 +178,9 @@ class MainScreenRowsTest {
         val artwork = ImagesStore.buildImageUri("s1", "https://img.invalid/capital.png")
         val item = station("s1", "Capital", "gb", "aac", 48, artwork)
 
-        val row = MainScreenRows.station(item, false, false, false, 0)
+        val row = MainScreenRows.station(item, false, false, false)
 
         assertEquals(artwork.toString(), row.artworkUri)
-        assertEquals("s1", MainScreenRows.artworkId(item))
     }
 
     private companion object {

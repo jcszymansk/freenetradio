@@ -83,7 +83,6 @@ sealed interface RowState {
         val isCurrent: Boolean,
         val canLongPress: Boolean,
         val artworkUri: String?,
-        val artworkRevision: Int,
     ) : RowState {
         override val key: String get() = id
     }

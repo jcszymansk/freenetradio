@@ -30,12 +30,13 @@ object MainScreenRows {
 
     private const val META_SEPARATOR = " · "
 
+    private val INITIALS_SEPARATOR = Regex("[^\\p{L}\\p{N}]+")
+
     fun station(
         item: MediaItem,
         isFavorite: Boolean,
         isCurrent: Boolean,
         canLongPress: Boolean,
-        artworkRevision: Int,
     ): RowState.Station {
         val name = item.mediaMetadata.title?.toString().orEmpty()
         return RowState.Station(
@@ -48,7 +49,6 @@ object MainScreenRows {
             isCurrent = isCurrent,
             canLongPress = canLongPress,
             artworkUri = artworkUri(item),
-            artworkRevision = artworkRevision,
         )
     }
 
@@ -63,20 +63,8 @@ object MainScreenRows {
         )
     }
 
-    /**
-     * @return the image id [ImagesStore] tells artwork changes by, or null when [item] has no
-     *   artwork to load.
-     */
-    fun artworkId(item: MediaItem): String? {
-        val uri = item.mediaMetadata.artworkUri ?: return null
-        if (ImagesStore.getImageUrl(uri).isEmpty()) {
-            return null
-        }
-        return ImagesStore.getId(uri)
-    }
-
     fun initials(name: String): String {
-        val words = name.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        val words = name.split(INITIALS_SEPARATOR).filter { it.isNotEmpty() }
         val letters = when {
             words.size >= 2 -> "${words[0].first()}${words[1].first()}"
             words.size == 1 -> words[0].take(2)
@@ -95,8 +83,15 @@ object MainScreenRows {
         return if (kbps > 0) "${kbps}k" else null
     }
 
-    private fun artworkUri(item: MediaItem): String? {
-        return if (artworkId(item) == null) null else item.mediaMetadata.artworkUri.toString()
+    /**
+     * @return the artwork URI as a string, or null when [item] has no URI or its image url is empty.
+     */
+    fun artworkUri(item: MediaItem): String? {
+        val uri = item.mediaMetadata.artworkUri ?: return null
+        if (ImagesStore.getImageUrl(uri).isEmpty()) {
+            return null
+        }
+        return uri.toString()
     }
 
     private fun isCountry(mediaId: String): Boolean {

@@ -154,7 +154,6 @@ internal object MainScreenFixtures {
         isCurrent = current,
         canLongPress = longPress,
         artworkUri = null,
-        artworkRevision = 0,
     )
 
     private fun country(id: String, title: String, flag: Int) = RowState.Category(id, title, flag)
