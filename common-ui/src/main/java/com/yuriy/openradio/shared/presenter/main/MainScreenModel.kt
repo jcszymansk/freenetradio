@@ -111,7 +111,8 @@ class MainScreenModel(
                     page = 0, pageInFlight = false, endReached = false
                 )
                 top.pageInFlight && top.items != null -> top.copy(
-                    items = top.items + children, pageInFlight = false, endReached = children.isEmpty()
+                    items = top.items + children, page = top.page + 1, pageInFlight = false,
+                    endReached = children.isEmpty()
                 )
                 else -> {
                     AppLogger.w("$TAG drop an unasked page of '$parentId'")
@@ -277,9 +278,8 @@ class MainScreenModel(
         if (!MediaId.isRefreshable(top.mediaId, mSourcesLayer)) {
             return
         }
-        val page = top.page + 1
-        replaceTop(top.copy(page = page, pageInFlight = true))
-        client.subscribe(top.mediaId, mShownNode, page, top.bundle)
+        replaceTop(top.copy(pageInFlight = true))
+        client.subscribe(top.mediaId, mShownNode, top.page + 1, top.bundle)
         emit()
     }
 

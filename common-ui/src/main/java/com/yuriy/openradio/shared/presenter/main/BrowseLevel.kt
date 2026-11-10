@@ -29,7 +29,8 @@ import androidx.media3.common.MediaItem
  * @param items the rows answered so far, or null before the first answer.
  * @param inFlight a first page was asked for and not answered yet.
  * @param failed the last first-page request failed.
- * @param page the last page asked for.
+ * @param page the last page appended; a failed or dropped page request leaves it, so the
+ *   next request asks for the same page again.
  * @param pageInFlight a further page was asked for and not answered yet.
  * @param endReached the last page came back empty.
  */

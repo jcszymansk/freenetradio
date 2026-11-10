@@ -384,6 +384,31 @@ class MainScreenModelTest {
     }
 
     @Test
+    fun anAppendedPageMovesLoadMoreToTheFollowingPage() {
+        val m = polandShown(listOf(station("a")))
+        m.model.loadMore()
+        m.client.answer(POLAND, listOf(station("b")), replace = false)
+
+        m.model.loadMore()
+
+        assertEquals(FakeLibraryClient.Request(POLAND, 2, NO_QUERY), m.client.lastSubscription())
+    }
+
+    @Test
+    fun aFailedPageIsAskedForAgainByTheNextLoadMore() {
+        val m = polandShown(listOf(station("a")))
+        m.model.loadMore()
+        m.client.fail(POLAND)
+        assertFalse(m.state.isLoadingPage)
+
+        m.model.loadMore()
+
+        assertEquals(FakeLibraryClient.Request(POLAND, 1, NO_QUERY), m.client.lastSubscription())
+        m.client.answer(POLAND, listOf(station("b")), replace = false)
+        assertEquals(listOf("a", "b"), m.rowIds())
+    }
+
+    @Test
     fun aNodeThatDoesNotPageIsNotAskedForMore() {
         val m = ModelUnderTest().startAndConnect()
         m.client.answer(FAV, listOf(station("a")))
