@@ -24,10 +24,10 @@ project.
 | Module | Responsibility |
 | --- | --- |
 | `common/` | Domain models, provider APIs, parsing, caching, persistence, playback, Media3 service, equalizer, location, timers, and broadcast receivers |
-| `common-ui/` | Shared presenter, RecyclerView adapter base, dialogs, file import/export, logging, and service-command glue |
+| `common-ui/` | The main screen's state holder (`MainScreenModel`), dialogs, file import/export, logging, and service-command glue |
 | `app/` | Phone/tablet UI and Android Auto metadata |
 | `console-design/` | Shared Compose design system: theme, colours, typography, and components. An included build from a git submodule, edited only in its own repository |
-| `android-jvm-stubs/` | Working JVM implementations of the Android types unit tests need — `Uri`, `Bundle`, `MimeTypeMap`, the resource lookups of `Context`, and the `android.database.Observable` behind `RecyclerView.Adapter` notifications. `:common` and `:common-ui` take it as `testRuntimeOnly`, so tests compile against the real Android API and only the implementation is swapped at run time |
+| `android-jvm-stubs/` | Working JVM implementations of the Android types unit tests need — `Uri`, `Bundle`, `MimeTypeMap`, and the resource lookups of `Context`. `:common` and `:common-ui` take it as `testRuntimeOnly`, so tests compile against the real Android API and only the implementation is swapped at run time |
 
 The application uses `applicationId` `com.github.jcszymansk.freenetradio`. Kotlin namespaces retain the recovered source package names; they do not define the installed application identity.
 
@@ -52,7 +52,7 @@ The service advertises both `android.media.browse.MediaBrowserService` and `andr
 ```mermaid
 flowchart LR
     UI["MainActivity or Android Auto"]
-    Presenter["MediaPresenterImpl"]
+    Presenter["MainScreenModel"]
     Browser["MediaResourcesManager / MediaBrowser"]
     Service["OpenRadioService"]
     Command["MediaItemCommand"]
@@ -77,7 +77,7 @@ flowchart LR
 
 A typical browse request follows this path:
 
-1. `MediaPresenterImpl` creates a `MediaResourcesManager`.
+1. `MainScreenModel` creates a `MediaResourcesManager` through its `MediaLibraryClient` factory.
 2. `MediaResourcesManager` builds a Media3 `MediaBrowser` connected to `OpenRadioService`.
 3. The UI requests children under a media ID such as root, countries, favorites, popular stations, or search.
 4. `OpenRadioService` selects the corresponding `MediaItemCommand`.
@@ -87,7 +87,7 @@ A typical browse request follows this path:
 8. Selecting a playable item causes the service to prepare and play it through `OpenRadioPlayer`.
 
 `MediaResourcesManager.kt` is the client-side Media3 wrapper. It connects to the service with a `SessionToken`, requests library roots and children, listens for player state and metadata, and sends custom session commands.
-The children it fetches reach the Activity only through `MediaPresenterImpl`, which drops an answer for any node but the top of its browse stack: a fetch can come back after the user has walked to another node.
+The children it fetches reach the screen only through `MainScreenModel`, which keeps one browse stack per tab and drops an answer for any node but the top of the selected tab's stack: a fetch can come back after the user has walked to another node or tab.
 
 ## Browsable content model
 
@@ -251,7 +251,7 @@ It also reads the UI mode once, at startup, to tell whether the process runs in 
 
 ### Phone and tablet: `app/`
 
-The entry points are `MainApp.kt` and `MainActivity.kt`. `MainActivity` is a single-instance `AppCompatActivity` using a drawer/navigation layout. It provides:
+The entry points are `MainApp.kt` and `MainActivity.kt`. `MainActivity` is a single-instance `AppCompatActivity` whose content is the Compose `MainScreen`, drawn with the console-design theme: a top bar with search and an overflow menu, the tabs (FAV, MINE, POPULAR, NEW, COUNTRY, GENRE; WebRadioDB has no POPULAR or NEW), the selected tab's list, and a mini player. There is no navigation drawer: the settings and other dialogs open from the overflow menu. It provides:
 
 - Station and category browsing
 - Search
@@ -261,7 +261,7 @@ The entry points are `MainApp.kt` and `MainActivity.kt`. `MainActivity` is a sin
 - Sleep timer
 - About information
 
-Its list adapter supports swipe-to-reveal station actions. The manifest also advertises Android Auto compatibility. Android Auto connects directly to the shared `OpenRadioService`; it does not use a separate projected-car Activity.
+A station row has a favourite toggle, and a long press on a row that allows it opens the station's settings. The manifest also advertises Android Auto compatibility. Android Auto connects directly to the shared `OpenRadioService`; it does not use a separate projected-car Activity.
 
 
 ## Android components and permissions
@@ -309,8 +309,8 @@ The repository contains these test classes, counted as files holding JUnit `@Tes
 | Source set | Runs on | Classes | Subject |
 | --- | --- | ---: | --- |
 | `common/src/test` | JVM | 56 | Playlist parsers, URL and parser layers, API caches, the model layer, browse commands and `BrowseTree`, media IDs and media-item building, station serialization and validation, sorting and filtering, network policy and recovery, playback state and error classification, equalizer serialization, sleep timer, artwork grants |
-| `common-ui/src/test` | JVM | 6 | `MediaPresenterImpl` browse stack and child delivery, `MediaItemsAdapter`, `ServiceCommander`, diagnostic report files |
-| `android-jvm-stubs/src/test` | JVM | 4 | The stubs themselves: `Uri`, `Bundle`, `MimeTypeMap`, `Observable` |
+| `common-ui/src/test` | JVM | 7 | `MainScreenModel` tabs, browse stacks, child delivery, paging, search and playback, its row mapping and tabs, the country setting, `ServiceCommander`, diagnostic report files |
+| `android-jvm-stubs/src/test` | JVM | 3 | The stubs themselves: `Uri`, `Bundle`, `MimeTypeMap` |
 | `app/src/androidTest` | Device | 42 | SharedPreferences storages, the Room API cache and its schema upgrade, `ImagesProvider` access, file import and export, receivers, `OpenRadioService` browse, search, playback, commands and recovery, `OpenRadioPlayer`, `MediaResourcesManager`, the sleep timer, playlist resolution, station dialogs, end-to-end journeys through `MainActivity`, and the offline test harness itself |
 
 The instrumented suite runs under `OfflineTestRunner`, which refuses to run on a device that

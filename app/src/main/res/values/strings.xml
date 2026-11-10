@@ -16,8 +16,6 @@
 -->
 <resources>
     <string name="eq_label">Equalizer</string>
-    <string name="navigation_drawer_open">Open navigation drawer</string>
-    <string name="navigation_drawer_close">Close navigation drawer</string>
     <string name="main_title">Radio</string>
     <string name="main_tab_fav">Fav</string>
     <string name="main_tab_mine">Mine</string>

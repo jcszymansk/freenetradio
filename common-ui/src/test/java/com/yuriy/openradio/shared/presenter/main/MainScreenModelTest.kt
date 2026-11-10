@@ -185,7 +185,7 @@ class MainScreenModelTest {
         assertEquals(listOf("s1" to MINE), m.client.plays)
     }
 
-    // --- shown-node filtering (ported from MediaPresenterShownNodeTest) -------------------------
+    // --- shown-node filtering ------------------------------------------------------------------
 
     @Test
     fun aRefreshOfTheNodeLeftByGoingBackDoesNotReplaceTheParent() {
@@ -301,7 +301,7 @@ class MainScreenModelTest {
         assertEquals(FAV, m.client.lastSubscription().parentId)
     }
 
-    // --- replace and append (ported from MediaPresenterChildrenLoadedTest) ----------------------
+    // --- replace and append --------------------------------------------------------------------
 
     @Test
     fun aRefreshOfTheShownNodeReplacesItsRows() {

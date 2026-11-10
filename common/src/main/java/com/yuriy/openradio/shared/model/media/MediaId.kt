@@ -42,10 +42,10 @@ object MediaId {
     const val MEDIA_ID_CHILD_CATEGORIES = "__CHILD_CATEGORIES__"
 
     /**
-     * Marks the search results on the browse stack `MediaPresenter` keeps. It never travels to the
-     * service: [MediaResourcesManager] answers it with `getSearchResult`, which the service serves
-     * under [MEDIA_ID_SEARCH_FROM_SERVICE]. It is therefore deliberately left out of [IDS], so no
-     * browse command can ever be resolved for it.
+     * Marks the search results that `MainScreenModel` pushes onto a tab's stack. It never travels
+     * to the service: [MediaResourcesManager] answers it with `getSearchResult`, which the service
+     * serves under [MEDIA_ID_SEARCH_FROM_SERVICE]. It is therefore deliberately left out of [IDS],
+     * so no browse command can ever be resolved for it.
      */
     const val MEDIA_ID_SEARCH_FROM_APP = "__SEARCH_FROM_APP__"
     const val MEDIA_ID_SEARCH_FROM_SERVICE = "__SEARCH_FROM_SERVICE__"

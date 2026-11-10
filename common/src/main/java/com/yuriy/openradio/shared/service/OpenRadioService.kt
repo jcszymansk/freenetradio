@@ -854,7 +854,6 @@ class OpenRadioService : MediaLibraryService() {
                     true
                 )
             }
-            //mIsRestoreState = OpenRadioStore.getRestoreState(rootHints)
             val libraryParams = LibraryParams.Builder().setExtras(rootExtras).build()
             return Futures.immediateFuture(
                 LibraryResult.ofItem(MediaItemBuilder.buildRootMediaItem(), libraryParams)

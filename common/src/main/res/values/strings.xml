@@ -25,7 +25,6 @@
     <string name="source_semicolon">Source:</string>
     <string name="buffering_infinite">Buffering…</string>
     <string name="no_network_connection_toast">No network connection found</string>
-    <string name="category_empty">Category is empty</string>
     <string name="media_stream_error">Error</string>
     <string name="media_stream_http_403">Forbidden</string>
     <string name="media_stream_http_404">Not Found</string>

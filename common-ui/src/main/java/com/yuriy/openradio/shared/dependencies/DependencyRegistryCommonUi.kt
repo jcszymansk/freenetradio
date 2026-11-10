@@ -36,9 +36,6 @@ import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayer
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayerImpl
-import com.yuriy.openradio.shared.model.timer.SleepTimerModel
-import com.yuriy.openradio.shared.presenter.MediaPresenter
-import com.yuriy.openradio.shared.presenter.MediaPresenterImpl
 import com.yuriy.openradio.shared.presenter.main.CountrySetting
 import com.yuriy.openradio.shared.presenter.main.CountrySettingImpl
 import com.yuriy.openradio.shared.presenter.main.LastPlayedStation
@@ -64,12 +61,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 object DependencyRegistryCommonUi :
     NetworkLayerDependency, LocationStorageDependency, FavoritesStorageDependency,
     DeviceLocalsStorageDependency, EqualizerLayerDependency, RadioStationManagerLayerDependency,
-    NetworkSettingsStorageDependency, SleepTimerModelDependency, SourcesLayerDependency,
+    NetworkSettingsStorageDependency, SourcesLayerDependency,
     LatestRadioStationStorageDependency {
 
     private const val MAIN_SCREEN_CLIENT = "MainScreen"
 
-    private lateinit var sMediaPresenter: MediaPresenter
     private lateinit var sEditStationPresenter: EditStationPresenter
     private lateinit var sEqualizerPresenter: EqualizerPresenter
     private lateinit var sRemoveStationDialogPresenter: RemoveStationDialogPresenter
@@ -82,7 +78,6 @@ object DependencyRegistryCommonUi :
     private lateinit var sNetworkSettingsStorage: NetworkSettingsStorage
     private lateinit var sEqualizerLayer: EqualizerLayer
     private lateinit var sRadioStationManagerLayer: RadioStationManagerLayer
-    private lateinit var sSleepTimerModel: SleepTimerModel
     private lateinit var sSourcesLayer: SourcesLayer
     private lateinit var sLoggingLayer: LoggingLayer
     private lateinit var sFileStoraManager: FileStoreManager
@@ -108,17 +103,9 @@ object DependencyRegistryCommonUi :
         DependencyRegistryCommon.injectEqualizerLayer(this)
         DependencyRegistryCommon.injectRadioStationManagerLayer(this)
         DependencyRegistryCommon.injectNetworkSettingsStorage(this)
-        DependencyRegistryCommon.injectSleepTimerModel(this)
         DependencyRegistryCommon.injectSourcesLayer(this)
         DependencyRegistryCommon.injectLatestRadioStationStorage(this)
         sLoggingLayer = LoggingLayerImpl(context)
-        sMediaPresenter = MediaPresenterImpl(
-            context,
-            sNetworkLayer,
-            sLocationStorage,
-            sSleepTimerModel,
-            sSourcesLayer
-        )
         val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         sMainScreenModel = MainScreenModel(
             { listener -> MediaResourcesManager(context, MAIN_SCREEN_CLIENT, listener) },
@@ -190,16 +177,8 @@ object DependencyRegistryCommonUi :
         sNetworkSettingsStorage = networkSettingsStorage
     }
 
-    override fun configureWith(sleepTimerModel: SleepTimerModel) {
-        sSleepTimerModel = sleepTimerModel
-    }
-
     override fun configureWith(latestRadioStationStorage: LatestRadioStationStorage) {
         sLatestRadioStationStorage = latestRadioStationStorage
-    }
-
-    fun inject(dependency: MediaPresenterDependency) {
-        dependency.configureWith(sMediaPresenter)
     }
 
     fun injectMainScreenModel(dependency: MainScreenModelDependency) {

@@ -30,9 +30,6 @@ object OpenRadioStore {
     const val EXTRA_KEY_SORT_IDS = "EXTRA_KEY_SORT_IDS"
     const val EXTRA_KEY_MASTER_VOLUME = "EXTRA_KEY_MASTER_VOLUME"
 
-    private const val BUNDLE_ARG_CATALOGUE_ID = "BUNDLE_ARG_CATALOGUE_ID"
-    private const val BUNDLE_ARG_IS_RESTORE_STATE = "BUNDLE_ARG_IS_RESTORE_STATE"
-
     fun makeMasterVolumeChangedBundle(masterVolume: Int): Bundle {
         val intent = Bundle()
         intent.putInt(EXTRA_KEY_MASTER_VOLUME, masterVolume)
@@ -71,29 +68,5 @@ object OpenRadioStore {
 
     fun extractMediaId(bundle: Bundle?): String {
         return bundle?.getString(EXTRA_KEY_MEDIA_ID) ?: AppUtils.EMPTY_STRING
-    }
-
-    fun putCurrentParentId(bundle: Bundle?, currentParentId: String?) {
-        if (bundle == null) {
-            return
-        }
-        bundle.putString(BUNDLE_ARG_CATALOGUE_ID, currentParentId)
-    }
-
-    fun getCurrentParentId(bundle: Bundle?): String {
-        return if (bundle == null) {
-            AppUtils.EMPTY_STRING
-        } else bundle.getString(BUNDLE_ARG_CATALOGUE_ID, AppUtils.EMPTY_STRING)
-    }
-
-    fun putRestoreState(bundle: Bundle?, value: Boolean) {
-        if (bundle == null) {
-            return
-        }
-        bundle.putBoolean(BUNDLE_ARG_IS_RESTORE_STATE, value)
-    }
-
-    fun getRestoreState(bundle: Bundle?): Boolean {
-        return bundle?.getBoolean(BUNDLE_ARG_IS_RESTORE_STATE, false) ?: false
     }
 }
