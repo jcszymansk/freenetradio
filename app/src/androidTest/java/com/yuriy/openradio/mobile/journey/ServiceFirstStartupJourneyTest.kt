@@ -226,7 +226,7 @@ class ServiceFirstStartupJourneyTest {
                 list.awaitRows("the favorites node") { it == markedRoot() }
             )
 
-            val navigation = JourneyNavigation(scenario)
+            val navigation = PresenterNavigation(scenario)
             try {
                 navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
 

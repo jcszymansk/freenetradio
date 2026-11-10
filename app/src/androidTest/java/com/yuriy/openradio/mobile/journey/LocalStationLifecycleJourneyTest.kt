@@ -18,6 +18,7 @@ package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
 import android.view.View
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
@@ -84,6 +85,10 @@ class LocalStationLifecycleJourneyTest {
 
     @get:Rule
     val mStack = PresenterStackRule()
+
+    /** The dialogs are reached through the Compose screen, which [JourneyDialogs] reads through this. */
+    @get:Rule
+    val mCompose = createEmptyComposeRule()
 
     private lateinit var mContext: Context
 
@@ -160,7 +165,7 @@ class LocalStationLifecycleJourneyTest {
         val url = serveStream(STATION_PATH)
         val editedUrl = serveStream(EDITED_PATH)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario)
+            val dialogs = JourneyDialogs(scenario, mCompose)
             val list = BrowseListView(scenario)
             awaitCleanInstallRoot(list)
             addStationThroughTheDialog(scenario, STATION_NAME, url)
@@ -190,7 +195,7 @@ class LocalStationLifecycleJourneyTest {
                     it == listOf(BrowseRow(station.id, EDITED_NAME))
                 }
             } finally {
-                JourneyNavigation(scenario).returnToRoot()
+                PresenterNavigation(scenario).returnToRoot()
             }
 
             val edited = awaitStoredStation(EDITED_NAME)
@@ -222,7 +227,7 @@ class LocalStationLifecycleJourneyTest {
     @Test
     fun removingTheLastStationTakesTheLocalsNodeOffTheRootList() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario)
+            val dialogs = JourneyDialogs(scenario, mCompose)
             val list = BrowseListView(scenario)
             awaitCleanInstallRoot(list)
             addStationThroughTheDialog(scenario, STATION_NAME, serveStream(STATION_PATH))
@@ -244,7 +249,7 @@ class LocalStationLifecycleJourneyTest {
                 dialogs.click(remove, DialogR.id.remove_station_dialog_add_btn_view)
                 list.awaitEmptied("the locals list without the removed station")
             } finally {
-                JourneyNavigation(scenario).returnToRoot()
+                PresenterNavigation(scenario).returnToRoot()
             }
 
             assertEquals(
@@ -284,7 +289,7 @@ class LocalStationLifecycleJourneyTest {
         mProfile.refreshTree()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val list = BrowseListView(scenario)
-            val navigation = JourneyNavigation(scenario)
+            val navigation = PresenterNavigation(scenario)
             val root = mProfile.cleanInstallRoot() + mProfile.localsRow()
             list.awaitRows("the root with the locals node") { it == root }
 
@@ -379,7 +384,7 @@ class LocalStationLifecycleJourneyTest {
 
             // The failure this case exists to catch is the node opening, which leaves the stack
             // inside it.
-            val navigation = JourneyNavigation(scenario)
+            val navigation = PresenterNavigation(scenario)
             try {
                 list.tapRow(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
 
@@ -432,7 +437,7 @@ class LocalStationLifecycleJourneyTest {
         name: String,
         url: String
     ) {
-        val dialogs = JourneyDialogs(scenario)
+        val dialogs = JourneyDialogs(scenario, mCompose)
         scenario.withActivity { activity ->
             activity.findViewById<View>(R.id.add_station_btn).performClick()
         }
@@ -459,7 +464,7 @@ class LocalStationLifecycleJourneyTest {
         list: BrowseListView,
         station: RadioStation
     ): DialogFragment {
-        JourneyNavigation(scenario).open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        PresenterNavigation(scenario).open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
         assertEquals(
             "The locals list does not show the station that was added",
             listOf(BrowseRow(station.id, station.name)),
@@ -472,7 +477,7 @@ class LocalStationLifecycleJourneyTest {
         )
 
         list.tapRowSettings(station.id)
-        val dialogs = JourneyDialogs(scenario)
+        val dialogs = JourneyDialogs(scenario, mCompose)
         val settings = dialogs.awaitDialog(RSSettingsDialog.DIALOG_TAG)
         assertEquals(
             "The settings dialog for a station of the user's own does not offer edit and remove",
@@ -497,7 +502,7 @@ class LocalStationLifecycleJourneyTest {
         buttonId: Int,
         opened: String
     ): DialogFragment {
-        val dialogs = JourneyDialogs(scenario)
+        val dialogs = JourneyDialogs(scenario, mCompose)
         dialogs.click(settings, buttonId)
         return dialogs.awaitDialog(opened)
     }

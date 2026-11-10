@@ -19,8 +19,11 @@ package com.yuriy.openradio.mobile.journey
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import com.yuriy.openradio.shared.model.media.MediaId
+import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.isInvalid
+import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.storage.makeStation
+import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.shared.service.AppDataReset
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.ServiceBrowser
@@ -129,9 +132,30 @@ internal class JourneyProfile(private val mContext: Context) {
     }
 
     /**
+     * The tabs a cleared device shows. A cleared profile binds Radio Browser, which fills all six,
+     * and [start] has already failed the case when the run bound another provider (see AGENTS.md
+     * on `pm clear`).
+     */
+    fun cleanInstallTabs(): List<Tab> = Tab.visibleFor(Source.RADIO_BROWSER)
+
+    /**
+     * Selects MINE and waits for it to list [station], the one station of the user's own a seeded
+     * journey starts from.
+     *
+     * @return the rendered rows, for a case that has something else to say about them.
+     */
+    fun awaitSeededMine(view: MainScreenView, station: RadioStation): List<BrowseRow> {
+        view.selectTab(Tab.MINE)
+        return view.awaitRows("the seeded station on MINE") { rows -> rows.map { it.mediaId } == listOf(station.id) }
+    }
+
+    /**
      * What the root offers with both user stores empty. Favorites and locals are absent because
      * nothing is stored, and the country entry is the default one, since a cleared profile has no
      * chosen country and the location lookup stays shut for anything but "use location".
+     *
+     * This and the root helpers below serve the journeys still written against the presenter's
+     * root list; they go with the last of those journeys.
      */
     fun cleanInstallRoot(): List<BrowseRow> {
         return listOf(

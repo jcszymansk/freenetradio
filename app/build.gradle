@@ -107,4 +107,7 @@ dependencies {
     // publishes. :common keeps both artifacts off the app classpath.
     androidTestImplementation "androidx.media3:media3-session:$media3Version"
     androidTestImplementation "androidx.media:media:$androidxMediaVersion"
+    // The journeys read the Compose main screen through its test tags.
+    androidTestImplementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    androidTestImplementation "androidx.compose.ui:ui-test-junit4"
 }

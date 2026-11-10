@@ -296,7 +296,7 @@ class OfflinePlaybackJourneyTest {
             val list = BrowseListView(scenario)
             val nowPlaying = NowPlayingView(scenario)
             mProfile.awaitSeededRoot(list)
-            val navigation = JourneyNavigation(scenario)
+            val navigation = PresenterNavigation(scenario)
             try {
                 navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
                 awaitTheStationsRow(list)
@@ -325,7 +325,7 @@ class OfflinePlaybackJourneyTest {
         scenario: ActivityScenario<MainActivity>,
         list: BrowseListView
     ) {
-        val navigation = JourneyNavigation(scenario)
+        val navigation = PresenterNavigation(scenario)
         try {
             navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
             awaitTheStationsRow(list)

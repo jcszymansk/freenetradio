@@ -422,12 +422,6 @@ internal class BrowseListView(private val mScenario: ActivityScenario<MainActivi
 }
 
 /**
- * One row of the browse list: the item the adapter holds at a position, and the text the view at
- * that position puts on screen.
- */
-internal data class BrowseRow(val mediaId: String, val title: String)
-
-/**
  * What one look at a row found: every adapter position holding the media id asked for, and what
  * the reader made of the row when exactly one of them was laid out.
  */

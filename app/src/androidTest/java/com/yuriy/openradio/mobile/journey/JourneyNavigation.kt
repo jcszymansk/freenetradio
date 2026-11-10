@@ -20,108 +20,86 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
-import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
-import com.yuriy.openradio.shared.model.media.MediaId
-import com.yuriy.openradio.shared.presenter.MediaPresenter
-import com.yuriy.openradio.shared.presenter.MediaPresenterImpl
+import com.yuriy.openradio.shared.dependencies.MainScreenModelDependency
+import com.yuriy.openradio.shared.presenter.main.BrowseSnapshot
+import com.yuriy.openradio.shared.presenter.main.MainScreenModel
+import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.testing.withActivity
 
 /**
- * Moving between browse nodes from a journey, and getting back out afterwards.
+ * Moving between the main screen's tabs from a journey, and getting back out afterwards.
  *
- * Offline, no journey can open a node by tapping its row: `MediaPresenterImpl.handleItemSelected`
- * gates every browse tap on connectivity and is the only tap-driven way in, so the nodes that need
- * no connection at all are shut along with the ones that do. TASK-049 lifts that, and each journey
- * pins the refusal down where it meets it. Until then [open] calls the one step that tap performs
- * once past the gate, so everything after it - the children the service answers with, the rows the
- * adapter renders, the controls on them and the node the presenter reports standing in - is the
- * application's own.
+ * Tabs are switched by tapping them, as a user does. A search is the one way deeper into a tab
+ * that no connectivity gate stands in front of, so it is pushed through the screen's
+ * [MainScreenModel] directly, which is what the search field does once a query is entered.
  *
- * Getting back out is not optional. The presenter is one of the registry's singletons and its node
- * stack outlives the Activity, so a case that walks into a node and leaves it there sends the next
- * case's Activity straight back into it, in the same process.
+ * Getting back out is not optional. The model is one of the registry's singletons and its tab
+ * stacks and selected tab outlive the Activity, so a case that leaves a search on a tab, or
+ * another tab selected, sends the next case's Activity straight back there, in the same process.
  */
 @UnstableApi
-internal class JourneyNavigation(private val mScenario: ActivityScenario<MainActivity>) {
+internal class JourneyNavigation(
+    private val mScenario: ActivityScenario<MainActivity>,
+    private val mView: MainScreenView,
+) {
 
-    /**
-     * Opens the node [mediaId], the way a tap on its row would once there is a connection.
-     */
-    fun open(mediaId: String) {
-        val presenter = registryPresenter()
-        mScenario.withActivity { presenter.addMediaItemToStack(mediaId) }
+    /** Switches to [tab] by tapping it, as a user does; tabs are not gated on the network. */
+    fun selectTab(tab: Tab) {
+        mView.selectTab(tab)
+    }
+
+    /** Pushes a search for [query] onto the selected tab, the one drill-down that needs no network gate. */
+    fun search(query: String) {
+        val model = registryModel()
+        mScenario.withActivity { model.search(query) }
+    }
+
+    fun snapshot(): BrowseSnapshot {
+        val model = registryModel()
+        return mScenario.withActivity { model.snapshot() }
     }
 
     /**
-     * @return the node the presenter is standing in. A selection is answered against it, so a
-     *   journey that plays a station reads the parent from here rather than naming it itself.
-     */
-    fun currentCategory(): String {
-        return registryPresenter().getCurrentCategory()
-    }
-
-    /**
-     * @return the presenter's node stack, bottom first.
-     */
-    fun stack(): List<String> {
-        val presenter = registryPresenter()
-        return mScenario.withActivity { presenter.getMediaItemsStack() }
-    }
-
-    /**
-     * Walks the presenter back out of whatever node a case opened, and leaves the list showing
-     * the root.
-     *
-     * Back is pressed only while there is a node below the top. `handleBackPressed` on a stack of
-     * one treats that one as the root, whatever it is, and "leave the application" sends
-     * `CMD_STOP_SERVICE`, which ends in `Process.killProcess` and takes the whole run with it. A
-     * stack that is down to a single node other than the root, or to nothing, has the root shown
-     * on top of it instead and what was under it dropped, and so does a stack a press failed to
-     * shrink, so the walk ends whatever the presenter does. The stack is read again after every
-     * press, so nothing here reads the top of a stack that has emptied.
+     * Puts every tab back at its root and selects FAV. Reselecting a tab pops it to its root, so
+     * this needs nothing but the screen's own actions, and never presses back at a root, which
+     * would leave the screen.
      *
      * This asserts nothing, because it is meant to be called from a `finally` and an assertion
-     * there would replace whatever failure sent the case into it. A failure to get back out is
-     * caught by the case's own root-list assertion, and one that escaped the case entirely by
-     * [PresenterStackRule].
+     * there would replace whatever failure sent the case into it. A case that escaped without
+     * getting back out is caught by [BrowseStacksRule].
      */
-    fun returnToRoot() {
-        val presenter = registryPresenter()
-        mScenario.withActivity {
-            var stack = presenter.getMediaItemsStack()
-            while (stack.size > 1 && stack.last() != MediaId.MEDIA_ID_ROOT) {
-                presenter.handleBackPressed()
-                val popped = presenter.getMediaItemsStack()
-                val shrank = popped.size < stack.size
-                stack = popped
-                if (!shrank) {
-                    break
-                }
-            }
-            if (stack.lastOrNull() != MediaId.MEDIA_ID_ROOT) {
-                presenter.addMediaItemToStack(MediaId.MEDIA_ID_ROOT)
-                stack.filter { it != MediaId.MEDIA_ID_ROOT }.forEach(presenter::unsubscribeFromItem)
-            }
-        }
+    fun returnToRoots() {
+        val model = registryModel()
+        mScenario.withActivity { resetToRoots(model) }
     }
 }
 
 /**
- * @return the registry's own presenter, the one [MainActivity] is driving, reached through the
- *   single-method hook that is the supported way to it. It is handed out as the implementation
- *   because the node stack the journeys check and restore is read only there, not through
- *   [MediaPresenter].
+ * Pops every tab of [model] to its root and selects FAV. Main thread only.
  */
-internal fun registryPresenter(): MediaPresenterImpl {
-    lateinit var result: MediaPresenter
-    DependencyRegistryCommonUi.inject(
-        object : MediaPresenterDependency {
+internal fun resetToRoots(model: MainScreenModel) {
+    for ((tab, stack) in model.snapshot().stacks) {
+        if (stack.size > 1 && tab in model.state.value.tabs) {
+            model.selectTab(tab)
+            model.selectTab(tab)
+        }
+    }
+    model.selectTab(Tab.FAV)
+}
 
-            override fun configureWith(mediaPresenter: MediaPresenter) {
-                result = mediaPresenter
+/**
+ * @return the registry's own model, the one [MainActivity] renders, reached through the
+ *   single-method hook that is the supported way to it.
+ */
+internal fun registryModel(): MainScreenModel {
+    lateinit var result: MainScreenModel
+    DependencyRegistryCommonUi.injectMainScreenModel(
+        object : MainScreenModelDependency {
+
+            override fun configureWith(model: MainScreenModel) {
+                result = model
             }
         }
     )
-    return result as? MediaPresenterImpl
-        ?: throw AssertionError("The registry's presenter is a ${result.javaClass.name}, not a MediaPresenterImpl")
+    return result
 }

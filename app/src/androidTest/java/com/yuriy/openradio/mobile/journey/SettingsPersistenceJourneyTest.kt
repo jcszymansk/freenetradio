@@ -18,14 +18,15 @@ package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
 import android.widget.Spinner
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.mobile.view.main.OverflowItem
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
@@ -51,13 +52,13 @@ import com.yuriy.openradio.shared.R as DialogR
  * The fifth phone journey: what the user changed in the settings is still what the application
  * offers after Android has torn the Activity down and built it again.
  *
- * The three dialogs the navigation drawer opens for settings are driven the way a user drives
+ * The three dialogs the overflow menu opens for settings are driven the way a user drives
  * them, through the widgets themselves, and they write to three different stores: the network
  * dialog to `NetworkSettingsStorage`, the buffering dialog and two thirds of the general dialog to
  * `AppPreferencesManager`, and the general dialog's country spinner to `LocationStorage` by way of
- * the presenter. None of them needs a connection, which is why this journey can run beside the
+ * the main screen's `CountrySetting`. None of them needs a connection, which is why this journey can run beside the
  * others with networking disabled: the connectivity gate of TASK-049 sits on the browse list, not
- * on the drawer.
+ * on the overflow menu.
  *
  * Two of the writes only happen when the dialog is left, so leaving it is part of the journey
  * rather than cleanup. The buffering dialog writes all four values in `onPause` after validating
@@ -74,7 +75,10 @@ import com.yuriy.openradio.shared.R as DialogR
 class SettingsPersistenceJourneyTest {
 
     @get:Rule
-    val mStack = PresenterStackRule()
+    val mStack = BrowseStacksRule()
+
+    @get:Rule
+    val mCompose = createEmptyComposeRule()
 
     private lateinit var mContext: Context
 
@@ -111,8 +115,8 @@ class SettingsPersistenceJourneyTest {
         assertTheDefaultsAreInPlace()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario)
-            BrowseListView(scenario).awaitRows()
+            val dialogs = JourneyDialogs(scenario, mCompose)
+            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
 
             changeEverySetting(dialogs)
         }
@@ -133,8 +137,8 @@ class SettingsPersistenceJourneyTest {
     @Test
     fun theChangedSettingsComeBackUpInTheDialogsAfterTheActivityIsRecreated() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario)
-            BrowseListView(scenario).awaitRows()
+            val dialogs = JourneyDialogs(scenario, mCompose)
+            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
             changeEverySetting(dialogs)
             assertTrue(
                 "A dialog was still up, so the recreate would restore its views instead of " +
@@ -146,7 +150,7 @@ class SettingsPersistenceJourneyTest {
             scenario.recreate()
             assertActivityWasRebuilt(scenario, before)
 
-            BrowseListView(scenario).awaitRows()
+            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
             readEverySettingBackFromTheDialogs(dialogs)
         }
 
@@ -165,8 +169,8 @@ class SettingsPersistenceJourneyTest {
     @Test
     fun theChangedSettingsReachDiskRatherThanOnlyTheRunningProcess() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario)
-            BrowseListView(scenario).awaitRows()
+            val dialogs = JourneyDialogs(scenario, mCompose)
+            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
             changeEverySetting(dialogs)
         }
 
@@ -201,16 +205,16 @@ class SettingsPersistenceJourneyTest {
         assertTheDefaultsAreInPlace()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario)
-            BrowseListView(scenario).awaitRows()
-            typeTheBufferValues(dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG))
+            val dialogs = JourneyDialogs(scenario, mCompose)
+            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
+            typeTheBufferValues(dialogs, dialogs.openFromOverflow(OverflowItem.BUFFERING, BUFFERING_TAG))
 
             val before = activityIdentity(scenario)
             scenario.recreate()
             assertActivityWasRebuilt(scenario, before)
 
             awaitStoredBuffers()
-            BrowseListView(scenario).awaitRows()
+            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
             assertTheBufferFieldsRead(
                 dialogs, dialogs.awaitDialog(BUFFERING_TAG), "after the recreate"
             )
@@ -221,7 +225,7 @@ class SettingsPersistenceJourneyTest {
      * Opens each of the three dialogs in turn, changes what it offers and leaves it again.
      */
     private fun changeEverySetting(dialogs: JourneyDialogs) {
-        val network = dialogs.openFromDrawer(R.id.nav_network, NETWORK_TAG)
+        val network = dialogs.openFromOverflow(OverflowItem.NETWORK, NETWORK_TAG)
         assertTrue(
             "The network dialog did not open on the stored value",
             dialogs.isChecked(network, DialogR.id.use_mobile_network_check_box)
@@ -229,11 +233,11 @@ class SettingsPersistenceJourneyTest {
         dialogs.click(network, DialogR.id.use_mobile_network_check_box)
         dialogs.dismiss(NETWORK_TAG)
 
-        typeTheBufferValues(dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG))
+        typeTheBufferValues(dialogs, dialogs.openFromOverflow(OverflowItem.BUFFERING, BUFFERING_TAG))
         dialogs.dismiss(BUFFERING_TAG)
         awaitStoredBuffers()
 
-        val general = dialogs.openFromDrawer(R.id.nav_general, GENERAL_TAG)
+        val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GENERAL_TAG)
         assertTrue(
             "The general dialog did not open on the stored value",
             dialogs.isChecked(
@@ -261,7 +265,7 @@ class SettingsPersistenceJourneyTest {
      * user looking at the settings after the recreate would see.
      */
     private fun readEverySettingBackFromTheDialogs(dialogs: JourneyDialogs) {
-        val network = dialogs.openFromDrawer(R.id.nav_network, NETWORK_TAG)
+        val network = dialogs.openFromOverflow(OverflowItem.NETWORK, NETWORK_TAG)
         assertFalse(
             "The network dialog offers mobile data again after the recreate",
             dialogs.isChecked(network, DialogR.id.use_mobile_network_check_box)
@@ -269,11 +273,11 @@ class SettingsPersistenceJourneyTest {
         dialogs.dismiss(NETWORK_TAG)
 
         assertTheBufferFieldsRead(
-            dialogs, dialogs.openFromDrawer(R.id.nav_buffering, BUFFERING_TAG), "after the recreate"
+            dialogs, dialogs.openFromOverflow(OverflowItem.BUFFERING, BUFFERING_TAG), "after the recreate"
         )
         dialogs.dismiss(BUFFERING_TAG)
 
-        val general = dialogs.openFromDrawer(R.id.nav_general, GENERAL_TAG)
+        val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GENERAL_TAG)
         assertFalse(
             "The general dialog offers the last known station again after the recreate",
             dialogs.isChecked(
@@ -455,7 +459,7 @@ class SettingsPersistenceJourneyTest {
      * Waits for the chosen country to reach the store.
      *
      * A spinner reports a selection from its next layout pass rather than from the call that set
-     * it, and the write then goes through the presenter, so there is nothing synchronous to read.
+     * it, and the write then goes through `CountrySetting`, so there is nothing synchronous to read.
      */
     private fun awaitChosenCountry() {
         awaitStored("the chosen country") {

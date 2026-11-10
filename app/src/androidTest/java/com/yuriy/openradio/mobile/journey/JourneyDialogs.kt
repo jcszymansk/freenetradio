@@ -21,12 +21,15 @@ import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.compose.ui.test.junit4.ComposeTestRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
-import com.google.android.material.navigation.NavigationView
-import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.mobile.view.main.MainScreenTags
+import com.yuriy.openradio.mobile.view.main.OverflowItem
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
@@ -42,24 +45,18 @@ import com.yuriy.openradio.shared.R as DialogR
  * [android.app.AlertDialog] and have no fragment view at all.
  */
 @UnstableApi
-internal class JourneyDialogs(private val mScenario: ActivityScenario<MainActivity>) {
+internal class JourneyDialogs(
+    private val mScenario: ActivityScenario<MainActivity>,
+    private val mCompose: ComposeTestRule,
+) {
 
     /**
-     * Asks for the dialog behind the navigation drawer entry [menuItemId] and waits for it.
-     *
-     * The entry is chosen through the drawer's own menu, so `MainActivity`'s
-     * [NavigationView.OnNavigationItemSelectedListener] decides which dialog appears, exactly as
-     * it does for a tap. The drawer's slide is not part of it: it is an animation over the same
-     * menu, and opening it first would only add a wait.
+     * Opens the dialog behind [item] in the top bar's overflow menu, the way a user does, and
+     * waits for it.
      */
-    fun openFromDrawer(menuItemId: Int, tag: String): DialogFragment {
-        val performed = mScenario.withActivity { activity ->
-            activity.findViewById<NavigationView>(R.id.nav_view)
-                .menu.performIdentifierAction(menuItemId, 0)
-        }
-        if (!performed) {
-            throw AssertionError("The navigation drawer holds no entry to open the $tag dialog")
-        }
+    fun openFromOverflow(item: OverflowItem, tag: String): DialogFragment {
+        mCompose.onNodeWithTag(MainScreenTags.OVERFLOW).performClick()
+        mCompose.onNodeWithTag(MainScreenTags.overflow(item)).performClick()
         return awaitDialog(tag)
     }
 

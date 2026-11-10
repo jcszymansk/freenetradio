@@ -52,7 +52,7 @@ import org.junit.runner.RunWith
  * [com.xenione.libs.swipemaker.SwipeLayout]; the drag is enabled in exactly the two nodes this
  * journey visits, and the box is a child of the row either way, so clicking it skips the drag and
  * nothing else. Opening a node by tapping its row is refused while the device is offline, which
- * [theFavoritesRowDoesNotOpenWithoutANetwork] pins down and TASK-049 lifts; [JourneyNavigation]
+ * [theFavoritesRowDoesNotOpenWithoutANetwork] pins down and TASK-049 lifts; [PresenterNavigation]
  * calls the step that tap performs once past the gate.
  *
  * What the service does with `CMD_MARK_FAVORITE` and `CMD_UNMARK_FAVORITE` is
@@ -139,7 +139,7 @@ class FavoriteLifecycleJourneyTest {
             markTheStationFromTheLocalsList(scenario, list)
             list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
 
-            val navigation = JourneyNavigation(scenario)
+            val navigation = PresenterNavigation(scenario)
             try {
                 navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
 
@@ -173,7 +173,7 @@ class FavoriteLifecycleJourneyTest {
             markTheStationFromTheLocalsList(scenario, list)
             list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
 
-            val navigation = JourneyNavigation(scenario)
+            val navigation = PresenterNavigation(scenario)
             try {
                 navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
                 list.awaitRowFavorite(mStation.id, true)
@@ -247,7 +247,7 @@ class FavoriteLifecycleJourneyTest {
                 list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
             )
 
-            val navigation = JourneyNavigation(scenario)
+            val navigation = PresenterNavigation(scenario)
             try {
                 navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
                 assertEquals(
@@ -291,7 +291,7 @@ class FavoriteLifecycleJourneyTest {
 
             // The failure this case exists to catch is the node opening, which leaves the stack
             // inside it.
-            val navigation = JourneyNavigation(scenario)
+            val navigation = PresenterNavigation(scenario)
             try {
                 list.tapRow(MediaId.MEDIA_ID_FAVORITES_LIST)
 
@@ -318,7 +318,7 @@ class FavoriteLifecycleJourneyTest {
         scenario: ActivityScenario<MainActivity>,
         list: BrowseListView
     ) {
-        val navigation = JourneyNavigation(scenario)
+        val navigation = PresenterNavigation(scenario)
         try {
             navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
             assertEquals(

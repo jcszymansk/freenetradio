@@ -25,13 +25,14 @@ import android.net.Uri
 import android.os.Build
 import android.view.inspector.WindowInspector
 import android.widget.Button
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
-import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.mobile.view.main.OverflowItem
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import com.yuriy.openradio.testing.withActivity
 import java.io.File
@@ -70,7 +71,10 @@ import com.yuriy.openradio.shared.R as DialogR
 class DiagnosticReportJourneyTest {
 
     @get:Rule
-    val mStack = PresenterStackRule()
+    val mStack = BrowseStacksRule()
+
+    @get:Rule
+    val mCompose = createEmptyComposeRule()
 
     private lateinit var mContext: Context
 
@@ -177,9 +181,9 @@ class DiagnosticReportJourneyTest {
      */
     private fun prepareReport(): Intent {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario)
-            BrowseListView(scenario).awaitRows()
-            val general = dialogs.openFromDrawer(R.id.nav_general, GeneralSettingsDialog.DIALOG_TAG)
+            val dialogs = JourneyDialogs(scenario, mCompose)
+            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
+            val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GeneralSettingsDialog.DIALOG_TAG)
             dialogs.click(general, DialogR.id.send_logs_btn)
             confirmTheWarning(scenario)
             val chooser = mChooser.awaitChooser()

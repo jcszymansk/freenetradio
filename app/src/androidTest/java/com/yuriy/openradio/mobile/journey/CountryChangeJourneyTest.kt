@@ -17,41 +17,51 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.mobile.view.main.MainScreenTags
+import com.yuriy.openradio.mobile.view.main.OverflowItem
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.storage.LocationStorage
-import com.yuriy.openradio.shared.model.storage.makeStation
+import com.yuriy.openradio.shared.presenter.main.SectionKind
+import com.yuriy.openradio.shared.presenter.main.Tab
+import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import java.lang.ref.WeakReference
 import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The country the user picks in the general dialog reaches the root menu, whichever node the user
- * is standing in when picking it.
+ * The country the user picks in the general dialog reaches the COUNTRY tab's "Your country"
+ * section, whichever tab the user is on when picking it.
  *
- * The root is the one node whose rows depend on the stored country: `MediaItemRoot` titles its
- * country stations row after it. The service caches the root it built, so a country change has to
- * drop that copy, or the root keeps the old country's row for as long as the service lives. Both
- * cases assert the row the user sees on the root, which is what the cache would get wrong.
+ * The section's row is the service root's country stations row, which `MediaItemRoot` titles
+ * after the stored country. The service caches the root it built, so a country change has to drop
+ * that copy and the screen has to read the root again, or the section keeps the old country for
+ * as long as the service lives. Both cases assert the row the user sees under "Your country",
+ * which is what the cache would get wrong.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class CountryChangeJourneyTest {
 
     @get:Rule
-    val mStack = PresenterStackRule()
+    val mStack = BrowseStacksRule()
+
+    @get:Rule
+    val mCompose = createEmptyComposeRule()
 
     private lateinit var mContext: Context
 
@@ -75,77 +85,87 @@ class CountryChangeJourneyTest {
     }
 
     /**
-     * Picking a country while the root is on screen rewrites the root's country row in place.
+     * Picking a country while COUNTRY is on screen rewrites its "Your country" row in place.
      */
     @Test
-    fun choosingACountryAtTheRootRetitlesItsCountryRow() {
+    fun choosingACountryShowsItUnderYourCountry() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            val dialogs = JourneyDialogs(scenario)
-            list.awaitRows("the root of a cleared profile") { it == mProfile.cleanInstallRoot() }
-
-            val general = dialogs.openFromDrawer(R.id.nav_general, GENERAL_TAG)
-            dialogs.chooseCountry(general, CHOSEN_COUNTRY_CODE)
-            awaitChosenCountry()
-            dialogs.dismiss(GENERAL_TAG)
-
-            val expected = rootFor(CHOSEN_COUNTRY_CODE)
-            assertEquals(
-                "The root still offers the country it had before the change",
-                expected,
-                list.awaitRows("the root with the chosen country") { it == expected }
-            )
-        }
-    }
-
-    /**
-     * Picking a country while another node is on screen leaves that node alone, and the root the
-     * user walks back to carries the new country.
-     *
-     * The locals list is the node walked into because it is the one a device with networking
-     * disabled can render.
-     */
-    @Test
-    fun choosingACountryInsideAnotherNodeRetitlesTheRootOnTheWayBack() {
-        val locals = mProfile.storages.locals
-        locals.add(makeStation(locals.getId(), name = STATION_NAME, isLocal = true))
-        mProfile.refreshTree()
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            val dialogs = JourneyDialogs(scenario)
-            val navigation = JourneyNavigation(scenario)
-            list.awaitRows("the root with the locals node") {
-                it == mProfile.cleanInstallRoot() + mProfile.localsRow()
-            }
+            val view = MainScreenView(mCompose)
+            val dialogs = JourneyDialogs(scenario, mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
 
             try {
-                navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-                list.awaitRendered(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST, 1)
+                navigation.selectTab(Tab.COUNTRY)
+                awaitYourCountry(view, Country.COUNTRY_CODE_DEFAULT)
 
-                val general = dialogs.openFromDrawer(R.id.nav_general, GENERAL_TAG)
-                dialogs.chooseCountry(general, CHOSEN_COUNTRY_CODE)
-                awaitChosenCountry()
-                dialogs.dismiss(GENERAL_TAG)
-                assertEquals(
-                    "Choosing a country moved the user out of the node they were standing in",
-                    MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
-                    navigation.currentCategory()
-                )
+                chooseTheCountry(dialogs)
+
+                awaitYourCountry(view, CHOSEN_COUNTRY_CODE)
             } finally {
-                navigation.returnToRoot()
+                navigation.returnToRoots()
             }
-
-            val expected = rootFor(CHOSEN_COUNTRY_CODE) + mProfile.localsRow()
-            assertEquals(
-                "The root walked back to still offers the country it had before the change",
-                expected,
-                list.awaitRows("the root with the chosen country") { it == expected }
-            )
         }
     }
 
     /**
-     * Waits for the chosen country to reach the store, so that a root still showing the old
+     * Picking a country while another tab is on screen leaves the user on that tab, and COUNTRY
+     * carries the new country once the user switches to it.
+     *
+     * MINE is the tab chosen from because a device with networking disabled can render it.
+     */
+    @Test
+    fun choosingACountryOnAnotherTabShowsItOnCountry() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val view = MainScreenView(mCompose)
+            val dialogs = JourneyDialogs(scenario, mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
+
+            try {
+                navigation.selectTab(Tab.MINE)
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_stations))
+
+                chooseTheCountry(dialogs)
+                assertEquals(
+                    "Choosing a country moved the user off the tab they were on",
+                    Tab.MINE,
+                    navigation.snapshot().selectedTab
+                )
+
+                navigation.selectTab(Tab.COUNTRY)
+                awaitYourCountry(view, CHOSEN_COUNTRY_CODE)
+            } finally {
+                navigation.returnToRoots()
+            }
+        }
+    }
+
+    private fun chooseTheCountry(dialogs: JourneyDialogs) {
+        val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GENERAL_TAG)
+        dialogs.chooseCountry(general, CHOSEN_COUNTRY_CODE)
+        awaitChosenCountry()
+        dialogs.dismiss(GENERAL_TAG)
+    }
+
+    /**
+     * Waits for COUNTRY's first row, the one under "Your country", to be titled after
+     * [countryCode], and checks that the section heading it is shown.
+     */
+    private fun awaitYourCountry(view: MainScreenView, countryCode: String) {
+        val expected = BrowseRow(
+            MediaId.MEDIA_ID_COUNTRY_STATIONS,
+            LocationService.COUNTRY_CODE_TO_NAME.getValue(countryCode)
+        )
+        view.awaitRows("$expected under Your country") { rows -> rows.first() == expected }
+        assertTrue(
+            "COUNTRY lists the user's country without the Your country heading. " + view.describe(),
+            view.isShown(MainScreenTags.section(SectionKind.YOUR_COUNTRY))
+        )
+    }
+
+    /**
+     * Waits for the chosen country to reach the store, so that a section still showing the old
      * country means the root was not rebuilt rather than that the spinner never reported the
      * selection. A spinner reports it from its next layout pass, not from the call that set it.
      */
@@ -161,20 +181,6 @@ class CountryChangeJourneyTest {
         throw AssertionError("The chosen country did not reach the store within $STORE_TIMEOUT_SECONDS seconds")
     }
 
-    /**
-     * @return the root of a cleared profile once [countryCode] has been chosen: the same rows,
-     *   with the country stations row titled after that country.
-     */
-    private fun rootFor(countryCode: String): List<BrowseRow> {
-        return mProfile.cleanInstallRoot().map { row ->
-            if (row.mediaId == MediaId.MEDIA_ID_COUNTRY_STATIONS) {
-                BrowseRow(row.mediaId, LocationService.COUNTRY_CODE_TO_NAME.getValue(countryCode))
-            } else {
-                row
-            }
-        }
-    }
-
     private companion object {
 
         val GENERAL_TAG = GeneralSettingsDialog.DIALOG_TAG
@@ -185,8 +191,6 @@ class CountryChangeJourneyTest {
          * resumes.
          */
         const val CHOSEN_COUNTRY_CODE = "PL"
-
-        const val STATION_NAME = "Country change local"
 
         const val STORE_TIMEOUT_SECONDS = 20L
 
