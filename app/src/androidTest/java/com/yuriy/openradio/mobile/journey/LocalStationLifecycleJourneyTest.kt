@@ -26,18 +26,19 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.mobile.view.main.MainScreenTags
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.storage.makeStation
 import com.yuriy.openradio.shared.permission.grantImageReadPermission
+import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
 import com.yuriy.openradio.shared.view.dialog.EditStationDialog
 import com.yuriy.openradio.shared.view.dialog.RSSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
-import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -59,21 +60,12 @@ import com.yuriy.openradio.shared.R as DialogR
  * probes it over HTTP before it will accept a station, and the loopback address is the one address
  * that answers with the device's networking disabled.
  *
- * Two gestures are not performed, and neither can be. Everything they lead to is.
- *
- * The swipe that reveals a row's settings button is a drag on a
- * [com.xenione.libs.swipemaker.SwipeLayout]. The button is a child of the row either way, so
- * clicking it directly skips the drag and nothing else.
- *
- * The tap that opens the locals list is refused while the device is offline:
- * `MediaPresenterImpl.handleItemSelected` gates every browse tap on connectivity and is the only
- * tap-driven way into a node. `theLocalsRowDoesNotOpenWithoutANetwork` pins that refusal down and
- * TASK-049 lifts it. What this journey calls instead is the one step that tap performs once past
- * the gate, so the locals list is rendered by the application, the station's row is a real row,
- * its settings button is the real control, and `handleItemSettings` builds the settings dialog's
- * arguments from the node the presenter is standing in. From there the path is untouched: the
- * locals-only edit and remove buttons, the media item they carry as a tag, the click listeners
- * the settings dialog puts on them, and the real edit and remove dialogs they open.
+ * Every gesture is the user's own. MINE is a tab, which opens without a network; the add dialog
+ * is behind MINE's FAB; and a long-press on a station's row on MINE opens the settings dialog,
+ * whose locals-only edit and remove buttons open the real edit and remove dialogs. The long-press
+ * hands the dialog the item and the node from `MainScreenModel.longPressTarget`, which answers
+ * only on FAV and MINE; that it answers nothing elsewhere is `MainScreenModelTest`'s
+ * `longPressActsOnlyOnFavAndMine`, because no other tab has rows offline.
  *
  * What the service answers for the locals node is `OpenRadioServiceBrowseTest`'s subject. What is
  * asserted here is what the Activity renders, and the store as a reader that has cached nothing
@@ -84,9 +76,8 @@ import com.yuriy.openradio.shared.R as DialogR
 class LocalStationLifecycleJourneyTest {
 
     @get:Rule
-    val mStack = PresenterStackRule()
+    val mStack = BrowseStacksRule()
 
-    /** The dialogs are reached through the Compose screen, which [JourneyDialogs] reads through this. */
     @get:Rule
     val mCompose = createEmptyComposeRule()
 
@@ -113,28 +104,29 @@ class LocalStationLifecycleJourneyTest {
     }
 
     /**
-     * The first half of the lifecycle, and the only half a user can drive offline: the add button
-     * the cold launch leaves on screen, the dialog behind it, and the row the root grows.
+     * The first half of the lifecycle: the FAB on an empty MINE, the dialog behind it, and the row
+     * MINE grows.
      *
      * Nothing between the dialog closing and the row appearing is done by the test. The dialog
-     * sends `CMD_UPDATE_TREE`, the service drops its cached root and notifies, and the Activity's
-     * subscription rewrites the list. Asserting the row is absent first is what makes the wait for
-     * it mean something.
+     * sends `CMD_UPDATE_TREE`, the service drops its cached locals list and notifies, and the
+     * screen's subscription reads MINE again. Asserting MINE empty first is what makes the wait
+     * for the row mean something.
      */
     @Test
-    fun addingAStationThroughTheDialogPutsItOnTheRootList() {
+    fun addingAStationThroughTheDialogPutsItOnMine() {
         val url = serveStream(STATION_PATH)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            awaitCleanInstallRoot(list)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            try {
+                awaitEmptyMine(view, navigation)
 
-            addStationThroughTheDialog(scenario, STATION_NAME, url)
+                addStationThroughTheDialog(scenario, view, STATION_NAME, url)
 
-            assertEquals(
-                "Adding a station did not put the locals node on the root list",
-                mProfile.cleanInstallRoot() + mProfile.localsRow(),
-                list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
-            )
+                awaitTheStationOnMine(view, STATION_NAME, "Adding a station did not put it on MINE")
+            } finally {
+                navigation.returnToRoots()
+            }
         }
 
         val station = storedStation()
@@ -157,23 +149,22 @@ class LocalStationLifecycleJourneyTest {
      * blind overwrite: a dialog that showed the user empty fields would pass the rest of this test
      * while silently discarding everything the user did not retype.
      *
-     * The locals list the edit was made from has to show the new name before the case walks back
-     * to the root, which is the refresh the dialog asked for arriving.
+     * MINE has to show the new name, which is the refresh the dialog asked for arriving.
      */
     @Test
     fun editingAStationThroughTheDialogRewritesWhatIsStored() {
         val url = serveStream(STATION_PATH)
         val editedUrl = serveStream(EDITED_PATH)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val view = MainScreenView(mCompose)
             val dialogs = JourneyDialogs(scenario, mCompose)
-            val list = BrowseListView(scenario)
-            awaitCleanInstallRoot(list)
-            addStationThroughTheDialog(scenario, STATION_NAME, url)
-            list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
-
+            val navigation = JourneyNavigation(scenario, view)
             try {
-                val station = storedStation()
-                val settings = openStationSettings(scenario, list, station)
+                awaitEmptyMine(view, navigation)
+                addStationThroughTheDialog(scenario, view, STATION_NAME, url)
+                val station = awaitTheStationOnMine(view, STATION_NAME, "Adding a station did not put it on MINE")
+
+                val settings = openStationSettings(scenario, view, station)
                 val edit = openFromSettings(
                     scenario, settings, DialogR.id.dialog_rs_settings_edit_btn, EditStationDialog.DIALOG_TAG
                 )
@@ -191,50 +182,44 @@ class LocalStationLifecycleJourneyTest {
                 dialogs.type(edit, DialogR.id.add_edit_station_name_edit, EDITED_NAME)
                 dialogs.type(edit, DialogR.id.add_edit_station_stream_url_edit, editedUrl)
                 dialogs.click(edit, DialogR.id.add_edit_station_dialog_add_btn_view)
-                list.awaitRows("the station's row under its new name") {
+                view.awaitRows("the station's row under its new name") {
                     it == listOf(BrowseRow(station.id, EDITED_NAME))
                 }
             } finally {
-                PresenterNavigation(scenario).returnToRoot()
+                navigation.returnToRoots()
             }
-
-            val edited = awaitStoredStation(EDITED_NAME)
-            assertEquals("The edit did not rewrite the stream url", editedUrl, edited.getStreamUrlFixed())
-            assertEquals(
-                "The edit added a second station instead of changing the one it was given",
-                1,
-                mProfile.storages.freshLocals().getAll().size
-            )
-            assertEquals(
-                "The service still serves the station under its old name",
-                listOf(EDITED_NAME),
-                servedLocalTitles()
-            )
-            assertEquals(
-                "Editing a station changed the root list, which only gains and loses the node",
-                mProfile.cleanInstallRoot() + mProfile.localsRow(),
-                list.awaitRows("the root list") { it.contains(mProfile.localsRow()) }
-            )
         }
+
+        val edited = awaitStoredStation(EDITED_NAME)
+        assertEquals("The edit did not rewrite the stream url", editedUrl, edited.getStreamUrlFixed())
+        assertEquals(
+            "The edit added a second station instead of changing the one it was given",
+            1,
+            mProfile.storages.freshLocals().getAll().size
+        )
+        assertEquals(
+            "The service still serves the station under its old name",
+            listOf(EDITED_NAME),
+            servedLocalTitles()
+        )
     }
 
     /**
-     * Removing the only station the user has takes the whole node away, which is the one part of
-     * the edit and remove path that is visible from where an offline user is standing.
-     *
-     * The locals list empties first, which is the refresh the dialog asked for arriving.
+     * Removing the only station the user has empties MINE, and the empty MINE offers the FAB
+     * again, which is the way back to adding one.
      */
     @Test
-    fun removingTheLastStationTakesTheLocalsNodeOffTheRootList() {
+    fun removingTheLastStationEmptiesMine() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val view = MainScreenView(mCompose)
             val dialogs = JourneyDialogs(scenario, mCompose)
-            val list = BrowseListView(scenario)
-            awaitCleanInstallRoot(list)
-            addStationThroughTheDialog(scenario, STATION_NAME, serveStream(STATION_PATH))
-            list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
-
+            val navigation = JourneyNavigation(scenario, view)
             try {
-                val settings = openStationSettings(scenario, list, storedStation())
+                awaitEmptyMine(view, navigation)
+                addStationThroughTheDialog(scenario, view, STATION_NAME, serveStream(STATION_PATH))
+                val station = awaitTheStationOnMine(view, STATION_NAME, "Adding a station did not put it on MINE")
+
+                val settings = openStationSettings(scenario, view, station)
                 val remove = openFromSettings(
                     scenario, settings, DialogR.id.dialog_rs_settings_remove_btn, RemoveStationDialog.DIALOG_TAG
                 )
@@ -247,68 +232,61 @@ class LocalStationLifecycleJourneyTest {
                     dialogs.text(remove, DialogR.id.remove_station_text_view)
                 )
                 dialogs.click(remove, DialogR.id.remove_station_dialog_add_btn_view)
-                list.awaitEmptied("the locals list without the removed station")
-            } finally {
-                PresenterNavigation(scenario).returnToRoot()
-            }
 
-            assertEquals(
-                "Removing the last station left the locals node on the root list",
-                mProfile.cleanInstallRoot(),
-                list.awaitRows("the locals node gone") { !it.contains(mProfile.localsRow()) }
-            )
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_stations))
+                assertTrue("The emptied MINE offers no FAB. " + view.describe(), view.isShown(MainScreenTags.FAB_ADD))
+            } finally {
+                navigation.returnToRoots()
+            }
         }
 
         assertTrue(
-            "The station is off the root list but still in the store",
+            "MINE is empty but the station is still in the store",
             mProfile.storages.freshLocals().getAll().isEmpty()
         )
     }
 
     /**
-     * Walking back while a refresh of the locals list is still in flight has to end on the root.
+     * Switching tabs while a refresh of MINE is still in flight has to leave the user on the tab
+     * they switched to, showing that tab's content.
      *
-     * Every refresh makes the service push a change for the root and for the locals node, and the
-     * Activity's media browser answers a push for the node it is subscribed to by fetching that
-     * node's children, without checking again when they come back. The case walks back as soon as
-     * the service has acknowledged a refresh, so the locals fetch the push started is still
-     * running when the root is asked for.
-     *
-     * Whether that fetch lands before or after the root depends on which answer the service sends
-     * back first. The store is filled with a page of stations so that the locals answer, which
-     * carries every one of them, takes longer than the root, which carries six rows. A locals
-     * answer rendered after the root would leave the list showing the locals rows under a
-     * presenter standing at the root, with the add button that follows the rendered node hidden.
+     * A refresh makes the service push a change for the locals node, and the screen answers it by
+     * fetching MINE's children again. The case switches to FAV as soon as the service has
+     * acknowledged the refresh, so that fetch is still running when FAV is shown. The store holds
+     * a page of stations so that the locals answer, which carries every one of them, is slow
+     * enough to arrive after the switch. An answer for MINE rendered on FAV would put the locals
+     * rows under the FAV tab; FAV holds no favorites, so any row on it is that answer.
      */
     @Test
-    fun walkingBackWhileTheLocalsListRefreshesEndsOnTheRootList() {
+    fun switchingTabsWhileMineRefreshesKeepsTheOtherTab() {
         val locals = mProfile.storages.locals
         repeat(LOCALS_PAGE) { index ->
-            locals.add(makeStation(locals.getId(), name = "Bulk local $index", isLocal = true))
+            locals.add(makeStation(locals.getId(), name = "$BULK_NAME $index", isLocal = true))
         }
         mProfile.refreshTree()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            val navigation = PresenterNavigation(scenario)
-            val root = mProfile.cleanInstallRoot() + mProfile.localsRow()
-            list.awaitRows("the root with the locals node") { it == root }
-
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
             try {
-                navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-                list.awaitRendered(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST, LOCALS_PAGE)
+                navigation.selectTab(Tab.MINE)
+                view.awaitRows("the bulk stations on MINE") { rows -> rows.all { it.title.startsWith(BULK_NAME) } }
+                locals.add(makeStation(locals.getId(), name = "$BULK_NAME extra", isLocal = true))
                 mProfile.refreshTree()
-            } finally {
-                navigation.returnToRoot()
-            }
 
-            list.awaitRows("the root list") { it == root }
-            list.assertRowsStay(root, "A locals refresh that was in flight during the walk back replaced the root")
-            assertEquals("The list renders a node other than the root", MediaId.MEDIA_ID_ROOT, list.renderedNode())
-            assertEquals(
-                "The add-station button follows the rendered node and is hidden at the root",
-                View.VISIBLE,
-                addStationButtonVisibility(scenario)
-            )
+                navigation.selectTab(Tab.FAV)
+
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
+                view.assertRowsStay(emptyList(), "A MINE refresh that was in flight during the switch filled FAV")
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
+                assertEquals(
+                    "A MINE refresh that was in flight during the switch moved the user off FAV",
+                    Tab.FAV,
+                    navigation.snapshot().selectedTab
+                )
+            } finally {
+                navigation.returnToRoots()
+            }
         }
     }
 
@@ -318,8 +296,8 @@ class LocalStationLifecycleJourneyTest {
      * Three things a restart depends on are asserted, each defeating a different way the station
      * could appear to survive without having been stored: it reached a preference file on disk
      * rather than only the copy Android keeps in memory for this process; a second Activity
-     * renders it after the service's cached root has been dropped, so the list it shows was built
-     * from the store rather than replayed; and a
+     * renders it on MINE after the service's cached locals list has been dropped, so the list it
+     * shows was built from the store rather than replayed; and a
      * [com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage] this test constructed reads
      * it back, so nothing the writer cached can answer for it.
      *
@@ -331,28 +309,36 @@ class LocalStationLifecycleJourneyTest {
     @Test
     fun theStationOutlivesTheActivityThatAddedIt() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            awaitCleanInstallRoot(list)
-            addStationThroughTheDialog(scenario, STATION_NAME, serveStream(STATION_PATH))
-            list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            try {
+                awaitEmptyMine(view, navigation)
+                addStationThroughTheDialog(scenario, view, STATION_NAME, serveStream(STATION_PATH))
+                awaitTheStationOnMine(view, STATION_NAME, "Adding a station did not put it on MINE")
+            } finally {
+                navigation.returnToRoots()
+            }
         }
 
         mProfile.awaitStoredOnDisk(LOCALS_PREFERENCE_FILE, STATION_NAME)
 
-        // The root is the one node the service does cache, so a second Activity would otherwise be
-        // handed the list the first one built and this would assert nothing about storage. Dropping
-        // it makes the relaunch rebuild the root through MediaItemRoot, which reads the locals
-        // store, so what the new Activity renders is what the store holds.
+        // The service caches the locals list, so a second Activity would otherwise be handed the
+        // list the first one built and this would assert nothing about storage. Dropping it makes
+        // the relaunch rebuild MINE through MediaItemLocalsList, which reads the locals store.
         mProfile.refreshTree()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            assertEquals(
-                "A relaunched Activity does not offer the station the previous one added",
-                mProfile.cleanInstallRoot() + mProfile.localsRow(),
-                BrowseListView(scenario).awaitRows("the locals node") {
-                    it.contains(mProfile.localsRow())
-                }
-            )
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
+            try {
+                navigation.selectTab(Tab.MINE)
+                awaitTheStationOnMine(
+                    view, STATION_NAME, "A relaunched Activity does not show the station the previous one added"
+                )
+            } finally {
+                navigation.returnToRoots()
+            }
         }
 
         val restored = mProfile.storages.freshLocals().getAll()
@@ -365,68 +351,90 @@ class LocalStationLifecycleJourneyTest {
     }
 
     /**
-     * The gate this journey ran into, asserted rather than described, so that TASK-049 lands with
-     * a test that changes answer when it is fixed.
+     * The user's own stations are within reach without a network.
      *
-     * `MediaPresenterImpl.handleItemSelected` returns before it does anything when
-     * `NetworkLayer.checkConnectivityAndNotify` says there is no connection. The locals node needs
-     * no connection: `MediaItemLocalsList` reads `DeviceLocalsStorage` and nothing else. So the
-     * row is offered, tapping it raises the no-connection toast, and the user's own station stays
-     * out of reach.
+     * `MediaItemLocalsList` reads `DeviceLocalsStorage` and nothing else, so MINE needs no
+     * connection, and it is a tab, which the connectivity gate does not stand in front of: only a
+     * row tap goes through `MainScreenModel.open`. The old screen offered the locals as a row on
+     * the root list and refused to open it offline, which is what TASK-049 was filed for. The tab
+     * is asserted to stand at its root, so MINE's own list is what answered.
      */
     @Test
-    fun theLocalsRowDoesNotOpenWithoutANetwork() {
+    fun mineOpensWithoutANetwork() {
+        val station = seedStation()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            awaitCleanInstallRoot(list)
-            addStationThroughTheDialog(scenario, STATION_NAME, serveStream(STATION_PATH))
-            val root = list.awaitRows("the locals node") { it.contains(mProfile.localsRow()) }
-
-            // The failure this case exists to catch is the node opening, which leaves the stack
-            // inside it.
-            val navigation = PresenterNavigation(scenario)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
             try {
-                list.tapRow(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-
-                list.assertRowsStay(
-                    root,
-                    "Tapping the locals row offline opened it. TASK-049 asks for exactly that, so " +
-                        "this test is what has to change, not the fix"
+                assertEquals(
+                    "MINE did not open without a network",
+                    listOf(BrowseRow(station.id, STATION_NAME)),
+                    mProfile.awaitSeededMine(view, station)
                 )
                 assertEquals(
-                    "The add-station button is hidden off the root, so the list did leave it",
-                    View.VISIBLE,
-                    addStationButtonVisibility(scenario)
+                    "Opening MINE pushed a node onto it",
+                    listOf(Tab.MINE.rootId),
+                    navigation.snapshot().stacks.getValue(Tab.MINE)
                 )
+                assertTrue("MINE offers no FAB. " + view.describe(), view.isShown(MainScreenTags.FAB_ADD))
             } finally {
-                navigation.returnToRoot()
+                navigation.returnToRoots()
             }
         }
     }
 
     /**
-     * Waits for the list to be the root of a cleared profile, which is where every case here
-     * starts.
+     * A long-press acts on FAV as well as on MINE (REQ-007), and on FAV it offers what a favorite
+     * can be given and nothing more: the settings dialog comes up without the edit and remove
+     * buttons, which only a station of the user's own has, wherever it is listed.
      *
-     * This is a precondition rather than a restatement of the cold launch journey. The presenter
-     * is one of the registry's singletons and its node stack outlives the Activity: `init` walks
-     * back into whatever node the stack ends with, so a case that navigated leaves the next
-     * Activity somewhere other than the root, in the same process. Every case here walks back out
-     * of the nodes it opens, which this asserts rather than assumes, because Phase 6 asks for a
-     * suite with no order assumptions in it.
+     * The station is marked through its heart rather than written into the store, so FAV is read
+     * from what the service was told rather than from a list it cached before.
      */
-    private fun awaitCleanInstallRoot(list: BrowseListView) {
-        assertEquals(
-            "This case did not start at the root of a cleared profile. A case that walks into a " +
-                "node leaves the presenter's stack there, and it is a registry singleton that " +
-                "outlives the Activity, so the next case launches back into that node.",
-            mProfile.cleanInstallRoot(),
-            list.awaitRows("the root of a cleared profile") { it == mProfile.cleanInstallRoot() }
-        )
+    @Test
+    fun longPressOnAFavRowOpensTheStationSettings() {
+        val station = seedStation()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val view = MainScreenView(mCompose)
+            val dialogs = JourneyDialogs(scenario, mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
+            try {
+                mProfile.awaitSeededMine(view, station)
+                view.tapFavorite(station.id)
+                mProfile.awaitFavorites(listOf(station.id))
+                navigation.selectTab(Tab.FAV)
+                view.awaitRows("the marked station on FAV") { it == listOf(BrowseRow(station.id, STATION_NAME)) }
+
+                view.longPressRow(station.id)
+
+                val settings = dialogs.awaitDialog(RSSettingsDialog.DIALOG_TAG)
+                assertEquals(
+                    "The settings dialog for a favorite offers edit and remove, which only MINE may",
+                    View.GONE,
+                    dialogs.read<View, Int>(settings, DialogR.id.dialog_rs_settings_edit_remove) { it.visibility }
+                )
+                dialogs.dismiss(RSSettingsDialog.DIALOG_TAG)
+            } finally {
+                navigation.returnToRoots()
+            }
+        }
     }
 
     /**
-     * Fills in and submits the real add dialog, reached through the button the root list shows.
+     * Selects MINE and waits for it to say it holds nothing, which is where every case that adds
+     * a station starts. The FAB is MINE's own control, so it has to be up as well.
+     */
+    private fun awaitEmptyMine(view: MainScreenView, navigation: JourneyNavigation) {
+        view.awaitTabs(mProfile.cleanInstallTabs())
+        navigation.selectTab(Tab.MINE)
+        view.awaitEmptyLine(mContext.getString(R.string.main_empty_stations))
+        assertTrue("An empty MINE offers no FAB. " + view.describe(), view.isShown(MainScreenTags.FAB_ADD))
+    }
+
+    /**
+     * Fills in and submits the real add dialog, reached through MINE's FAB.
      *
      * Only the name and the url are typed. The home page is left empty on purpose: a home page the
      * validator cannot reach is reported to the user as a failed add even though the station was
@@ -434,13 +442,12 @@ class LocalStationLifecycleJourneyTest {
      */
     private fun addStationThroughTheDialog(
         scenario: ActivityScenario<MainActivity>,
+        view: MainScreenView,
         name: String,
         url: String
     ) {
         val dialogs = JourneyDialogs(scenario, mCompose)
-        scenario.withActivity { activity ->
-            activity.findViewById<View>(R.id.add_station_btn).performClick()
-        }
+        view.tap(MainScreenTags.FAB_ADD)
         val dialog = dialogs.awaitDialog(AddStationDialog.DIALOG_TAG)
         dialogs.type(dialog, DialogR.id.add_edit_station_name_edit, name)
         dialogs.type(dialog, DialogR.id.add_edit_station_stream_url_edit, url)
@@ -449,34 +456,28 @@ class LocalStationLifecycleJourneyTest {
     }
 
     /**
-     * Opens the locals list, finds [station]'s row and clicks its settings button, which is how a
-     * user reaches editing and removing.
+     * Waits for MINE to list exactly the one station named [name], and checks it is the stored
+     * one.
      *
-     * The one step not driven is the tap that would open the node, because offline the presenter
-     * refuses it. `theLocalsRowDoesNotOpenWithoutANetwork` pins that refusal down and TASK-049
-     * lifts it. What is called instead is the step that tap performs once past the gate, so the
-     * rendered list, the station's row, the settings button on it and the arguments
-     * `handleItemSettings` builds from the node the presenter is standing in are the
-     * application's own rather than this test's.
+     * @return the stored station.
+     */
+    private fun awaitTheStationOnMine(view: MainScreenView, name: String, reason: String): RadioStation {
+        val rows = view.awaitRows("'$name' on MINE") { rows -> rows.any { it.title == name } }
+        val station = storedStation()
+        assertEquals(reason, listOf(BrowseRow(station.id, name)), rows)
+        return station
+    }
+
+    /**
+     * Long-presses [station]'s row on MINE, which is how a user reaches editing and removing, and
+     * waits for the settings dialog to offer both.
      */
     private fun openStationSettings(
         scenario: ActivityScenario<MainActivity>,
-        list: BrowseListView,
+        view: MainScreenView,
         station: RadioStation
     ): DialogFragment {
-        PresenterNavigation(scenario).open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-        assertEquals(
-            "The locals list does not show the station that was added",
-            listOf(BrowseRow(station.id, station.name)),
-            list.awaitRows("the station's own row") { it.size == 1 }
-        )
-        assertEquals(
-            "The add-station button belongs to the root and is still up inside the locals list",
-            View.GONE,
-            addStationButtonVisibility(scenario)
-        )
-
-        list.tapRowSettings(station.id)
+        view.longPressRow(station.id)
         val dialogs = JourneyDialogs(scenario, mCompose)
         val settings = dialogs.awaitDialog(RSSettingsDialog.DIALOG_TAG)
         assertEquals(
@@ -492,9 +493,8 @@ class LocalStationLifecycleJourneyTest {
     /**
      * Clicks one of the settings dialog's two buttons and waits for the dialog it opens.
      *
-     * The click goes through the listener the settings dialog put on the button, so this
-     * exercises the presenter call it makes and the media item the dialog left on the button as
-     * a tag.
+     * The click goes through the listener the settings dialog put on the button, with the media
+     * item the long-press handed the dialog.
      */
     private fun openFromSettings(
         scenario: ActivityScenario<MainActivity>,
@@ -507,10 +507,16 @@ class LocalStationLifecycleJourneyTest {
         return dialogs.awaitDialog(opened)
     }
 
-    private fun addStationButtonVisibility(scenario: ActivityScenario<MainActivity>): Int {
-        return scenario.withActivity { activity ->
-            activity.findViewById<View>(R.id.add_station_btn).visibility
-        }
+    /**
+     * Writes one station of the user's own into the store and drops the service's cached locals
+     * list, for a case whose subject is not adding it.
+     */
+    private fun seedStation(): RadioStation {
+        val locals = mProfile.storages.locals
+        val station = makeStation(locals.getId(), name = STATION_NAME, isLocal = true)
+        locals.add(station)
+        mProfile.refreshTree()
+        return station
     }
 
     /**
@@ -560,6 +566,8 @@ class LocalStationLifecycleJourneyTest {
 
         const val EDITED_NAME = "Journey local one renamed"
 
+        const val BULK_NAME = "Bulk local"
+
         const val STATION_PATH = "/journey-local-stream"
 
         const val EDITED_PATH = "/journey-local-stream-edited"
@@ -582,7 +590,7 @@ class LocalStationLifecycleJourneyTest {
 
         /**
          * One full page of the locals list, the most a single answer carries. The more rows the
-         * locals answer carries, the longer it takes to arrive after the root.
+         * locals answer carries, the longer it takes to arrive after the switch.
          */
         const val LOCALS_PAGE = DependencyRegistryCommon.PAGE_SIZE
     }

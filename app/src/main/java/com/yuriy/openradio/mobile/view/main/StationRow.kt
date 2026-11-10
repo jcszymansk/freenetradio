@@ -95,7 +95,14 @@ internal fun StationRow(row: RowState.Station, actions: MainScreenActions) {
     ) {
         StationTile(row)
         Column(Modifier.weight(1f)) {
-            Text(row.name, style = Console.type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                row.name,
+                style = Console.type.bodyStrong,
+                color = c.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.testTag(MainScreenTags.rowTitle(row.id)),
+            )
             if (row.meta.isNotEmpty()) {
                 Text(
                     row.meta,

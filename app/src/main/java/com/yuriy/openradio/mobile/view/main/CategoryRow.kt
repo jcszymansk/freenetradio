@@ -58,6 +58,13 @@ internal fun CategoryRow(row: RowState.Category, actions: MainScreenActions) {
         row.iconResId?.let { icon ->
             Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(ConsoleDimens.tileSize))
         }
-        Text(row.title, style = Console.type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            row.title,
+            style = Console.type.bodyStrong,
+            color = c.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.testTag(MainScreenTags.rowTitle(row.id)),
+        )
     }
 }

@@ -21,6 +21,10 @@ import com.yuriy.openradio.shared.presenter.main.SectionKind
 /**
  * Compose test tags of the main screen, shared by the screenshot tests and the instrumented
  * journeys. A row's tag is [ROW_PREFIX] followed by its media id.
+ *
+ * A row's title has a tag of its own, [rowTitle], because a station row without artwork draws
+ * its initials before its name, so the row's first text is not its title. That tag must not start
+ * with [ROW_PREFIX], or a search for rows would find the titles too.
  */
 object MainScreenTags {
     const val TOP_BAR = "main.topBar"
@@ -41,10 +45,13 @@ object MainScreenTags {
     const val MINI_TOGGLE = "main.miniPlayer.toggle"
     const val ROW_PREFIX = "main.row."
     const val FAVORITE_SUFFIX = ".favorite"
+    const val ROW_TITLE_PREFIX = "main.rowTitle."
 
     fun row(mediaId: String): String = ROW_PREFIX + mediaId
 
     fun favorite(mediaId: String): String = row(mediaId) + FAVORITE_SUFFIX
+
+    fun rowTitle(mediaId: String): String = ROW_TITLE_PREFIX + mediaId
 
     fun overflow(item: OverflowItem): String = "main.overflow.${item.name}"
 

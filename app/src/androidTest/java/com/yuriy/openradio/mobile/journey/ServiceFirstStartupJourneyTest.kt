@@ -18,16 +18,19 @@ package com.yuriy.openradio.mobile.journey
 
 import android.app.ActivityManager
 import android.content.Context
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.SessionResult
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
+import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.shared.service.ActivityPresence
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LocalStationsFixture
@@ -70,7 +73,10 @@ import org.junit.runner.RunWith
 class ServiceFirstStartupJourneyTest {
 
     @get:Rule
-    val mStack = PresenterStackRule()
+    val mStack = BrowseStacksRule()
+
+    @get:Rule
+    val mCompose = createEmptyComposeRule()
 
     private val mContext = InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -155,7 +161,7 @@ class ServiceFirstStartupJourneyTest {
         assertEquals(MediaId.MEDIA_ID_ROOT, root.value?.mediaId)
         assertEquals(
             "The root served with no Activity is not the offline catalogue",
-            mProfile.seededRoot().map { it.mediaId },
+            SEEDED_ROOT,
             mProfile.browser.mediaIds(MediaId.MEDIA_ID_ROOT)
         )
         assertEquals(
@@ -168,7 +174,7 @@ class ServiceFirstStartupJourneyTest {
 
         assertEquals(
             "Marking a station through the session did not put the favorites node on the root",
-            markedRoot().map { it.mediaId },
+            MARKED_ROOT,
             mProfile.browser.mediaIds(MediaId.MEDIA_ID_ROOT)
         )
         assertEquals(
@@ -181,25 +187,42 @@ class ServiceFirstStartupJourneyTest {
 
     /**
      * The second half of the ordering, at its plainest: the Activity that opens afterwards shows
-     * the list the service had already answered.
+     * the lists the service had already answered, FAV empty and MINE with the seeded station.
      *
-     * The rendered rows are compared against both the expected menu and the ids the service
-     * actually served, so a UI and a service that agree on something wrong fail as loudly as one
-     * that disagrees.
+     * The rendered rows are compared against the ids the service actually served as well as
+     * against the expected station, so a UI and a service that agree on something wrong fail as
+     * loudly as one that disagrees.
      */
     @Test
-    fun theActivityRendersTheRootTheServiceAnsweredBeforeItExisted() {
-        val served = mProfile.browser.mediaIds(MediaId.MEDIA_ID_ROOT)
-        mPresence.assertNone("An Activity was alive when the service answered the root.")
+    fun theActivityRendersTheListsTheServiceHeldBeforeItExisted() {
+        val servedFavorites = mProfile.browser.mediaIds(MediaId.MEDIA_ID_FAVORITES_LIST)
+        val servedLocals = mProfile.browser.mediaIds(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        mPresence.assertNone("An Activity was alive when the service answered FAV and MINE.")
+        assertEquals("The service served favorites to a profile that holds none", emptyList<String>(), servedFavorites)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val rendered = mProfile.awaitSeededRoot(BrowseListView(scenario))
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
+            try {
+                navigation.selectTab(Tab.FAV)
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
 
-            assertEquals(
-                "The Activity renders a different root than the service answered before it existed",
-                served,
-                rendered.map { it.mediaId }
-            )
+                val rendered = mProfile.awaitSeededMine(view, mStation)
+
+                assertEquals(
+                    "MINE renders a different list than the service answered before the Activity existed",
+                    servedLocals,
+                    rendered.map { it.mediaId }
+                )
+                assertEquals(
+                    "MINE does not show the seeded station under its own name",
+                    listOf(BrowseRow(mStation.id, mStation.name)),
+                    rendered
+                )
+            } finally {
+                navigation.returnToRoots()
+            }
         }
     }
 
@@ -207,11 +230,11 @@ class ServiceFirstStartupJourneyTest {
      * State a head unit produced before the phone's screen existed has to be on that screen when
      * it opens, in every list the station appears in.
      *
-     * The mark is made through the session rather than through a box on a row: that is the gesture
-     * a car offers, and it is the whole point of the ordering. Both nodes are read because they
-     * are built from different places - `MediaItemFavoritesList` from the favorites store, the
-     * locals list from the locals store with the favorite state bound onto each row - and a mark
-     * that reached only one of them is the failure this case is looking for.
+     * The mark is made through the session rather than through a heart on a row: that is the
+     * gesture a car offers, and it is the whole point of the ordering. FAV and MINE are both read
+     * because they are built from different places - `MediaItemFavoritesList` from the favorites
+     * store, the locals list from the locals store with the favorite state bound onto each row -
+     * and a mark that reached only one of them is the failure this case is looking for.
      */
     @Test
     fun aStationMarkedBeforeTheActivityExistedIsMarkedInTheListsItOpens() {
@@ -219,37 +242,22 @@ class ServiceFirstStartupJourneyTest {
         mPresence.assertNone("An Activity was alive when the station was marked.")
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            assertEquals(
-                "The Activity does not offer the node the mark produced before it existed",
-                markedRoot(),
-                list.awaitRows("the favorites node") { it == markedRoot() }
-            )
-
-            val navigation = PresenterNavigation(scenario)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
             try {
-                navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
-
+                navigation.selectTab(Tab.FAV)
                 assertEquals(
-                    "The favorites node does not show the station marked before the Activity existed",
+                    "FAV does not show the station marked before the Activity existed",
                     listOf(BrowseRow(mStation.id, mStation.name)),
-                    list.awaitRows("the station's own row") { it.size == 1 }
+                    view.awaitRows("the marked station on FAV") { rows -> rows.any { it.mediaId == mStation.id } }
                 )
-                list.awaitRowFavorite(mStation.id, true)
-            } finally {
-                navigation.returnToRoot()
-            }
-            try {
-                navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+                view.awaitRowFavorite(mStation.id, true)
 
-                assertEquals(
-                    "The locals list does not show the seeded station",
-                    listOf(BrowseRow(mStation.id, mStation.name)),
-                    list.awaitRows("the station's own row") { it.size == 1 }
-                )
-                list.awaitRowFavorite(mStation.id, true)
+                mProfile.awaitSeededMine(view, mStation)
+                view.awaitRowFavorite(mStation.id, true)
             } finally {
-                navigation.returnToRoot()
+                navigation.returnToRoots()
             }
         }
     }
@@ -258,36 +266,32 @@ class ServiceFirstStartupJourneyTest {
      * A station started before the Activity existed, which is a car that was already playing when
      * the user picked their phone up.
      *
-     * The bar is the phone's whole playback screen and it starts down, so the Activity is what
-     * raises it, out of the metadata the session pushes to the controller it built for itself.
-     * Nothing hands it the station.
+     * The mini player is the phone's whole playback screen, and the Activity raises it out of
+     * what the session holds for the controller it built for itself. Nothing hands it the station.
      *
-     * What the bar comes up showing when nothing was started is the station of whichever case ran
-     * before, because the session outlives them all and `parkThePlayer` hands the next one a queue.
+     * What the mini player comes up showing when nothing was started is the station of whichever
+     * case ran before, because the session outlives them all and `parkThePlayer` hands the next one a queue.
      * The name waited for is what separates the two, and [LocalStationsFixture] makes it unique for
      * the whole run rather than for this class.
      *
      * The queue and the current item are read before and after, because the risk here is not only
      * that the Activity shows nothing. A second controller connecting is also the moment the
      * service could rebuild what it was playing, and a phone that reshuffles the car's queue on
-     * being opened would pass every assertion about the bar.
+     * being opened would pass every assertion about the mini player.
      */
     @Test
-    fun aStationPlayingBeforeTheActivityExistedIsOnTheBarTheActivityPutsUp() {
+    fun aStationPlayingBeforeTheActivityExistedIsOnTheMiniPlayerTheActivityPutsUp() {
         startTheStationThroughTheSession()
         mPresence.assertNone("An Activity was alive when the session started the station.")
         val queue = mProfile.browser.queueMediaIds()
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val nowPlaying = NowPlayingView(scenario)
+        ActivityScenario.launch(MainActivity::class.java).use {
+            val miniPlayer = MiniPlayerView(mCompose)
 
-            nowPlaying.awaitTitle(mStation.name)
+            miniPlayer.awaitName(mStation.name)
 
-            assertEquals(
-                "The bar came up for the station but not for what the player says about it",
-                mAudio.liveStreamDescription(),
-                nowPlaying.description()
-            )
+            miniPlayer.awaitTrack(mAudio.liveStreamDescription())
+            miniPlayer.awaitPlaying(true)
             assertTrue(
                 "Opening the Activity stopped the station the session was already playing",
                 mProfile.browser.isPlaying()
@@ -308,8 +312,8 @@ class ServiceFirstStartupJourneyTest {
     /**
      * The same ordering read backwards: the phone app goes away and the car keeps working.
      *
-     * `MainActivity.onDestroy` releases the presenter and the browser it built, and a release that
-     * took the session with it would leave a head unit holding a dead connection. The browser this
+     * `MainActivity.onDestroy` stops the screen's model, which releases the browser it built, and a
+     * release that took the session with it would leave a head unit holding a dead connection. The browser this
      * asserts through is the one that was connected before any Activity existed, so what it gets
      * back is the service serving the process on its own again.
      */
@@ -318,8 +322,15 @@ class ServiceFirstStartupJourneyTest {
         startTheStationThroughTheSession()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            mProfile.awaitSeededRoot(BrowseListView(scenario))
-            NowPlayingView(scenario).awaitTitle(mStation.name)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
+            try {
+                mProfile.awaitSeededMine(view, mStation)
+                MiniPlayerView(mCompose).awaitName(mStation.name)
+            } finally {
+                navigation.returnToRoots()
+            }
         }
 
         mPresence.awaitNone(
@@ -327,7 +338,7 @@ class ServiceFirstStartupJourneyTest {
         )
         assertEquals(
             "The service stopped serving the root once the Activity was closed",
-            mProfile.seededRoot().map { it.mediaId },
+            SEEDED_ROOT,
             mProfile.browser.mediaIds(MediaId.MEDIA_ID_ROOT)
         )
         assertEquals(
@@ -429,14 +440,6 @@ class ServiceFirstStartupJourneyTest {
         return mProfile.storages.freshFavorites().getAll().map { it.id }
     }
 
-    /**
-     * @return the root once the station is marked. `MediaItemRoot` puts the favorites node first
-     *   and the locals node last, with the catalogue between them.
-     */
-    private fun markedRoot(): List<BrowseRow> {
-        return listOf(mProfile.favoritesRow()) + mProfile.seededRoot()
-    }
-
     private companion object {
 
         /**
@@ -449,5 +452,24 @@ class ServiceFirstStartupJourneyTest {
          * misses one.
          */
         const val RUNNING_SERVICE_LIMIT = 100
+
+        /**
+         * The root the service serves a cleared profile holding one station of the user's own:
+         * the catalogue, the default country's stations, since a cleared profile has chosen no
+         * country, and the locals node, which `MediaItemRoot` adds last.
+         */
+        val SEEDED_ROOT = listOf(
+            MediaId.MEDIA_ID_NEW_STATIONS,
+            MediaId.MEDIA_ID_POPULAR_STATIONS,
+            MediaId.MEDIA_ID_ALL_CATEGORIES,
+            MediaId.MEDIA_ID_COUNTRIES_LIST,
+            MediaId.MEDIA_ID_COUNTRY_STATIONS,
+            MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
+        )
+
+        /**
+         * [SEEDED_ROOT] once the station is marked: `MediaItemRoot` puts the favorites node first.
+         */
+        val MARKED_ROOT = listOf(MediaId.MEDIA_ID_FAVORITES_LIST) + SEEDED_ROOT
     }
 }

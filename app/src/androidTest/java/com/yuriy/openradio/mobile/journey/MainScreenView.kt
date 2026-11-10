@@ -115,12 +115,20 @@ internal class MainScreenView(private val mCompose: ComposeTestRule) {
         mCompose.onNodeWithTag(tag).performClick()
     }
 
+    /**
+     * The rows in list order, each with the text of its [MainScreenTags.rowTitle] node. A row's
+     * own merged text is no title: a station without artwork shows its initials first.
+     */
     fun rows(): List<BrowseRow> {
+        val titles = mCompose.onAllNodes(IS_ROW_TITLE, useUnmergedTree = true)
+            .fetchSemanticsNodes(atLeastOneRootRequired = false)
+            .associate { node ->
+                node.config[SemanticsProperties.TestTag].removePrefix(MainScreenTags.ROW_TITLE_PREFIX) to
+                    node.config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text }.orEmpty()
+            }
         return nodes(IS_ROW).map { node ->
-            BrowseRow(
-                node.config[SemanticsProperties.TestTag].removePrefix(MainScreenTags.ROW_PREFIX),
-                node.config.getOrNull(SemanticsProperties.Text)?.firstOrNull()?.text.orEmpty()
-            )
+            val mediaId = node.config[SemanticsProperties.TestTag].removePrefix(MainScreenTags.ROW_PREFIX)
+            BrowseRow(mediaId, titles[mediaId].orEmpty())
         }
     }
 
@@ -168,6 +176,10 @@ internal class MainScreenView(private val mCompose: ComposeTestRule) {
             tag != null && tag.startsWith(MainScreenTags.ROW_PREFIX) && !tag.endsWith(MainScreenTags.FAVORITE_SUFFIX)
         }
 
+        private val IS_ROW_TITLE = SemanticsMatcher("is a list row's title") { node ->
+            node.config.getOrNull(SemanticsProperties.TestTag)?.startsWith(MainScreenTags.ROW_TITLE_PREFIX) == true
+        }
+
         /**
          * @return the label [tab] shows on screen. The tabs draw their labels upper-cased.
          */
@@ -179,6 +191,6 @@ internal class MainScreenView(private val mCompose: ComposeTestRule) {
 }
 
 /**
- * One row of the list: its media id and the first text it shows.
+ * One row of the list: its media id and its title.
  */
 internal data class BrowseRow(val mediaId: String, val title: String)

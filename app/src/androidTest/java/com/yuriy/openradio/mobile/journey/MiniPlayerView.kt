@@ -34,6 +34,9 @@ internal class MiniPlayerView(private val mCompose: ComposeTestRule) {
 
     fun isVisible(): Boolean = hasNode(MainScreenTags.MINI_PLAYER)
 
+    /** @return the station name the mini player shows, or null while it is down. */
+    fun name(): String? = text(MainScreenTags.MINI_NAME)
+
     fun awaitName(expected: String) = await("the name '$expected'") { text(MainScreenTags.MINI_NAME) == expected }
 
     fun awaitTrack(expected: String) = await("the track '$expected'") { text(MainScreenTags.MINI_TRACK) == expected }
