@@ -16,6 +16,7 @@
 
 package com.yuriy.openradio.shared.presenter.main
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -33,7 +34,7 @@ class MainScreenRowsTest {
     @Test
     fun aStationRowCarriesNameMetaBitrateAndFlags() {
         val row = MainScreenRows.station(
-            station("s1", "Hard Rock Radio FM", "us", "mp3", 128),
+            station("s1", "Hard Rock Radio FM", "us", "mp3", 128, NO_LOGO),
             isFavorite = true,
             isCurrent = false,
             canLongPress = true,
@@ -74,6 +75,16 @@ class MainScreenRowsTest {
     }
 
     @Test
+    fun aStationWithoutALogoHasNoArtworkToLoad() {
+        val item = station("s1", "Capital", "gb", "aac", 48, NO_LOGO)
+
+        val row = MainScreenRows.station(item, false, false, false, 0)
+
+        assertNull("The browse tree gives a logo-less station an image uri with an empty url", row.artworkUri)
+        assertNull(MainScreenRows.artworkId(item))
+    }
+
+    @Test
     fun aCountryRowKeepsItsFlag() {
         val row = MainScreenRows.category(category(MediaId.MEDIA_ID_COUNTRIES_LIST + "PL", "Poland", FLAG))
 
@@ -96,6 +107,20 @@ class MainScreenRowsTest {
     }
 
     @Test
+    fun theCountriesListEntryIsNotACountry() {
+        val row = MainScreenRows.category(category(MediaId.MEDIA_ID_COUNTRIES_LIST, "Countries", FLAG))
+
+        assertNull(row.iconResId)
+    }
+
+    @Test
+    fun aCountryWithAnUndefinedDrawableHasNoIcon() {
+        val row = MainScreenRows.category(category(MediaId.MEDIA_ID_COUNTRIES_LIST + "PL", "Poland", null))
+
+        assertNull(row.iconResId)
+    }
+
+    @Test
     fun aCountryWithoutAFlagDrawableHasNoIcon() {
         val row = MainScreenRows.category(category(MediaId.MEDIA_ID_COUNTRIES_LIST + "XX", "Nowhere", 0))
 
@@ -104,17 +129,12 @@ class MainScreenRowsTest {
 
     @Test
     fun aStationWithStoredArtworkCarriesItsImageUri() {
-        val item = station("s1", "Capital", "gb", "aac", 48).buildUpon()
-            .setMediaMetadata(
-                station("s1", "Capital", "gb", "aac", 48).mediaMetadata.buildUpon()
-                    .setArtworkUri(ImagesStore.buildImageUri("s1", "https://img.invalid/capital.png"))
-                    .build()
-            )
-            .build()
+        val artwork = ImagesStore.buildImageUri("s1", "https://img.invalid/capital.png")
+        val item = station("s1", "Capital", "gb", "aac", 48, artwork)
 
         val row = MainScreenRows.station(item, false, false, false, 0)
 
-        assertEquals(ImagesStore.buildImageUri("s1", "https://img.invalid/capital.png").toString(), row.artworkUri)
+        assertEquals(artwork.toString(), row.artworkUri)
         assertEquals("s1", MainScreenRows.artworkId(item))
     }
 
@@ -122,7 +142,17 @@ class MainScreenRowsTest {
 
         const val FLAG = 42
 
-        fun station(id: String, name: String, countryCode: String, codec: String, bitrate: Int): MediaItem {
+        /** What the browse tree sets on a station whose logo url is empty. */
+        val NO_LOGO: Uri = ImagesStore.buildImageUri("s1", "")
+
+        fun station(
+            id: String,
+            name: String,
+            countryCode: String,
+            codec: String,
+            bitrate: Int,
+            artworkUri: Uri? = null,
+        ): MediaItem {
             val extras = Bundle()
             MediaItemHelper.updateCountryCodeField(extras, countryCode)
             MediaItemHelper.updateCodecField(extras, codec)
@@ -132,6 +162,7 @@ class MainScreenRowsTest {
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(name)
+                        .setArtworkUri(artworkUri)
                         .setIsPlayable(true)
                         .setIsBrowsable(false)
                         .setExtras(extras)
@@ -140,9 +171,11 @@ class MainScreenRowsTest {
                 .build()
         }
 
-        fun category(id: String, title: String, drawableId: Int): MediaItem {
+        fun category(id: String, title: String, drawableId: Int?): MediaItem {
             val extras = Bundle()
-            MediaItemHelper.setDrawableId(extras, drawableId)
+            if (drawableId != null) {
+                MediaItemHelper.setDrawableId(extras, drawableId)
+            }
             return MediaItem.Builder()
                 .setMediaId(id)
                 .setMediaMetadata(
