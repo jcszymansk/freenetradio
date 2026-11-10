@@ -235,8 +235,13 @@ class MainScreenModel(
         }
     }
 
+    /**
+     * Pushes a search for [query] onto the selected tab, in place of an earlier search there and
+     * of everything opened from it.
+     */
+    @MainThread
     override fun search(query: String) {
-        val levels = stack(mSelected).filter { it.mediaId != MediaId.MEDIA_ID_SEARCH_FROM_APP }
+        val levels = stack(mSelected).takeWhile { it.mediaId != MediaId.MEDIA_ID_SEARCH_FROM_APP }
         mStacks[mSelected] = levels
         push(newLevel(MediaId.MEDIA_ID_SEARCH_FROM_APP, query, AppUtils.makeSearchQueryBundle(query)))
     }
@@ -245,6 +250,7 @@ class MainScreenModel(
      * Asks again for the node on top of the selected tab: the UI's "Retry", and the station
      * settings dialog after a sort.
      */
+    @MainThread
     override fun reload() {
         showTop()
     }
@@ -299,6 +305,7 @@ class MainScreenModel(
      * @return what the station settings dialog needs for the row [rowId], or null when the node
      *   on top is not sortable (only FAV and the locals node are) or holds no such station.
      */
+    @MainThread
     fun longPressTarget(rowId: String): StationSettingsTarget? {
         val top = top()
         if (!MediaId.isSortable(top.mediaId)) {
@@ -313,6 +320,7 @@ class MainScreenModel(
      * Reads the root node's children again, for the user's country row. Called after the country
      * changed and the service dropped the root it had built for the old one.
      */
+    @MainThread
     fun refreshRoot() {
         mClient?.fetchChildren(MediaId.MEDIA_ID_ROOT, mRootAnswer)
     }

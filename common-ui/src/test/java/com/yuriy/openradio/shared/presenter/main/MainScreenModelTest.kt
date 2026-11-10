@@ -19,6 +19,7 @@ package com.yuriy.openradio.shared.presenter.main
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.service.OpenRadioService
+import com.yuriy.openradio.shared.utils.AppUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -263,6 +264,43 @@ class MainScreenModelTest {
         assertEquals(ListContent.Loading, m.state.content)
     }
 
+    @Test
+    fun aRestartKeepsTheStacksAndAsksForTheShownNodeAgain() {
+        val m = polandShown(listOf(station("a")))
+        m.model.loadMore()
+        val before = m.model.snapshot()
+        val first = m.client
+
+        m.model.stop()
+        assertFalse("A page asked of the old client is not waited for", m.state.isLoadingPage)
+        assertFalse(m.state.isRefreshing)
+        m.startAndConnect()
+
+        assertTrue(first !== m.client)
+        assertEquals(before, m.model.snapshot())
+        assertEquals("Poland", m.state.title)
+        assertEquals(FakeLibraryClient.Request(POLAND, 0, NO_QUERY), m.client.lastSubscription())
+        assertEquals(listOf("a"), m.rowIds())
+        assertTrue(m.state.isRefreshing)
+        m.client.answer(POLAND, listOf(station("a")))
+        m.model.loadMore()
+        assertEquals(FakeLibraryClient.Request(POLAND, 1, NO_QUERY), m.client.lastSubscription())
+    }
+
+    @Test
+    fun aRestartUnderAProviderWithoutTheSelectedTabFallsBackToFav() {
+        val m = ModelUnderTest().startAndConnect()
+        m.model.selectTab(Tab.POPULAR)
+
+        m.model.stop()
+        m.sources.source = Source.WEB_RADIO
+        m.startAndConnect()
+
+        assertEquals(Tab.FAV, m.state.selectedTab)
+        assertEquals(listOf(Tab.FAV, Tab.MINE, Tab.COUNTRY, Tab.GENRE), m.state.tabs)
+        assertEquals(FAV, m.client.lastSubscription().parentId)
+    }
+
     // --- replace and append (ported from MediaPresenterChildrenLoadedTest) ----------------------
 
     @Test
@@ -330,7 +368,7 @@ class MainScreenModelTest {
 
         m.model.loadMore()
 
-        assertEquals(FakeLibraryClient.Request(POLAND, 1, m.client.lastSubscription().query), m.client.lastSubscription())
+        assertEquals(FakeLibraryClient.Request(POLAND, 1, NO_QUERY), m.client.lastSubscription())
         assertTrue(m.state.isLoadingPage)
     }
 
@@ -420,6 +458,20 @@ class MainScreenModelTest {
 
         assertEquals(listOf(FAV, MediaId.MEDIA_ID_SEARCH_FROM_APP), m.model.snapshot().stacks.getValue(Tab.FAV))
         assertEquals("jazz", m.state.title)
+    }
+
+    @Test
+    fun aSecondSearchAlsoDropsWhatWasOpenedFromTheFirst() {
+        val m = ModelUnderTest().startAndConnect()
+        m.model.search("rock")
+        m.client.answer(MediaId.MEDIA_ID_SEARCH_FROM_APP, listOf(category(JAZZ, "Jazz")))
+        m.model.open(JAZZ)
+
+        m.model.search("blues")
+
+        assertEquals(listOf(FAV, MediaId.MEDIA_ID_SEARCH_FROM_APP), m.model.snapshot().stacks.getValue(Tab.FAV))
+        m.model.back()
+        assertEquals(FAV, m.client.lastSubscription().parentId)
     }
 
     // --- COUNTRY and YOUR COUNTRY --------------------------------------------------------------
@@ -578,5 +630,8 @@ class MainScreenModelTest {
         const val POLAND = MediaId.MEDIA_ID_COUNTRIES_LIST + "PL"
         const val AUSTRIA = MediaId.MEDIA_ID_COUNTRIES_LIST + "AT"
         const val JAZZ = MediaId.MEDIA_ID_CHILD_CATEGORIES + "jazz"
+
+        /** What a request carries when its bundle holds no search query. */
+        const val NO_QUERY = AppUtils.USE_CUR_SEARCH_QUERY
     }
 }
