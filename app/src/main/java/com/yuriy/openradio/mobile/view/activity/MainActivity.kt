@@ -22,9 +22,9 @@ import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.lifecycleScope
 import com.github.jcszymansk.console.design.ConsoleTheme
 import com.yuriy.openradio.mobile.view.main.MainScreen
 import com.yuriy.openradio.mobile.view.main.MainScreenActions
@@ -54,6 +54,8 @@ import com.yuriy.openradio.shared.view.dialog.SearchDialog
 import com.yuriy.openradio.shared.view.dialog.SleepTimerDialog
 import com.yuriy.openradio.shared.view.dialog.SourceDialog
 import com.yuriy.openradio.shared.view.dialog.StreamBufferingDialog
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /**
  * Created with Android Studio.
@@ -111,13 +113,14 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
                 finish()
             }
         }
+        // Watched outside the composition: its frame clock is paused while the activity is
+        // stopped, and the sleep timer and the notification's close action both fire then.
+        lifecycleScope.launch {
+            mModel.state.first { it.isClosed }
+            finish()
+        }
         setContent {
             val state by mModel.state.collectAsState()
-            LaunchedEffect(state.isClosed) {
-                if (state.isClosed) {
-                    finish()
-                }
-            }
             ConsoleTheme { MainScreen(state, this@MainActivity) }
         }
         BatteryOptimizationDialog.handle(applicationContext, supportFragmentManager)

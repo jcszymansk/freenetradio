@@ -102,7 +102,9 @@ internal class MainScreenPlatform(
     }
 
     private inner class ArtworkObserver : ContentObserver(Handler(Looper.getMainLooper())) {
-        override fun onChange(selfChange: Boolean, uri: Uri?, flags: Int) {
+        // The two-argument overload is the one API 26 to 29 dispatch to; API 30 and later reach
+        // it through the default of the flags overload.
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
             if (uri != null) {
                 mModel.artworkChanged(ImagesStore.getId(uri))
             }
