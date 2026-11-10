@@ -75,6 +75,9 @@ The suites assert the provider they got rather than the one that is stored, and 
 it is the wrong one.
 
 Release builds are unsigned — no release signing key exists yet, and `sign.properties` must never be committed.
+Release builds are shrunk and optimized by R8, with this app's keep rules in `app/proguard-rules.pro`. Code that
+loads a class, constructor or field by name needs a rule there. The instrumented tests run on the debug build,
+which R8 does not touch, so they cannot catch a missing rule: check a release build on a device when you add such code.
 `./gradlew signReleaseBundle` increments `VERSION_CODE` in the tracked `version.properties` as a side effect.
 
 Toolchain versions live in `constants.gradle`, not in the module build files. `minSdkVersion` is 26.

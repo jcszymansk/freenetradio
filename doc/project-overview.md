@@ -298,7 +298,7 @@ The wrapper version comes from `gradle/wrapper/gradle-wrapper.properties`, KSP f
 `build.gradle`, and the rest from `constants.gradle`; the Compose compiler plugin follows `kotlinVersion`.
 `AGENTS.md` names the JDK and Android SDK a fresh clone builds with, and the `console-design` submodule it needs.
 
-The configured release version is `15.0.0`; `version.properties` contains version code `716`. The application ID is `com.github.jcszymansk.freenetradio` and the user-visible name is FreeNetRadio. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project creates its release signing key.
+The configured release version is `15.0.0`; `version.properties` contains version code `716`. The application ID is `com.github.jcszymansk.freenetradio` and the user-visible name is FreeNetRadio. Mandatory private signing configuration has been removed: debug builds use Android's standard debug key, while release builds remain unsigned until the project creates its release signing key. Release builds are shrunk and optimized by R8; `app/proguard-rules.pro` keeps what the app loads by name.
 
 Historical APKs are retained under `app/store/`. No continuous-integration workflow is present under `.github`; release signing and version advancement are developer-run Gradle tasks.
 
