@@ -21,11 +21,13 @@ import androidx.annotation.MainThread
 import androidx.annotation.VisibleForTesting
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import com.yuriy.openradio.shared.model.ServiceCommander
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.MediaItemsSubscription
 import com.yuriy.openradio.shared.model.media.MediaLibraryClient
 import com.yuriy.openradio.shared.model.media.MediaResourceManagerListener
 import com.yuriy.openradio.shared.model.media.PlaybackState
+import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.OpenRadioStore
@@ -33,6 +35,7 @@ import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.MediaItemHelper
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,12 +53,15 @@ import kotlinx.coroutines.launch
  *
  * @param mClientFactory builds the client for [start], handing it the listener for playback events.
  * @param connectivity asked before a row tap opens or plays anything; tabs are not gated.
+ * @param mLastStation the station a service with an empty queue would resume, which the mini
+ *   player shows until something plays.
  * @param scope runs the service commands the model sends.
  */
 class MainScreenModel(
     private val mClientFactory: (MediaResourceManagerListener) -> MediaLibraryClient,
     private val mSourcesLayer: SourcesLayer,
     private val mConnectivity: ConnectivityGate,
+    private val mLastStation: LastPlayedStation,
     private val mScope: CoroutineScope,
 ) : BrowseSearch, BrowseReload, ScreenClose {
 
@@ -145,12 +151,18 @@ class MainScreenModel(
         override fun onConnected() {
             showTop()
             refreshRoot()
+            showWhatTheServiceHolds()
         }
 
-        // Now playing is added in Task 5.
-        override fun onPlaybackStateChanged(state: PlaybackState) = Unit
+        override fun onPlaybackStateChanged(state: PlaybackState) {
+            mPlayingId = mClient?.currentMediaItem?.mediaId ?: mPlayingId
+            mMiniPlayer = mMiniPlayer?.copy(isPlaying = state.isPlaying)
+            emit()
+        }
 
-        override fun onMetadataChanged(metadata: MediaMetadata) = Unit
+        override fun onMetadataChanged(metadata: MediaMetadata) {
+            updateNowPlaying(metadata)
+        }
     }
 
     @MainThread
@@ -330,11 +342,115 @@ class MainScreenModel(
         return BrowseSnapshot(mSelected, Tab.entries.associateWith { tab -> stack(tab).map { it.mediaId } })
     }
 
-    // Now playing members (Task 5) go here.
+    /**
+     * The service's commands, sent through whichever client the screen holds, or answered false
+     * while there is none. Dialogs reach the service through it.
+     */
+    val serviceCommander: ServiceCommander = object : ServiceCommander {
+
+        override suspend fun sendCommand(command: String, parameters: Bundle): Boolean {
+            return mClient?.sendCommand(command, parameters) ?: false
+        }
+
+        override suspend fun sendCommand(
+            command: String,
+            parameters: Bundle,
+            resultCallback: (Int, Bundle?) -> Unit
+        ): Boolean {
+            return mClient?.sendCommand(command, parameters, resultCallback) ?: false
+        }
+    }
+
+    /**
+     * Pauses the playing station or resumes the last played one. With nothing loaded, as after a
+     * cold start, the toggle command would find an empty player and do nothing, so the session is
+     * asked to play instead, which resumes the latest station ([MediaLibraryClient.play]).
+     */
+    @MainThread
+    fun togglePlayback() {
+        val client = mClient ?: return
+        if (client.currentMediaItem == null) {
+            client.play()
+            return
+        }
+        mScope.launch { client.sendCommand(OpenRadioService.CMD_TOGGLE_LAST_PLAYED_ITEM, Bundle()) }
+    }
+
+    /**
+     * Back at a tab's root: the screen is left, and the service is stopped as it was by the old
+     * main screen. Sent before the activity finishes, so it does not wait for a dispatch the
+     * activity's teardown could overtake.
+     */
+    @MainThread
+    fun leave() {
+        mScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            mClient?.sendCommand(OpenRadioService.CMD_STOP_SERVICE, Bundle())
+        }
+    }
+
+    /**
+     * The artwork store finished writing the image [imageId]; rows showing it load it again.
+     */
+    @MainThread
+    fun artworkChanged(imageId: String) {
+        mArtworkRevisions[imageId] = (mArtworkRevisions[imageId] ?: 0) + 1
+        emit()
+    }
 
     override fun close() {
-        // Replaced in Task 5.
-        AppLogger.w("$TAG close is not wired yet")
+        mStacks.clear()
+        mStacks.putAll(rootStacks())
+        mSelected = Tab.FAV
+        mClosed = true
+        emit()
+    }
+
+    /**
+     * Puts the mini player up for [metadata], or leaves it as it is when [metadata] names no
+     * station: once a station was chosen the mini player stays.
+     */
+    private fun updateNowPlaying(metadata: MediaMetadata?) {
+        val client = mClient ?: return
+        val title = metadata?.title?.toString()
+        if (metadata == null || title.isNullOrEmpty()) {
+            return
+        }
+        mPlayingId = client.currentMediaItem?.mediaId ?: mPlayingId
+        mMiniPlayer = MiniPlayerState(
+            name = title,
+            initials = MainScreenRows.initials(title),
+            track = MediaItemHelper.getDisplayDescription(metadata, AppUtils.EMPTY_STRING),
+            isPlaying = client.isPlaying,
+        )
+        emit()
+    }
+
+    /**
+     * What the mini player shows when the screen connects. A service that holds a station has
+     * pushed its metadata already. One with an empty queue, as after the process was killed,
+     * pushes none, and a play request would resume [mLastStation]'s station, so that one is shown,
+     * paused. Without one the mini player goes down, because the button would resume nothing.
+     */
+    private fun showWhatTheServiceHolds() {
+        val client = mClient ?: return
+        if (client.currentMediaItem != null) {
+            updateNowPlaying(client.mediaMetadata)
+            return
+        }
+        val last = mLastStation.get()
+        if (last.isInvalid()) {
+            mMiniPlayer = null
+            mPlayingId = null
+        } else {
+            mMiniPlayer = MiniPlayerState(
+                name = last.name,
+                initials = MainScreenRows.initials(last.name),
+                track = AppUtils.EMPTY_STRING,
+                isPlaying = false,
+            )
+            mPlayingId = last.id
+        }
+        emit()
     }
 
     private fun showTop() {

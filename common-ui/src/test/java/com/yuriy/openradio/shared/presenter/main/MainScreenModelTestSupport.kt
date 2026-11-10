@@ -22,6 +22,7 @@ import androidx.media3.common.MediaMetadata
 import com.yuriy.openradio.shared.model.media.MediaItemsSubscription
 import com.yuriy.openradio.shared.model.media.MediaLibraryClient
 import com.yuriy.openradio.shared.model.media.MediaResourceManagerListener
+import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.utils.AppUtils
@@ -121,11 +122,13 @@ internal class ModelUnderTest(source: Source = Source.RADIO_BROWSER) {
 
     val sources = FakeSourcesLayer(source)
     var online = true
+    var lastStation: RadioStation = RadioStation.INVALID_INSTANCE
     private var mClient: FakeLibraryClient? = null
     val model = MainScreenModel(
         { listener -> FakeLibraryClient(listener).also { mClient = it } },
         sources,
         { online },
+        { lastStation },
         CoroutineScope(Dispatchers.Unconfined)
     )
 
