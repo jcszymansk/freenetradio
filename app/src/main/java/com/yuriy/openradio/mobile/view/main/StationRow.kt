@@ -16,8 +16,6 @@
 
 package com.yuriy.openradio.mobile.view.main
 
-import android.content.Context
-import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,13 +38,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -59,11 +56,8 @@ import com.github.jcszymansk.console.design.ConsoleShapes
 import com.github.jcszymansk.console.design.InitialsTile
 import com.github.jcszymansk.console.design.bottomHairline
 import com.yuriy.openradio.mobile.R
+import com.yuriy.openradio.shared.model.storage.images.ImagesStore
 import com.yuriy.openradio.shared.presenter.main.RowState
-import com.yuriy.openradio.shared.utils.AppLogger
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.IOException
 
 /**
  * A station: tile or artwork, name, `CC · CODEC`, bitrate and heart. The current station's row
@@ -144,7 +138,8 @@ internal fun StationRow(row: RowState.Station, actions: MainScreenActions) {
 
 @Composable
 private fun StationTile(row: RowState.Station) {
-    val artwork = rememberArtwork(row.artworkUri, row.artworkRevision)
+    val uri = row.artworkUri
+    val artwork = if (uri == null) null else rememberArtwork(uri)
     if (artwork != null) {
         Image(
             artwork,
@@ -158,26 +153,18 @@ private fun StationTile(row: RowState.Station) {
 }
 
 /**
- * Loads the artwork at [uri] from the images provider, again whenever [revision] changes, which
- * is how artwork downloaded after the row appeared reaches it.
+ * The logo at [uri] from the [LocalArtworkCache]. The cached bitmap is the initial value, so a row
+ * that scrolls back into view shows its logo on the first frame. The revision of the image id is
+ * read, so a finished download reloads only the rows that show that logo, and the old bitmap stays
+ * until the new one is loaded.
  */
 @Composable
-private fun rememberArtwork(uri: String?, revision: Int): ImageBitmap? {
-    val context = LocalContext.current
-    val artwork by produceState<ImageBitmap?>(initialValue = null, uri, revision) {
-        value = if (uri == null) null else withContext(Dispatchers.IO) { readArtwork(context, uri) }
+private fun rememberArtwork(uri: String): ImageBitmap? {
+    val cache = LocalArtworkCache.current
+    val imageId = remember(uri) { ImagesStore.getId(Uri.parse(uri)) }
+    val revision = cache.revision(imageId)
+    val artwork by produceState(initialValue = cache.cached(imageId), cache, imageId, uri, revision) {
+        value = cache.load(imageId, uri)
     }
     return artwork
-}
-
-private fun readArtwork(context: Context, uri: String): ImageBitmap? {
-    return try {
-        context.contentResolver.openInputStream(Uri.parse(uri))?.use { BitmapFactory.decodeStream(it) }?.asImageBitmap()
-    } catch (failure: IOException) {
-        AppLogger.w("StationRow artwork $uri not read: $failure")
-        null
-    } catch (failure: SecurityException) {
-        AppLogger.w("StationRow artwork $uri not readable: $failure")
-        null
-    }
 }

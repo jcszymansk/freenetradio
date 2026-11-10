@@ -22,10 +22,15 @@ import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.lifecycleScope
+import com.github.jcszymansk.console.design.ConsoleDimens
 import com.github.jcszymansk.console.design.ConsoleTheme
+import com.yuriy.openradio.mobile.view.main.ArtworkCache
+import com.yuriy.openradio.mobile.view.main.LocalArtworkCache
 import com.yuriy.openradio.mobile.view.main.MainScreen
 import com.yuriy.openradio.mobile.view.main.MainScreenActions
 import com.yuriy.openradio.mobile.view.main.OverflowItem
@@ -104,7 +109,9 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
         DependencyRegistryCommonUi.injectMainScreenModel(this)
         DependencyRegistryCommonUi.injectCountrySetting(this)
         DependencyRegistryCommon.injectSleepTimerModel(this)
-        mPlatform = MainScreenPlatform(this, mModel, mCountrySetting, mSleepTimerModel)
+        val targetPx = with(Density(this)) { ConsoleDimens.tileSize.roundToPx() }
+        val artworkCache = ArtworkCache.forProvider(applicationContext, targetPx)
+        mPlatform = MainScreenPlatform(this, mModel, mCountrySetting, mSleepTimerModel, artworkCache)
         mPlatform.attach()
         mModel.start()
         onBackPressedDispatcher.addCallback(this) {
@@ -121,7 +128,11 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
         }
         setContent {
             val state by mModel.state.collectAsState()
-            ConsoleTheme { MainScreen(state, this@MainActivity) }
+            ConsoleTheme {
+                CompositionLocalProvider(LocalArtworkCache provides artworkCache) {
+                    MainScreen(state, this@MainActivity)
+                }
+            }
         }
         BatteryOptimizationDialog.handle(applicationContext, supportFragmentManager)
     }
