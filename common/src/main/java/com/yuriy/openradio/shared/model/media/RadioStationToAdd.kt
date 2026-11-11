@@ -16,7 +16,6 @@
 
 package com.yuriy.openradio.shared.model.media
 
-import java.io.Serializable
 
 /**
  * This class contains data to validate prior to add to data set (either local or remote server).
@@ -33,4 +32,4 @@ class RadioStationToAdd(
     val name: String, val url: String, val imageLocalUrl: String,
     val homePage: String, val genre: String,
     val country: String, val isAddToFav: Boolean
-) : Serializable
+)

@@ -20,7 +20,6 @@ import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.storage.images.ImagesStore
 import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppUtils
-import java.io.Serializable
 import java.util.Locale
 
 /**
@@ -59,7 +58,7 @@ fun RadioStation.setVariantFixed(bitrate: Int, url: String) {
     mediaStreamFixed.setVariant(bitrate, url)
 }
 
-class RadioStation : Serializable, Comparable<RadioStation> {
+class RadioStation : Comparable<RadioStation> {
 
     var name = AppUtils.EMPTY_STRING
     var homePage = AppUtils.EMPTY_STRING

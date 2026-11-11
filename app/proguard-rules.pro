@@ -6,17 +6,6 @@
     public <init>();
 }
 
-# Stations are Java-serialized; keep what Java serialization reads by name.
--keepclassmembers class * implements java.io.Serializable {
-    static final long serialVersionUID;
-    private static final java.io.ObjectStreamField[] serialPersistentFields;
-    private void writeObject(java.io.ObjectOutputStream);
-    private void readObject(java.io.ObjectInputStream);
-    java.lang.Object writeReplace();
-    java.lang.Object readResolve();
-    !static !transient <fields>;
-}
-
 # The playlist parsers use JDOM2's SAXBuilder, which instantiates its reader and handler
 # factories by name.
 -keep class org.jdom2.** { *; }
