@@ -19,6 +19,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
+import com.yuriy.openradio.shared.utils.AppLogger
 
 /**
  * Created by Yuriy Chernyshov
@@ -44,6 +45,8 @@ object AppPreferencesManager {
     private const val PREFS_KEY_BUFFER_FOR_PLAYBACK = "PREFS_KEY_BUFFER_FOR_PLAYBACK"
     private const val PREFS_KEY_BUFFER_FOR_REBUFFER_PLAYBACK = "PREFS_KEY_BUFFER_FOR_REBUFFER_PLAYBACK"
     private const val PREFS_KEY_BT_AUTO_PLAY = "PREFS_KEY_BT_AUTO_PLAY"
+    private const val PREFS_KEY_START_PLAYBACK = "START_PLAYBACK"
+    private const val PREFS_KEY_WAS_PLAYING_AT_EXIT = "WAS_PLAYING_AT_EXIT"
 
     /**
      * @return True if it is allowed to autoplay last known Radio Station on app start. False - otherwise.
@@ -60,6 +63,67 @@ object AppPreferencesManager {
     fun lastKnownRadioStationEnabled(context: Context, value: Boolean) {
         val editor = getEditor(context)
         editor.putBoolean(PREFS_KEY_LAST_KNOWN_RADIO_STATION_ENABLED, value)
+        editor.apply()
+    }
+
+    /**
+     * @return [StartPlayback] to apply on app start. A setting that was never stored is migrated from
+     * [PREFS_KEY_LAST_KNOWN_RADIO_STATION_ENABLED] once: true becomes [StartPlayback.ALWAYS], false
+     * becomes [StartPlayback.NEVER], and no old setting becomes [StartPlayback.IF_PLAYING].
+     */
+    fun startPlayback(context: Context): StartPlayback {
+        val preferences = getSharedPreferences(context)
+        if (preferences.contains(PREFS_KEY_START_PLAYBACK)) {
+            val stored = preferences.getString(PREFS_KEY_START_PLAYBACK, null)
+            val match = StartPlayback.entries.firstOrNull { it.name == stored }
+            if (match != null) {
+                return match
+            }
+            AppLogger.w("Unknown start playback setting '$stored', using ${StartPlayback.IF_PLAYING}")
+            return StartPlayback.IF_PLAYING
+        }
+
+        val migrated = if (!preferences.contains(PREFS_KEY_LAST_KNOWN_RADIO_STATION_ENABLED)) {
+            StartPlayback.IF_PLAYING
+        } else if (preferences.getBoolean(PREFS_KEY_LAST_KNOWN_RADIO_STATION_ENABLED, true)) {
+            StartPlayback.ALWAYS
+        } else {
+            StartPlayback.NEVER
+        }
+        val editor = preferences.edit()
+        editor.putString(PREFS_KEY_START_PLAYBACK, migrated.name)
+        editor.remove(PREFS_KEY_LAST_KNOWN_RADIO_STATION_ENABLED)
+        editor.apply()
+        AppLogger.i("Migrated start playback setting to $migrated")
+        return migrated
+    }
+
+    /**
+     * Set the [StartPlayback] to apply on app start.
+     *
+     * @param value [StartPlayback] value.
+     */
+    fun startPlayback(context: Context, value: StartPlayback) {
+        val editor = getEditor(context)
+        editor.putString(PREFS_KEY_START_PLAYBACK, value.name)
+        editor.apply()
+    }
+
+    /**
+     * @return True if playback was running when the app last exited. False - otherwise.
+     */
+    fun wasPlayingAtExit(context: Context): Boolean {
+        return getSharedPreferences(context).getBoolean(PREFS_KEY_WAS_PLAYING_AT_EXIT, false)
+    }
+
+    /**
+     * Record whether playback is running when the app exits.
+     *
+     * @param value Boolean value.
+     */
+    fun wasPlayingAtExit(context: Context, value: Boolean) {
+        val editor = getEditor(context)
+        editor.putBoolean(PREFS_KEY_WAS_PLAYING_AT_EXIT, value)
         editor.apply()
     }
 
