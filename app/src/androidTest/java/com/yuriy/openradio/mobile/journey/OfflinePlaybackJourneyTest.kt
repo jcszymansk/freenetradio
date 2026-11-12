@@ -27,6 +27,7 @@ import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
+import com.yuriy.openradio.shared.model.storage.StartPlayback
 import com.yuriy.openradio.shared.presenter.main.BrowseSnapshot
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LocalStationsFixture
@@ -89,7 +90,9 @@ class OfflinePlaybackJourneyTest {
 
     private lateinit var mStation: RadioStation
 
-    private var mWasLastKnownStationEnabled = true
+    private var mWasStartPlayback = StartPlayback.IF_PLAYING
+
+    private var mWasPlayingAtExit = false
 
     @Before
     fun setUp() {
@@ -97,8 +100,8 @@ class OfflinePlaybackJourneyTest {
         mAudio = LocalAudioFixture(mContext)
         mProfile = JourneyProfile(mContext)
         mProfile.start()
-        mWasLastKnownStationEnabled = AppPreferencesManager.lastKnownRadioStationEnabled(mContext)
-        AppPreferencesManager.lastKnownRadioStationEnabled(mContext, true)
+        mWasStartPlayback = AppPreferencesManager.startPlayback(mContext)
+        mWasPlayingAtExit = AppPreferencesManager.wasPlayingAtExit(mContext)
         // The player outlives every test class in the run, so a case that asserts what playing
         // does has to start from a player that is not.
         mProfile.browser.stop()
@@ -121,7 +124,8 @@ class OfflinePlaybackJourneyTest {
         mStations.parkThePlayer()
         mProfile.finish()
         mAudio.delete()
-        AppPreferencesManager.lastKnownRadioStationEnabled(mContext, mWasLastKnownStationEnabled)
+        AppPreferencesManager.startPlayback(mContext, mWasStartPlayback)
+        AppPreferencesManager.wasPlayingAtExit(mContext, mWasPlayingAtExit)
     }
 
     /**
@@ -333,22 +337,21 @@ class OfflinePlaybackJourneyTest {
     }
 
     /**
-     * REQ-008's restart, with the "last known station" setting on, as it is by default. The new
-     * service holds no queue and adopts the latest station, and the mini player comes up on it.
-     *
-     * It does not stay paused. With the setting on, the service starts the latest station by
-     * itself on the first non-empty page-0 browse it stores (`onFirstPageStored` →
-     * `maybeCreateInitialPlaylist`), and the screen browses the root as soon as it connects. That
-     * is the setting's own promise ("autoplay last known Radio Station on app start"), and the
-     * service is not changed (REQ-015). Decision 14 records the conflict with the spec's
-     * "paused" for the owner.
+     * With "always", the service starts the latest station on every app start, whichever state the
+     * player was in when the app last exited. The stop before the service is destroyed records that
+     * nothing was playing, and "always" ignores that record.
      */
     @Test
-    fun aRecreatedServiceBringsTheLatestStationBackOnTheMiniPlayer() {
+    fun aRecreatedServiceWithStartPlaybackAlwaysPlaysTheLatestStation() {
+        AppPreferencesManager.startPlayback(mContext, StartPlayback.ALWAYS)
         mProfile.storages.favorites.add(mStation)
         playTheStationUntilItIsTheLatest()
 
         recreateTheService()
+        assertFalse(
+            "The stop did not record that nothing was playing",
+            AppPreferencesManager.wasPlayingAtExit(mContext)
+        )
         assertEquals(
             "The recreated service did not adopt the latest station",
             mStation.id, mProfile.browser.activeStationId()
@@ -381,34 +384,99 @@ class OfflinePlaybackJourneyTest {
     }
 
     /**
-     * With the setting off, a recreated service adopts no station, so a play request would resume
-     * nothing. The mini player stays down rather than offer a button that does nothing, and
-     * nothing starts.
+     * With "if playing", a station that was playing when the app last exited starts again. The
+     * service records the playing state as it changes, and destroying a playing service does not
+     * overwrite that record, so the recreated service still sees it.
      */
     @Test
-    fun aRecreatedServiceWithTheLastStationSettingOffLeavesTheMiniPlayerDown() {
+    fun aRecreatedServiceWithStartPlaybackIfPlayingResumesAStationThatWasPlaying() {
+        AppPreferencesManager.startPlayback(mContext, StartPlayback.IF_PLAYING)
         mProfile.storages.favorites.add(mStation)
         playTheStationUntilItIsTheLatest()
-        AppPreferencesManager.lastKnownRadioStationEnabled(mContext, false)
+        mProfile.browser.awaitPlayback("the service to record that the station was playing") {
+            AppPreferencesManager.wasPlayingAtExit(mContext)
+        }
 
-        recreateTheService()
-        assertFalse(
-            "The recreated service adopted a station although the setting is off",
-            mProfile.browser.canABrowseStartPlayback()
+        recreateTheServiceWhilePlaying()
+        assertTrue(
+            "Destroying the playing service overwrote the record that it was playing",
+            AppPreferencesManager.wasPlayingAtExit(mContext)
         )
 
         ActivityScenario.launch(MainActivity::class.java).use {
-            val view = MainScreenView(mCompose)
             val miniPlayer = MiniPlayerView(mCompose)
-            view.awaitRows("FAV to show the favorite, so the screen is connected") { rows ->
-                rows.any { it.mediaId == mStation.id }
-            }
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(SETTLE_SECONDS)
-            while (System.nanoTime() < deadline) {
-                assertFalse("The mini player came up. " + miniPlayer.describe(), miniPlayer.isVisible())
-                assertFalse("Something started playing", mProfile.browser.isPlaying())
-                Thread.sleep(POLL_MILLIS)
-            }
+            miniPlayer.awaitName(mStation.name)
+            mProfile.browser.awaitPlaying()
+            assertEquals(
+                "The service started some other station than the latest one",
+                mStation.id, mProfile.browser.currentMediaId()
+            )
+            miniPlayer.awaitPlaying(true)
+        }
+    }
+
+    /**
+     * With "if playing", a station that was paused when the app last exited is held paused: the
+     * recreated service prepares it without a play request, and the mini player's button resumes
+     * it.
+     */
+    @Test
+    fun aRecreatedServiceWithStartPlaybackIfPlayingHoldsAPausedStationPaused() {
+        AppPreferencesManager.startPlayback(mContext, StartPlayback.IF_PLAYING)
+        mProfile.storages.favorites.add(mStation)
+        playTheStationUntilItIsTheLatest()
+        mProfile.browser.pause()
+        mProfile.browser.awaitPlayback("the station to pause and the pause to be recorded") {
+            !mProfile.browser.isPlaying() && !AppPreferencesManager.wasPlayingAtExit(mContext)
+        }
+
+        recreateTheService()
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            val miniPlayer = MiniPlayerView(mCompose)
+            awaitTheStationHeldPaused(miniPlayer)
+
+            miniPlayer.tapButton()
+
+            mProfile.browser.awaitPlaying()
+            assertEquals(
+                "Resuming moved the player onto some other station",
+                mStation.id, mProfile.browser.currentMediaId()
+            )
+        }
+    }
+
+    /**
+     * With "never", a recreated service starts nothing, but it still holds the latest station
+     * prepared and paused, so the mini player shows it with the play button and one press resumes
+     * it. A record that the station was playing does not change that.
+     */
+    @Test
+    fun aRecreatedServiceWithStartPlaybackNeverHoldsTheLatestStationPaused() {
+        AppPreferencesManager.startPlayback(mContext, StartPlayback.NEVER)
+        mProfile.storages.favorites.add(mStation)
+        playTheStationUntilItIsTheLatest()
+        mProfile.browser.awaitPlayback("the service to record that the station was playing") {
+            AppPreferencesManager.wasPlayingAtExit(mContext)
+        }
+
+        recreateTheServiceWhilePlaying()
+        assertEquals(
+            "The recreated service did not adopt the latest station",
+            mStation.id, mProfile.browser.activeStationId()
+        )
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            val miniPlayer = MiniPlayerView(mCompose)
+            awaitTheStationHeldPaused(miniPlayer)
+
+            miniPlayer.tapButton()
+
+            mProfile.browser.awaitPlaying()
+            assertEquals(
+                "Resuming moved the player onto some other station",
+                mStation.id, mProfile.browser.currentMediaId()
+            )
         }
     }
 
@@ -428,18 +496,46 @@ class OfflinePlaybackJourneyTest {
 
     /**
      * Stops playback and destroys the service, so the next connection creates a new one with an
-     * empty queue. [ServiceRecreation] needs every binding released. The screen's binding went
-     * when its activity was destroyed, because the model's `stop()` cleans its client. This
-     * class's own two bindings are released here.
+     * empty queue. The service is destroyed with nothing playing, and the stop records that.
      */
     private fun recreateTheService() {
         mProfile.browser.stop()
         mProfile.browser.awaitPlaybackState(Player.STATE_IDLE)
+        recreateTheServiceWhilePlaying()
+    }
+
+    /**
+     * Destroys the service without stopping it first, so the station is still playing when the
+     * service goes. [ServiceRecreation] needs every binding released. The screen's binding went
+     * when its activity was destroyed, because the model's `stop()` cleans its client. This
+     * class's own two bindings are released here.
+     */
+    private fun recreateTheServiceWhilePlaying() {
         mPlayback.release()
         mProfile.browser.release()
         ServiceRecreation(mContext).destroyTheService()
         mProfile.browser.connectUnchecked()
         assertEquals("The recreated service holds a queue", 0, mProfile.browser.mediaItemCount())
+    }
+
+    /**
+     * Waits for the mini player to show the station paused, then holds it so for [SETTLE_SECONDS]:
+     * the player is prepared, is not playing, has no play request, and stays on the station.
+     */
+    private fun awaitTheStationHeldPaused(miniPlayer: MiniPlayerView) {
+        miniPlayer.awaitName(mStation.name)
+        miniPlayer.awaitPlaying(false)
+        mProfile.browser.awaitPlaybackState(Player.STATE_READY)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(SETTLE_SECONDS)
+        while (System.nanoTime() < deadline) {
+            assertFalse("The paused station started playing", mProfile.browser.isPlaying())
+            assertFalse("The paused station has a play request", mProfile.browser.playWhenReady())
+            assertEquals(
+                "The paused start moved the player",
+                mStation.id, mProfile.browser.currentMediaId()
+            )
+            Thread.sleep(POLL_MILLIS)
+        }
     }
 
     /**

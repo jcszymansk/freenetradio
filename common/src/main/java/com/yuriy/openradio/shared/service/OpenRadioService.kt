@@ -162,6 +162,12 @@ class OpenRadioService : MediaLibraryService() {
     @Volatile
     private var mCountryStationsCode = AppUtils.EMPTY_STRING
     private var mIsRestoreState = false
+
+    /**
+     * Set while the service shuts down, so the player's stop is not recorded as the user pausing.
+     * Only touched on the main thread.
+     */
+    private var mIsShuttingDown = false
     private lateinit var mPresenter: OpenRadioServicePresenter
     private lateinit var mDownloader: DownloaderLayer
     private val mSleepTimerListener = SleepTimerListenerImpl()
@@ -233,9 +239,7 @@ class OpenRadioService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         AppLogger.i("$TAG on create")
-        if (AppPreferencesManager.lastKnownRadioStationEnabled(applicationContext)) {
-            setActiveRS(mPresenter.getLastRadioStation())
-        }
+        setActiveRS(mPresenter.getLastRadioStation())
         registerReceivers()
         mSession = with(
             MediaLibrarySession.Builder(
@@ -280,6 +284,7 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        mIsShuttingDown = true
         super.onDestroy()
         AppLogger.i("$TAG on destroy")
         mUiScope.cancel("Cancel on destroy")
@@ -534,6 +539,7 @@ class OpenRadioService : MediaLibraryService() {
     }
 
     private fun closeService() {
+        mIsShuttingDown = true
         handleStopRequest()
         stopSelfResultInt()
         // TODO: There is on start command received after stop command ... need to find out the reason.
@@ -661,8 +667,31 @@ class OpenRadioService : MediaLibraryService() {
         }
         buildInitialPlaylist(rs) { playlist ->
             mPlayer.setMediaItems(playlist.mediaItems, playlist.startIndex, playlist.startPositionMs)
-            handlePlayRequestUiThread()
+            val startPlayback = AppPreferencesManager.startPlayback(applicationContext)
+            val wasPlaying = AppPreferencesManager.wasPlayingAtExit(applicationContext)
+            val plays = startPlayback.playsOnStart(wasPlaying)
+            AppLogger.i("$TAG start playback $startPlayback, was playing $wasPlaying, plays $plays")
+            if (plays) {
+                handlePlayRequestUiThread()
+            } else {
+                holdPausedUiThread()
+            }
         }
+    }
+
+    /**
+     * Prepares the station without a play request, so the mini player shows it and one press of
+     * its button resumes it. A new player starts with play-when-ready set, so it is paused before
+     * it is prepared; otherwise it would start playing as soon as it loads.
+     */
+    @MainThread
+    private fun holdPausedUiThread() {
+        mPlayer.pause()
+        if (mPresenter.isPlaybackBlockedByMobileNetwork()) {
+            AppLogger.i("$TAG hold paused without prepare, mobile network is blocked")
+            return
+        }
+        mPlayer.prepare()
     }
 
     /**
@@ -718,6 +747,19 @@ class OpenRadioService : MediaLibraryService() {
          */
         override fun onStreamRetryBlocked() {
             pauseForNetworkPolicyUiThread()
+        }
+
+        /**
+         * Records whether the station is playing, so the next start can tell what the user left
+         * playing. Stopping during shutdown is not the user's doing, so it is not recorded.
+         */
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (mIsShuttingDown) {
+                AppLogger.d("$TAG playing $isPlaying while shutting down, not recorded")
+                return
+            }
+            AppPreferencesManager.wasPlayingAtExit(applicationContext, isPlaying)
+            AppLogger.i("$TAG recorded was playing $isPlaying")
         }
 
         override fun onPlaybackStateChanged(mediaItem: MediaItem) {

@@ -23,11 +23,9 @@ import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.logging.LoggingLayer
 import com.yuriy.openradio.shared.model.logging.LoggingLayerImpl
 import com.yuriy.openradio.shared.model.media.MediaResourcesManager
-import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayer
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.source.SourcesLayer
-import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
 import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.FileStoreManager
@@ -111,15 +109,9 @@ object DependencyRegistryCommonUi :
             { listener -> MediaResourcesManager(context, MAIN_SCREEN_CLIENT, listener) },
             sSourcesLayer,
             { sNetworkLayer.checkConnectivityAndNotify(context) },
-            // A recreated service adopts the latest station only while this setting is on
-            // (OpenRadioService.onCreate), and only then would a play request resume it.
-            LastPlayedStation {
-                if (AppPreferencesManager.lastKnownRadioStationEnabled(context)) {
-                    sLatestRadioStationStorage.get()
-                } else {
-                    RadioStation.INVALID_INSTANCE
-                }
-            },
+            // A recreated service always adopts the latest station (OpenRadioService.onCreate),
+            // so a play request resumes it whenever there is one.
+            LastPlayedStation { sLatestRadioStationStorage.get() },
             uiScope
         )
         sCountrySetting = CountrySettingImpl(sLocationStorage, sMainScreenModel, uiScope)

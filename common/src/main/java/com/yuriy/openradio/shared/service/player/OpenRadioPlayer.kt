@@ -102,6 +102,11 @@ class OpenRadioPlayer(
          * and nothing tries it again until that network connects.
          */
         fun onStreamRetryBlocked()
+
+        /**
+         * The player started or stopped playing.
+         */
+        fun onIsPlayingChanged(isPlaying: Boolean) = Unit
     }
 
     /**
@@ -1075,6 +1080,10 @@ class OpenRadioPlayer(
             if (playWhenReady) {
                 updateNetworkRecovery(mNetworkRecovery.onPlayRequested(), "play requested")
             }
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            mListener.onIsPlayingChanged(isPlaying)
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
