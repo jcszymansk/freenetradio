@@ -30,6 +30,7 @@ import com.yuriy.openradio.mobile.view.main.OverflowItem
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
+import com.yuriy.openradio.shared.model.storage.StartPlayback
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.NetworkDialog
@@ -184,9 +185,7 @@ class SettingsPersistenceJourneyTest {
             APP_PREFERENCE_FILE,
             "\"PREFS_KEY_BUFFER_FOR_REBUFFER_PLAYBACK\" value=\"$REBUFFER_BUFFER\""
         )
-        mProfile.awaitStoredOnDisk(
-            APP_PREFERENCE_FILE, "\"LAST_KNOWN_RADIO_STATION_ENABLED\" value=\"false\""
-        )
+        mProfile.awaitStoredOnDisk(APP_PREFERENCE_FILE, "\"START_PLAYBACK\">NEVER<")
         mProfile.awaitStoredOnDisk(APP_PREFERENCE_FILE, "\"IS_CUSTOM_USER_AGENT\" value=\"true\"")
         mProfile.awaitStoredOnDisk(APP_PREFERENCE_FILE, ">${CUSTOM_USER_AGENT}<")
         mProfile.awaitStoredOnDisk(LOCATION_PREFERENCE_FILE, ">${CHOSEN_COUNTRY_CODE}<")
@@ -240,13 +239,13 @@ class SettingsPersistenceJourneyTest {
         val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GENERAL_TAG)
         assertTrue(
             "The general dialog did not open on the stored value",
-            dialogs.isChecked(
-                general, DialogR.id.settings_dialog_enable_last_known_radio_station_check_view
-            )
+            dialogs.isChecked(general, DialogR.id.settings_dialog_start_playback_if_playing)
         )
-        dialogs.click(
-            general, DialogR.id.settings_dialog_enable_last_known_radio_station_check_view
+        assertFalse(
+            "The general dialog did not open on the stored value",
+            dialogs.isChecked(general, DialogR.id.settings_dialog_start_playback_never)
         )
+        dialogs.click(general, DialogR.id.settings_dialog_start_playback_never)
 
         assertFalse(
             "A custom user agent was already switched on",
@@ -278,11 +277,13 @@ class SettingsPersistenceJourneyTest {
         dialogs.dismiss(BUFFERING_TAG)
 
         val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GENERAL_TAG)
+        assertTrue(
+            "The general dialog shows a different start playback choice after the recreate",
+            dialogs.isChecked(general, DialogR.id.settings_dialog_start_playback_never)
+        )
         assertFalse(
-            "The general dialog offers the last known station again after the recreate",
-            dialogs.isChecked(
-                general, DialogR.id.settings_dialog_enable_last_known_radio_station_check_view
-            )
+            "The general dialog shows a different start playback choice after the recreate",
+            dialogs.isChecked(general, DialogR.id.settings_dialog_start_playback_if_playing)
         )
         assertTrue(
             "The custom user agent is switched off again after the recreate",
@@ -364,9 +365,10 @@ class SettingsPersistenceJourneyTest {
             DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
             AppPreferencesManager.getPlayBufferRebuffer(mContext)
         )
-        assertTrue(
-            "This journey starts from a cleared profile, and the last known station was already off",
-            AppPreferencesManager.lastKnownRadioStationEnabled(mContext)
+        assertEquals(
+            "This journey starts from a cleared profile, and the start playback choice was already changed",
+            StartPlayback.IF_PLAYING,
+            AppPreferencesManager.startPlayback(mContext)
         )
         assertFalse(
             "This journey starts from a cleared profile, and a custom user agent was already on",
@@ -404,9 +406,10 @@ class SettingsPersistenceJourneyTest {
             REBUFFER_BUFFER,
             AppPreferencesManager.getPlayBufferRebuffer(mContext)
         )
-        assertFalse(
-            "The general dialog did not store the last known station being switched off",
-            AppPreferencesManager.lastKnownRadioStationEnabled(mContext)
+        assertEquals(
+            "The general dialog did not store the start playback choice",
+            StartPlayback.NEVER,
+            AppPreferencesManager.startPlayback(mContext)
         )
         assertTrue(
             "The general dialog did not store the custom user agent being switched on",

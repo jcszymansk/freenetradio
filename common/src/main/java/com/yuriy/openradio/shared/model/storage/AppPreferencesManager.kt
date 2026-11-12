@@ -49,24 +49,6 @@ object AppPreferencesManager {
     private const val PREFS_KEY_WAS_PLAYING_AT_EXIT = "WAS_PLAYING_AT_EXIT"
 
     /**
-     * @return True if it is allowed to autoplay last known Radio Station on app start. False - otherwise.
-     */
-    fun lastKnownRadioStationEnabled(context: Context): Boolean {
-        return getSharedPreferences(context).getBoolean(PREFS_KEY_LAST_KNOWN_RADIO_STATION_ENABLED, true)
-    }
-
-    /**
-     * Set True if it is allowed to autoplay last known Radio Station on app start. False - otherwise.
-     *
-     * @param value Boolean value.
-     */
-    fun lastKnownRadioStationEnabled(context: Context, value: Boolean) {
-        val editor = getEditor(context)
-        editor.putBoolean(PREFS_KEY_LAST_KNOWN_RADIO_STATION_ENABLED, value)
-        editor.apply()
-    }
-
-    /**
      * @return [StartPlayback] to apply on app start. A setting that was never stored is migrated from
      * [PREFS_KEY_LAST_KNOWN_RADIO_STATION_ENABLED] once: true becomes [StartPlayback.ALWAYS], false
      * becomes [StartPlayback.NEVER], and no old setting becomes [StartPlayback.IF_PLAYING].

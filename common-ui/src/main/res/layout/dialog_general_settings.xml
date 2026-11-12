@@ -42,12 +42,39 @@
             android:alpha="0.5"
             android:background="@color/or_color_text" />
 
-        <CheckBox
-            android:id="@+id/settings_dialog_enable_last_known_radio_station_check_view"
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="5dp"
+            android:text="@string/start_playback_title"
+            android:textSize="20sp" />
+
+        <RadioGroup
+            android:id="@+id/settings_dialog_start_playback_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="15dp"
-            android:text="@string/enable_last_known_radio_station_label" />
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/settings_dialog_start_playback_always"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/start_playback_always" />
+
+            <RadioButton
+                android:id="@+id/settings_dialog_start_playback_if_playing"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/start_playback_if_playing" />
+
+            <RadioButton
+                android:id="@+id/settings_dialog_start_playback_never"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/start_playback_never" />
+
+        </RadioGroup>
 
         <View
             android:layout_width="match_parent"
