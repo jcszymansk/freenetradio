@@ -16,7 +16,6 @@
 
 package com.yuriy.openradio.mobile.journey
 
-import android.app.Activity
 import android.app.Instrumentation
 import android.content.ContentResolver
 import android.content.Context
@@ -36,7 +35,6 @@ import com.yuriy.openradio.mobile.view.main.OverflowItem
 import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import com.yuriy.openradio.testing.withActivity
 import java.io.File
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 import org.junit.After
@@ -84,7 +82,7 @@ class DiagnosticReportJourneyTest {
 
     private lateinit var mLegacyReports: File
 
-    private val mChooser = ChooserMonitor()
+    private val mChooser = LaunchRecorder(Intent.ACTION_CHOOSER)
 
     @Before
     fun setUp() {
@@ -95,12 +93,12 @@ class DiagnosticReportJourneyTest {
         mLegacyReports.deleteRecursively()
         mProfile = JourneyProfile(mContext)
         mProfile.start()
-        InstrumentationRegistry.getInstrumentation().addMonitor(mChooser)
+        mChooser.install()
     }
 
     @After
     fun tearDown() {
-        InstrumentationRegistry.getInstrumentation().removeMonitor(mChooser)
+        mChooser.remove()
         mReports.deleteRecursively()
         mLegacyReports.deleteRecursively()
         mProfile.clearApplicationData()
@@ -186,7 +184,7 @@ class DiagnosticReportJourneyTest {
             val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GeneralSettingsDialog.DIALOG_TAG)
             dialogs.click(general, DialogR.id.send_logs_btn)
             confirmTheWarning(scenario)
-            val chooser = mChooser.awaitChooser()
+            val chooser = mChooser.await(CHOOSER_TIMEOUT_SECONDS)
             dialogs.dismiss(GeneralSettingsDialog.DIALOG_TAG)
             @Suppress("DEPRECATION")
             return chooser.getParcelableExtra(Intent.EXTRA_INTENT)
@@ -233,28 +231,6 @@ class DiagnosticReportJourneyTest {
         return ZipInputStream(input).use { zip ->
             val entry = zip.nextEntry ?: throw AssertionError("The report is an empty archive")
             entry.name to zip.bufferedReader().readText()
-        }
-    }
-
-    /**
-     * Records the chooser the application starts and keeps it from opening, while every other
-     * start goes ahead.
-     */
-    private class ChooserMonitor : Instrumentation.ActivityMonitor() {
-
-        private val mChoosers = LinkedBlockingQueue<Intent>()
-
-        override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? {
-            if (intent.action != Intent.ACTION_CHOOSER) {
-                return null
-            }
-            mChoosers.add(intent)
-            return Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null)
-        }
-
-        fun awaitChooser(): Intent {
-            return mChoosers.poll(CHOOSER_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                ?: throw AssertionError("No chooser was started within $CHOOSER_TIMEOUT_SECONDS seconds")
         }
     }
 

@@ -75,9 +75,10 @@ internal class JourneyNavigation(
 }
 
 /**
- * Pops every tab of [model] to its root and selects FAV. Main thread only.
+ * Closes Now playing, pops every tab of [model] to its root and selects FAV. Main thread only.
  */
 internal fun resetToRoots(model: MainScreenModel) {
+    model.closePlayer()
     for ((tab, stack) in model.snapshot().stacks) {
         if (stack.size > 1 && tab in model.state.value.tabs) {
             model.selectTab(tab)

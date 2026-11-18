@@ -28,17 +28,14 @@ import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.storage.StartPlayback
-import com.yuriy.openradio.shared.presenter.main.BrowseSnapshot
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LocalStationsFixture
 import com.yuriy.openradio.shared.service.ServiceRecreation
-import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -139,7 +136,7 @@ class OfflinePlaybackJourneyTest {
     @Test
     fun aSelectedStationPlaysTheAudioItPointsAt() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            selectTheStationFromMine(scenario)
+            selectTheStationFromMine(scenario, mCompose, mProfile, mPlayback, mStation)
 
             mProfile.browser.awaitPlaying()
             assertEquals(
@@ -184,7 +181,7 @@ class OfflinePlaybackJourneyTest {
                 miniPlayer.name()
             )
 
-            selectTheStationFromMine(scenario)
+            selectTheStationFromMine(scenario, mCompose, mProfile, mPlayback, mStation)
 
             miniPlayer.awaitName(mStation.name)
             miniPlayer.awaitTrack(mAudio.liveStreamDescription())
@@ -205,7 +202,7 @@ class OfflinePlaybackJourneyTest {
     @Test
     fun theMiniPlayerComesBackUpForAnActivityThatDidNotStartPlayback() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            selectTheStationFromMine(scenario)
+            selectTheStationFromMine(scenario, mCompose, mProfile, mPlayback, mStation)
             mProfile.browser.awaitPlaying()
             MiniPlayerView(mCompose).awaitName(mStation.name)
         }
@@ -229,14 +226,15 @@ class OfflinePlaybackJourneyTest {
      * state whether that means pause or play, so the same gesture has to do both, and the button
      * has to say which one it will do next.
      *
-     * The station's name is a tap target that acts on nothing until a Now playing screen exists
-     * (REQ-008). It is tapped while the station is paused, where anything it started would show.
+     * The station's name opens Now playing (REQ-001 of the Now playing build). It is tapped while
+     * the station is paused, where anything it started would show, and Now playing is closed again
+     * before the button resumes the station.
      */
     @Test
     fun theMiniPlayerButtonPausesAndResumesTheStation() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val miniPlayer = MiniPlayerView(mCompose)
-            selectTheStationFromMine(scenario)
+            selectTheStationFromMine(scenario, mCompose, mProfile, mPlayback, mStation)
             mProfile.browser.awaitPlaying()
             miniPlayer.awaitName(mStation.name)
             miniPlayer.awaitPlaying(true)
@@ -251,9 +249,17 @@ class OfflinePlaybackJourneyTest {
                 mProfile.browser.currentMediaId()
             )
 
-            val before = JourneyNavigation(scenario, MainScreenView(mCompose)).snapshot()
+            val navigation = JourneyNavigation(scenario, MainScreenView(mCompose))
+            val before = navigation.snapshot()
+            val nowPlaying = NowPlayingView(mCompose)
             miniPlayer.tapName()
-            assertNameTapDoesNothing(scenario, miniPlayer, before)
+            nowPlaying.awaitShown()
+            nowPlaying.awaitName(mStation.name)
+            assertFalse("Opening Now playing started the station", mProfile.browser.isPlaying())
+            assertFalse("The mini player is shown over Now playing", miniPlayer.isVisible())
+            nowPlaying.tapClose()
+            nowPlaying.awaitGone()
+            assertEquals("Closing Now playing moved the main screen", before, navigation.snapshot())
 
             miniPlayer.tapButton()
 
@@ -280,11 +286,11 @@ class OfflinePlaybackJourneyTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val view = MainScreenView(mCompose)
             val navigation = JourneyNavigation(scenario, view)
-            selectTheStationFromMine(scenario)
+            selectTheStationFromMine(scenario, mCompose, mProfile, mPlayback, mStation)
             mProfile.browser.awaitPlaying()
             MiniPlayerView(mCompose).awaitName(mStation.name)
             try {
-                awaitTheStationOnMine(view)
+                awaitTheStationOnMine(view, mProfile, mStation)
                 assertEquals(
                     "The station is already marked, so marking it proves nothing. " + view.describe(),
                     false,
@@ -321,7 +327,7 @@ class OfflinePlaybackJourneyTest {
             val view = MainScreenView(mCompose)
             val navigation = JourneyNavigation(scenario, view)
             try {
-                awaitTheStationOnMine(view)
+                awaitTheStationOnMine(view, mProfile, mStation)
 
                 view.tapRow(mStation.id)
 
@@ -486,7 +492,7 @@ class OfflinePlaybackJourneyTest {
      */
     private fun playTheStationUntilItIsTheLatest() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            selectTheStationFromMine(scenario)
+            selectTheStationFromMine(scenario, mCompose, mProfile, mPlayback, mStation)
             mProfile.browser.awaitPlaying()
             mProfile.browser.awaitPlayback("the station to be stored as the latest one") {
                 mProfile.storages.freshLatest().get().id == mStation.id
@@ -539,42 +545,6 @@ class OfflinePlaybackJourneyTest {
     }
 
     /**
-     * Selects the station on its own rendered row on MINE, and puts the tabs back.
-     *
-     * The item handed over is the one MINE's row shows and the parent is the node MINE stands in,
-     * both read from the screen's model the way its long-press reads them, so neither argument of
-     * the selection is invented here.
-     */
-    private fun selectTheStationFromMine(scenario: ActivityScenario<MainActivity>) {
-        val view = MainScreenView(mCompose)
-        val navigation = JourneyNavigation(scenario, view)
-        try {
-            awaitTheStationOnMine(view)
-            val model = registryModel()
-            val target = scenario.withActivity { model.longPressTarget(mStation.id) }
-            assertNotNull(
-                "The station's row is on MINE but the model holds no item for it. " + view.describe(),
-                target
-            )
-            mPlayback.select(target!!.item, target.parentId)
-        } finally {
-            navigation.returnToRoots()
-        }
-    }
-
-    /**
-     * Selects MINE and waits for it to list the seeded station, under its own name.
-     */
-    private fun awaitTheStationOnMine(view: MainScreenView) {
-        view.awaitTabs(mProfile.cleanInstallTabs())
-        assertEquals(
-            "MINE does not show the seeded station",
-            listOf(BrowseRow(mStation.id, mStation.name)),
-            mProfile.awaitSeededMine(view, mStation)
-        )
-    }
-
-    /**
      * Asserts that nothing starts playing and that the mini player does not come up for this
      * station, and goes on asserting it.
      *
@@ -587,28 +557,6 @@ class OfflinePlaybackJourneyTest {
             assertFalse("$reason " + mProfile.browser.currentMediaId(), mProfile.browser.isPlaying())
             assertNotEquals(reason, mStation.id, mProfile.browser.currentMediaId())
             assertNotEquals("$reason " + miniPlayer.describe(), mStation.name, miniPlayer.name())
-            Thread.sleep(POLL_MILLIS)
-        }
-    }
-
-    /**
-     * Asserts that the tap on the station's name, made while the station is paused, goes on
-     * changing nothing: the station stays paused and held, the mini player stays as it was, and
-     * the screen stays where it was.
-     */
-    private fun assertNameTapDoesNothing(
-        scenario: ActivityScenario<MainActivity>,
-        miniPlayer: MiniPlayerView,
-        before: BrowseSnapshot
-    ) {
-        val navigation = JourneyNavigation(scenario, MainScreenView(mCompose))
-        val reason = "Tapping the station's name in the mini player did something"
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(SETTLE_SECONDS)
-        while (System.nanoTime() < deadline) {
-            assertFalse("$reason: the station started", mProfile.browser.isPlaying())
-            assertEquals("$reason: the player moved", mStation.id, mProfile.browser.currentMediaId())
-            assertEquals("$reason. " + miniPlayer.describe(), mStation.name, miniPlayer.name())
-            assertEquals("$reason: the screen moved", before, navigation.snapshot())
             Thread.sleep(POLL_MILLIS)
         }
     }
