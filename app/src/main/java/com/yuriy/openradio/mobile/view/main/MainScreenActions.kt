@@ -34,6 +34,7 @@ interface MainScreenActions {
     fun onLoadMore()
     fun onRetry()
     fun onTogglePlayback()
+    fun onOpenNowPlaying()
     fun onAddStation()
     fun onScroll(levelKey: String, position: ScrollPosition)
 }

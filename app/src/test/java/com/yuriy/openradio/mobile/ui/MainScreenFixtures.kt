@@ -110,6 +110,7 @@ internal object MainScreenFixtures {
         override fun onLoadMore() = Unit
         override fun onRetry() = Unit
         override fun onTogglePlayback() = Unit
+        override fun onOpenNowPlaying() = Unit
         override fun onAddStation() = Unit
         override fun onScroll(levelKey: String, position: ScrollPosition) = Unit
     }

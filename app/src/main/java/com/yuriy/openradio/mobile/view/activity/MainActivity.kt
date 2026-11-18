@@ -191,6 +191,8 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
 
     override fun onTogglePlayback() = mModel.togglePlayback()
 
+    override fun onOpenNowPlaying() = mModel.openNowPlaying()
+
     override fun onAddStation() = showDialog(AddStationDialog::class.java.name, AddStationDialog.DIALOG_TAG)
 
     override fun onScroll(levelKey: String, position: ScrollPosition) = mModel.rememberScroll(levelKey, position)
