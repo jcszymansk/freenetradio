@@ -16,9 +16,11 @@
 
 package com.yuriy.openradio.shared.presenter.main
 
+import androidx.media3.common.MediaMetadata
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.service.OpenRadioService
+import com.yuriy.openradio.shared.service.OpenRadioStore
 import com.yuriy.openradio.shared.utils.AppUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -626,6 +628,198 @@ class MainScreenModelTest {
 
         m.model.search("rock")
         assertFalse("The FAB follows the node on top, not the tab", m.state.showAddFab)
+    }
+
+    // --- now playing and station details (REQ-001 to REQ-003, REQ-007, REQ-015) ---------------
+
+    @Test
+    fun theMiniPlayerOpensNowPlayingForTheStationShown() {
+        val m = ModelUnderTest().startAndConnect().play()
+
+        m.model.openNowPlaying()
+
+        assertEquals(PlayerScreen.NOW_PLAYING, m.state.playerScreen)
+        assertEquals("Arrow Classic Rock", m.state.nowPlaying!!.name)
+    }
+
+    @Test
+    fun withNoStationNowPlayingStaysShut() {
+        val m = ModelUnderTest().startAndConnect()
+
+        m.model.openNowPlaying()
+
+        assertEquals(PlayerScreen.NONE, m.state.playerScreen)
+        assertNull(m.state.nowPlaying)
+    }
+
+    @Test
+    fun aVisitToNowPlayingLeavesTheTabsStacksAndScrollAsTheyWere() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.selectTab(Tab.GENRE)
+        m.model.search("rock")
+        m.client.answer(MediaId.MEDIA_ID_SEARCH_FROM_APP, listOf(station("a"), station("b")))
+        m.model.rememberScroll(m.state.levelKey, ScrollPosition(1, 12))
+        val before = m.model.snapshot()
+        val asked = m.client.subscriptions.size
+
+        m.model.openNowPlaying()
+        m.model.closePlayer()
+
+        assertEquals(before, m.model.snapshot())
+        assertEquals(ScrollPosition(1, 12), m.state.scroll)
+        assertEquals(listOf("a", "b"), m.rowIds())
+        assertEquals("A visit asked the library again", asked, m.client.subscriptions.size)
+    }
+
+    @Test
+    fun backClosesNowPlayingBeforeItPopsATab() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.search("rock")
+        m.model.openNowPlaying()
+
+        assertTrue(m.model.back())
+
+        assertEquals(PlayerScreen.NONE, m.state.playerScreen)
+        assertEquals(
+            listOf(Tab.FAV.rootId, MediaId.MEDIA_ID_SEARCH_FROM_APP),
+            m.model.snapshot().stacks.getValue(Tab.FAV)
+        )
+    }
+
+    @Test
+    fun backOnStationDetailsReturnsToNowPlaying() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.openNowPlaying()
+        m.model.openStationDetails()
+        assertEquals(PlayerScreen.STATION_DETAILS, m.state.playerScreen)
+
+        assertTrue(m.model.back())
+
+        assertEquals(PlayerScreen.NOW_PLAYING, m.state.playerScreen)
+    }
+
+    @Test
+    fun stationDetailsOpensOnlyFromNowPlaying() {
+        val m = ModelUnderTest().startAndConnect().play()
+
+        m.model.openStationDetails()
+
+        assertEquals(PlayerScreen.NONE, m.state.playerScreen)
+    }
+
+    @Test
+    fun theChevronClosesStationDetailsAndNowPlayingTogether() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.openNowPlaying()
+        m.model.openStationDetails()
+
+        m.model.closePlayer()
+
+        assertEquals(PlayerScreen.NONE, m.state.playerScreen)
+        assertEquals(PlayerScreen.NONE, m.model.snapshot().player)
+    }
+
+    @Test
+    fun closeShutsNowPlayingWithTheScreen() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.openNowPlaying()
+
+        m.model.close()
+
+        assertEquals(PlayerScreen.NONE, m.state.playerScreen)
+    }
+
+    @Test
+    fun aServiceThatResumesNothingShutsNowPlaying() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.openNowPlaying()
+        m.model.stop()
+
+        m.startAndConnect()
+
+        assertEquals(PlayerScreen.NONE, m.state.playerScreen)
+        assertNull(m.state.miniPlayer)
+    }
+
+    /**
+     * The model is a process singleton, so a rotation or a theme switch, which destroys the
+     * activity and stops and starts the model, finds Station details where it was.
+     */
+    @Test
+    fun theOpenPlayerScreenOutlivesTheActivity() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.openNowPlaying()
+        m.model.openStationDetails()
+        m.model.stop()
+
+        m.model.start()
+        m.client.currentMediaItem = station("s1", "Arrow Classic Rock")
+        m.client.mediaMetadata = MediaMetadata.Builder().setTitle("Arrow Classic Rock").build()
+        m.client.listener.onConnected()
+
+        assertEquals(PlayerScreen.STATION_DETAILS, m.state.playerScreen)
+    }
+
+    @Test
+    fun anotherStationKeepsNowPlayingOpenOnIt() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.openNowPlaying()
+        m.model.openStationDetails()
+
+        m.play("s2", "Capital FM", "")
+
+        assertEquals(PlayerScreen.STATION_DETAILS, m.state.playerScreen)
+        assertEquals("Capital FM", m.state.nowPlaying!!.name)
+        assertEquals("s2", m.state.playingId)
+    }
+
+    @Test
+    fun theNowPlayingHeartMarksAStationThatNoShownListHolds() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.client.answer(MediaId.MEDIA_ID_FAVORITES_LIST, emptyList())
+        m.model.openNowPlaying()
+
+        m.model.toggleCurrentFavorite()
+
+        assertTrue(m.state.nowPlaying!!.isFavorite)
+        assertEquals(OpenRadioService.CMD_MARK_FAVORITE, m.client.commands.last().first)
+        assertEquals("s1", OpenRadioStore.extractMediaId(m.client.commands.last().second))
+    }
+
+    @Test
+    fun theNowPlayingHeartShowsAtOnceOnTheStationsRow() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.selectTab(Tab.POPULAR)
+        m.client.answer(MediaId.MEDIA_ID_POPULAR_STATIONS, listOf(station("s1"), station("s2")))
+        m.model.openNowPlaying()
+
+        m.model.toggleCurrentFavorite()
+
+        assertEquals(listOf(true, false), m.rows().map { (it as RowState.Station).isFavorite })
+    }
+
+    @Test
+    fun aRowHeartOfThePlayingStationShowsOnNowPlaying() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.selectTab(Tab.MINE)
+        m.client.answer(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST, listOf(station("s1")))
+
+        m.model.toggleFavorite("s1")
+        m.model.openNowPlaying()
+
+        assertTrue(m.state.nowPlaying!!.isFavorite)
+    }
+
+    @Test
+    fun theHeartOfASearchResultRowIsTheStationsHeart() {
+        val m = ModelUnderTest().startAndConnect().play()
+        m.model.search("rock")
+        m.client.answer(MediaId.MEDIA_ID_SEARCH_FROM_APP, listOf(station(MediaId.makeSearchId("s1"))))
+        m.model.openNowPlaying()
+
+        m.model.toggleCurrentFavorite()
+
+        assertTrue((m.rows().single() as RowState.Station).isFavorite)
     }
 
     // --- helpers -------------------------------------------------------------------------------

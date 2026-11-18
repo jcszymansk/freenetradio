@@ -75,6 +75,9 @@ class MainScreenModel(
 
     private var mClosed = false
 
+    /** Declared before [mState], whose initial [buildState] reads it. */
+    private var mPlayerScreen = PlayerScreen.NONE
+
     private val mState = MutableStateFlow(buildState())
 
     val state: StateFlow<MainScreenState> = mState.asStateFlow()
@@ -203,12 +206,22 @@ class MainScreenModel(
     }
 
     /**
-     * Pops one level of the selected tab.
+     * Closes Station details, else Now playing, else pops one level of the selected tab.
      *
-     * @return false at the tab's root, where back leaves the screen.
+     * @return false at the tab's root with no player screen open, where back leaves the screen.
      */
     @MainThread
     fun back(): Boolean {
+        when (mPlayerScreen) {
+            PlayerScreen.STATION_DETAILS -> mPlayerScreen = PlayerScreen.NOW_PLAYING
+            PlayerScreen.NOW_PLAYING -> mPlayerScreen = PlayerScreen.NONE
+            PlayerScreen.NONE -> return popSelectedTab()
+        }
+        emit()
+        return true
+    }
+
+    private fun popSelectedTab(): Boolean {
         val levels = stack(mSelected)
         if (levels.size < 2) {
             return false
@@ -216,6 +229,45 @@ class MainScreenModel(
         mStacks[mSelected] = levels.dropLast(1)
         showTop()
         return true
+    }
+
+    /**
+     * The mini player's tap: Now playing for the station shown. Nothing opens while none is.
+     */
+    @MainThread
+    fun openNowPlaying() {
+        if (!mTracker.hasStation) {
+            AppLogger.w("$TAG no station for Now playing")
+            return
+        }
+        mPlayerScreen = PlayerScreen.NOW_PLAYING
+        emit()
+    }
+
+    /** Now playing's "Station details". */
+    @MainThread
+    fun openStationDetails() {
+        if (mPlayerScreen != PlayerScreen.NOW_PLAYING) {
+            AppLogger.w("$TAG station details asked from $mPlayerScreen")
+            return
+        }
+        mPlayerScreen = PlayerScreen.STATION_DETAILS
+        emit()
+    }
+
+    /** Now playing's chevron: Now playing and Station details close together. */
+    @MainThread
+    fun closePlayer() {
+        mPlayerScreen = PlayerScreen.NONE
+        emit()
+    }
+
+    /** Now playing's heart ([NowPlayingTracker.toggleCurrentFavorite]). */
+    @MainThread
+    fun toggleCurrentFavorite() {
+        if (mTracker.toggleCurrentFavorite()) {
+            emit()
+        }
     }
 
     /**
@@ -328,7 +380,11 @@ class MainScreenModel(
 
     @VisibleForTesting
     fun snapshot(): BrowseSnapshot {
-        return BrowseSnapshot(mSelected, Tab.entries.associateWith { tab -> stack(tab).map { it.mediaId } })
+        return BrowseSnapshot(
+            mSelected,
+            Tab.entries.associateWith { tab -> stack(tab).map { it.mediaId } },
+            mPlayerScreen,
+        )
     }
 
     /**
@@ -373,6 +429,7 @@ class MainScreenModel(
         mStacks.putAll(rootStacks())
         mSelected = Tab.FAV
         mClosed = true
+        mPlayerScreen = PlayerScreen.NONE
         emit()
     }
 
@@ -424,7 +481,14 @@ class MainScreenModel(
 
     private fun isCountryRoot(level: BrowseLevel): Boolean = level.mediaId == MediaId.MEDIA_ID_COUNTRIES_LIST
 
+    /**
+     * Publishes the state. Now playing and Station details close when no station is shown any
+     * more (REQ-015), so the screen never covers the main screen with nothing.
+     */
     private fun emit() {
+        if (!mTracker.hasStation) {
+            mPlayerScreen = PlayerScreen.NONE
+        }
         mState.value = buildState()
     }
 
@@ -445,6 +509,8 @@ class MainScreenModel(
             miniPlayer = mTracker.miniPlayer(),
             showAddFab = top.mediaId == MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
             isClosed = mClosed,
+            playerScreen = mPlayerScreen,
+            nowPlaying = mTracker.nowPlaying(),
         )
     }
 
