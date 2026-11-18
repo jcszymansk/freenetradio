@@ -29,11 +29,16 @@ import androidx.compose.ui.unit.Density
 import androidx.lifecycle.lifecycleScope
 import com.github.jcszymansk.console.design.ConsoleDimens
 import com.github.jcszymansk.console.design.ConsoleTheme
+import com.yuriy.openradio.mobile.view.main.ARTWORK_HEIGHT
 import com.yuriy.openradio.mobile.view.main.ArtworkCache
 import com.yuriy.openradio.mobile.view.main.LocalArtworkCache
+import com.yuriy.openradio.mobile.view.main.LocalPlayerArtworkCache
 import com.yuriy.openradio.mobile.view.main.MainScreen
 import com.yuriy.openradio.mobile.view.main.MainScreenActions
+import com.yuriy.openradio.mobile.view.main.NowPlayingActions
+import com.yuriy.openradio.mobile.view.main.NowPlayingScreen
 import com.yuriy.openradio.mobile.view.main.OverflowItem
+import com.yuriy.openradio.mobile.view.main.PlayerMenuItem
 import com.yuriy.openradio.shared.dependencies.CountrySettingDependency
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
@@ -42,6 +47,7 @@ import com.yuriy.openradio.shared.dependencies.SleepTimerModelDependency
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.presenter.main.CountrySetting
 import com.yuriy.openradio.shared.presenter.main.MainScreenModel
+import com.yuriy.openradio.shared.presenter.main.PlayerScreen
 import com.yuriy.openradio.shared.presenter.main.ScrollPosition
 import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.shared.utils.AppLogger
@@ -68,17 +74,19 @@ import kotlinx.coroutines.launch
  * Date: 19.12.14
  * Time: 15:13
  *
- * The main screen. It renders [MainScreen] from the registry's [MainScreenModel], launches the
- * dialogs its controls ask for, and starts and stops the model with its own lifecycle; the model
- * keeps the tabs and stacks across a recreation.
+ * The main screen. It renders [MainScreen], or [NowPlayingScreen] while the model says a player
+ * screen is open, from the registry's [MainScreenModel], launches the dialogs and platform actions
+ * their controls ask for, and starts and stops the model with its own lifecycle; the model keeps
+ * the tabs and stacks across a recreation.
  */
 class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySettingDependency,
-    SleepTimerModelDependency, MainScreenActions {
+    SleepTimerModelDependency, MainScreenActions, NowPlayingActions {
 
     private lateinit var mModel: MainScreenModel
     private lateinit var mCountrySetting: CountrySetting
     private lateinit var mSleepTimerModel: SleepTimerModel
     private lateinit var mPlatform: MainScreenPlatform
+    private lateinit var mPlayerPlatform: NowPlayingPlatform
 
     override fun configureWith(model: MainScreenModel) {
         mModel = model
@@ -109,9 +117,11 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
         DependencyRegistryCommonUi.injectMainScreenModel(this)
         DependencyRegistryCommonUi.injectCountrySetting(this)
         DependencyRegistryCommon.injectSleepTimerModel(this)
-        val targetPx = with(Density(this)) { ConsoleDimens.tileSize.roundToPx() }
-        val artworkCache = ArtworkCache.forProvider(applicationContext, targetPx)
-        mPlatform = MainScreenPlatform(this, mModel, mCountrySetting, mSleepTimerModel, artworkCache)
+        val density = Density(this)
+        val artworkCache = ArtworkCache.forProvider(applicationContext, with(density) { ConsoleDimens.tileSize.roundToPx() })
+        val playerArtworkCache = ArtworkCache.forProvider(applicationContext, with(density) { ARTWORK_HEIGHT.roundToPx() })
+        mPlatform = MainScreenPlatform(this, mModel, mCountrySetting, mSleepTimerModel, listOf(artworkCache, playerArtworkCache))
+        mPlayerPlatform = NowPlayingPlatform(this)
         mPlatform.attach()
         mModel.start()
         onBackPressedDispatcher.addCallback(this) {
@@ -129,8 +139,16 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
         setContent {
             val state by mModel.state.collectAsState()
             ConsoleTheme {
-                CompositionLocalProvider(LocalArtworkCache provides artworkCache) {
-                    MainScreen(state, this@MainActivity)
+                CompositionLocalProvider(
+                    LocalArtworkCache provides artworkCache,
+                    LocalPlayerArtworkCache provides playerArtworkCache,
+                ) {
+                    val nowPlaying = state.nowPlaying
+                    if (state.playerScreen != PlayerScreen.NONE && nowPlaying != null) {
+                        NowPlayingScreen(nowPlaying, state.playerScreen, this@MainActivity)
+                    } else {
+                        MainScreen(state, this@MainActivity)
+                    }
                 }
             }
         }
@@ -190,6 +208,27 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
     override fun onRetry() = mModel.reload()
 
     override fun onTogglePlayback() = mModel.togglePlayback()
+
+    override fun onClosePlayer() = mModel.closePlayer()
+
+    override fun onToggleCurrentFavorite() = mModel.toggleCurrentFavorite()
+
+    override fun onCloseStationDetails() {
+        mModel.back()
+    }
+
+    override fun onOpenHomePage(url: String) = mPlayerPlatform.openHomePage(url)
+
+    override fun onPlayerMenu(item: PlayerMenuItem) {
+        val nowPlaying = mModel.state.value.nowPlaying ?: return
+        when (item) {
+            PlayerMenuItem.STATION_DETAILS -> mModel.openStationDetails()
+            PlayerMenuItem.COPY_STREAM_URL -> mPlayerPlatform.copyStreamUrl(nowPlaying.streamUrl)
+            PlayerMenuItem.SHARE_STREAM_URL -> mPlayerPlatform.shareStreamUrl(nowPlaying.name, nowPlaying.streamUrl)
+            PlayerMenuItem.SLEEP_TIMER -> showDialog(SleepTimerDialog::class.java.name, SleepTimerDialog.DIALOG_TAG)
+            PlayerMenuItem.EQUALIZER -> showDialog(EqualizerDialog::class.java.name, EqualizerDialog.DIALOG_TAG)
+        }
+    }
 
     override fun onOpenNowPlaying() = mModel.openNowPlaying()
 

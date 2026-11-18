@@ -41,14 +41,14 @@ import com.yuriy.openradio.shared.utils.AppUtils
 /**
  * What the main screen needs from Android that the model must not touch: the location lookup and
  * its permission, the Bluetooth permission, artwork change notifications and the sleep timer.
- * An artwork change drops that logo from the [ArtworkCache], so only its rows redraw.
+ * An artwork change drops that logo from every [ArtworkCache], so only what shows it redraws.
  */
 internal class MainScreenPlatform(
     private val mActivity: AppCompatActivity,
     private val mModel: MainScreenModel,
     private val mCountrySetting: CountrySetting,
     private val mSleepTimerModel: SleepTimerModel,
-    private val mArtworkCache: ArtworkCache,
+    private val mArtworkCaches: List<ArtworkCache>,
 ) {
     private val mLocationMessenger = Messenger(LocationHandler())
     private val mArtworkObserver = ArtworkObserver()
@@ -109,7 +109,8 @@ internal class MainScreenPlatform(
         // it through the default of the flags overload.
         override fun onChange(selfChange: Boolean, uri: Uri?) {
             if (uri != null) {
-                mArtworkCache.invalidate(ImagesStore.getId(uri))
+                val imageId = ImagesStore.getId(uri)
+                mArtworkCaches.forEach { it.invalidate(imageId) }
             }
         }
     }
