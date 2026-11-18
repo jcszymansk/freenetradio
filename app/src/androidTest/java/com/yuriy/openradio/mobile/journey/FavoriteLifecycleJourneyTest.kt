@@ -17,17 +17,18 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
-import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.storage.makeStation
+import com.yuriy.openradio.shared.presenter.main.Tab
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -36,24 +37,20 @@ import org.junit.runner.RunWith
 /**
  * The third phone journey: marking a station as a favorite and taking the mark away again.
  *
- * A favorite is a check box on a station's row, a command to the service, a line in
- * `FavoritesPreferences`, and a node the root menu gains and loses. Those four have to agree, and
- * the one of them a user can see is the first. So what is asserted here is the rendered box, the
- * rendered lists it changes, and the store read back through an instance that has cached nothing -
+ * A favorite is a heart on a station's row, a command to the service, a line in
+ * `FavoritesPreferences`, and the FAV tab's list. Those four have to agree, and the one of them a
+ * user can see is the first. So what is asserted here is the rendered heart, the FAV list it
+ * changes, and the store read back through an instance that has cached nothing -
  * `FavoritesStorage` answers `isFavorite` out of a map it fills as it goes, so the writer is the
  * one reader that cannot be trusted to say whether anything was written.
  *
  * The station the user marks is seeded into the locals store rather than typed into the add
  * dialog. Creating a station is TASK-006.02's subject, and with the device offline a station of
- * the user's own is the only kind there is: every other node needs a provider.
+ * the user's own is the only kind there is: every other tab needs a provider.
  *
- * Neither the swipe nor the tap that a user performs to get here can be performed. The check box
- * lives in the layer a left swipe reveals, which is a drag on a
- * [com.xenione.libs.swipemaker.SwipeLayout]; the drag is enabled in exactly the two nodes this
- * journey visits, and the box is a child of the row either way, so clicking it skips the drag and
- * nothing else. Opening a node by tapping its row is refused while the device is offline, which
- * [theFavoritesRowDoesNotOpenWithoutANetwork] pins down and TASK-049 lifts; [JourneyNavigation]
- * calls the step that tap performs once past the gate.
+ * Every gesture here is the user's own: the heart is a toggle on the row, and FAV and MINE are
+ * tabs, which open without a network. Only a row tap is gated on the connection
+ * (`MainScreenModel.open`), and no case here taps a row.
  *
  * What the service does with `CMD_MARK_FAVORITE` and `CMD_UNMARK_FAVORITE` is
  * `OpenRadioServiceCommandTest`'s subject, and what it answers for the favorites node is
@@ -64,7 +61,10 @@ import org.junit.runner.RunWith
 class FavoriteLifecycleJourneyTest {
 
     @get:Rule
-    val mStack = PresenterStackRule()
+    val mStack = BrowseStacksRule()
+
+    @get:Rule
+    val mCompose = createEmptyComposeRule()
 
     private lateinit var mContext: Context
 
@@ -81,8 +81,8 @@ class FavoriteLifecycleJourneyTest {
             mProfile.storages.locals.getId(), name = STATION_NAME, isLocal = true
         )
         mProfile.storages.locals.add(mStation)
-        // The root is cached and the profile has just browsed it to check which provider is bound,
-        // so the seeded station would otherwise be missing from the first list an Activity shows.
+        // The locals list is cached and the profile has just browsed the root to check which
+        // provider is bound, so the seeded station would otherwise be missing from MINE.
         mProfile.refreshTree()
     }
 
@@ -92,32 +92,30 @@ class FavoriteLifecycleJourneyTest {
     }
 
     /**
-     * The first half of the lifecycle: the box on the station's own row, and the node the root
-     * gains because of it.
+     * The first half of the lifecycle: the heart on the station's own row on MINE, and the FAV
+     * list it fills.
      *
-     * Nothing between the click and the row appearing is done by the test. The box sends
-     * `CMD_MARK_FAVORITE`; the service writes the store, drops its cached root and notifies; and
-     * the list the Activity shows on the way back out is built from the store. Asserting the row
-     * is absent first is what makes waiting for it mean something.
+     * Nothing between the tap and the row appearing on FAV is done by the test. The heart sends
+     * `CMD_MARK_FAVORITE`, the service writes the store, and FAV reads the store when it is shown
+     * again. FAV is asserted empty first, which is what makes waiting for the row mean something.
      */
     @Test
-    fun markingAStationFromItsRowPutsTheFavoritesNodeOnTheRoot() {
+    fun markingAStationFromItsRowPutsItOnFav() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            mProfile.awaitSeededRoot(list)
-            assertNull(
-                "A browsable row offers a favorite box, so the box this journey clicks is not " +
-                    "the station's own control",
-                list.rowFavorite(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-            )
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
+            try {
+                navigation.selectTab(Tab.FAV)
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
 
-            markTheStationFromTheLocalsList(scenario, list)
+                markTheStationOnMine(view)
 
-            assertEquals(
-                "Marking a station did not put the favorites node on the root list",
-                favoritesRoot(),
-                list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
-            )
+                navigation.selectTab(Tab.FAV)
+                awaitTheStationOnFav(view, "Marking a station did not put it on FAV")
+            } finally {
+                navigation.returnToRoots()
+            }
         }
 
         assertEquals(
@@ -128,80 +126,65 @@ class FavoriteLifecycleJourneyTest {
     }
 
     /**
-     * The node the mark produced has to lead somewhere: the station, under the name it was marked
-     * with, with its box showing what it is.
+     * FAV has to show the station as what it is: under the name it was marked with, and with its
+     * heart filled, which is bound from the item FAV read rather than from the row on MINE.
      */
     @Test
-    fun theFavoritesNodeShowsTheStationTheUserMarked() {
+    fun favShowsTheStationTheUserMarkedWithAFilledHeart() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            mProfile.awaitSeededRoot(list)
-            markTheStationFromTheLocalsList(scenario, list)
-            list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
-
-            val navigation = JourneyNavigation(scenario)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
             try {
-                navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
+                markTheStationOnMine(view)
 
-                assertEquals(
-                    "The favorites node does not show the station that was marked",
-                    listOf(BrowseRow(mStation.id, STATION_NAME)),
-                    list.awaitRows("the station's own row") { it.size == 1 }
-                )
-                list.awaitRowFavorite(mStation.id, true)
+                navigation.selectTab(Tab.FAV)
+
+                awaitTheStationOnFav(view, "FAV does not show the station that was marked")
+                view.awaitRowFavorite(mStation.id, true)
             } finally {
-                navigation.returnToRoot()
+                navigation.returnToRoots()
             }
         }
     }
 
     /**
-     * The second half of the lifecycle, driven where a user would drive it: inside the favorites
-     * node, on the row that put it there.
+     * The second half of the lifecycle, driven where a user would drive it: on FAV, on the row the
+     * mark put there.
      *
-     * Removing the only favorite empties the list the user is standing in, and then takes the
-     * whole node off the root. The emptied list is the half that went wrong: the service used to
-     * pick the node to notify from the one it last answered a browse for, and named the favorites
-     * list only while the store still held something, so the removed station stayed on screen
-     * (TASK-050).
+     * Removing the only favorite empties the list the user is standing in. That is the half that
+     * went wrong once: the service used to pick the node to notify from the one it last answered a
+     * browse for, and named the favorites list only while the store still held something, so the
+     * removed station stayed on screen (TASK-050).
      */
     @Test
-    fun unmarkingAStationFromTheFavoritesNodeTakesItOffTheRoot() {
+    fun unmarkingOnFavEmptiesFav() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            mProfile.awaitSeededRoot(list)
-            markTheStationFromTheLocalsList(scenario, list)
-            list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
-
-            val navigation = JourneyNavigation(scenario)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
             try {
-                navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
-                list.awaitRowFavorite(mStation.id, true)
+                markTheStationOnMine(view)
+                navigation.selectTab(Tab.FAV)
+                awaitTheStationOnFav(view, "FAV does not show the station that was marked")
+                view.awaitRowFavorite(mStation.id, true)
 
-                list.tapRowFavorite(mStation.id)
+                view.tapFavorite(mStation.id)
 
                 mProfile.awaitFavorites(emptyList())
-                list.awaitEmptied("the favorites list without the unmarked station")
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
                 assertEquals(
-                    "The list that emptied is not the favorites list the station was unmarked in",
-                    MediaId.MEDIA_ID_FAVORITES_LIST,
-                    list.renderedNode()
+                    "The list that emptied is not FAV, where the station was unmarked",
+                    Tab.FAV,
+                    navigation.snapshot().selectedTab
                 )
             } finally {
-                navigation.returnToRoot()
+                navigation.returnToRoots()
             }
-
-            assertEquals(
-                "Unmarking the last favorite left the favorites node on the root list",
-                mProfile.seededRoot(),
-                list.awaitRows("the favorites node gone") {
-                    !it.contains(mProfile.favoritesRow())
-                }
-            )
         }
 
         assertEquals(
-            "The node is off the root list but the station is still in the favorites store",
+            "FAV is empty but the station is still in the favorites store",
             emptyList<String>(),
             mProfile.storages.freshFavorites().getAll().map { it.id }
         )
@@ -213,8 +196,8 @@ class FavoriteLifecycleJourneyTest {
      * Three things a restart depends on are asserted, each defeating a different way the mark
      * could appear to survive without having been stored: it reached the favorites preference file
      * on disk rather than only the copy Android keeps in memory for this process; a second
-     * Activity offers the node and its station after the service's cached root has been dropped,
-     * so what it renders was built from the store rather than replayed; and a
+     * Activity shows it on FAV after the service's cached tree has been dropped, so what it
+     * renders was built from the store rather than replayed; and a
      * [com.yuriy.openradio.shared.model.storage.FavoritesStorage] this test constructed reads it
      * back, so the answer cache the writer filled cannot be what is answering.
      *
@@ -226,37 +209,32 @@ class FavoriteLifecycleJourneyTest {
     @Test
     fun theMarkOutlivesTheActivityThatMadeIt() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            mProfile.awaitSeededRoot(list)
-            markTheStationFromTheLocalsList(scenario, list)
-            list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
+            try {
+                markTheStationOnMine(view)
+            } finally {
+                navigation.returnToRoots()
+            }
         }
 
         mProfile.awaitStoredOnDisk(FAVORITES_PREFERENCE_FILE, STATION_NAME)
 
-        // The root is the one node of the three involved here that the service caches, so a second
-        // Activity would otherwise be handed the list the first one built. Dropping it makes the
-        // relaunch rebuild the root through MediaItemRoot, which reads the favorites store.
+        // Dropping the service's cached tree makes the relaunch build FAV through
+        // MediaItemFavoritesList, which reads the favorites store.
         mProfile.refreshTree()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            assertEquals(
-                "A relaunched Activity does not offer the node the previous one produced",
-                favoritesRoot(),
-                list.awaitRows("the favorites node") { it.contains(mProfile.favoritesRow()) }
-            )
-
-            val navigation = JourneyNavigation(scenario)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
             try {
-                navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
-                assertEquals(
-                    "A relaunched Activity does not show the station inside the node",
-                    listOf(BrowseRow(mStation.id, STATION_NAME)),
-                    list.awaitRows("the station's own row") { it.size == 1 }
-                )
+                navigation.selectTab(Tab.FAV)
+                awaitTheStationOnFav(view, "A relaunched Activity does not show the marked station on FAV")
+                view.awaitRowFavorite(mStation.id, true)
             } finally {
-                navigation.returnToRoot()
+                navigation.returnToRoots()
             }
         }
 
@@ -270,80 +248,68 @@ class FavoriteLifecycleJourneyTest {
     }
 
     /**
-     * The gate this journey ran into, asserted rather than described, so that TASK-049 lands with
-     * a test that changes answer when it is fixed.
+     * The stations a user marked are within reach without a network.
      *
-     * `MediaPresenterImpl.handleItemSelected` returns before it does anything when
-     * `NetworkLayer.checkConnectivityAndNotify` says there is no connection. The favorites node
-     * needs no connection: `MediaItemFavoritesList` reads `FavoritesStorage` and nothing else. So
-     * the row is offered, tapping it raises the no-connection toast, and the stations the user
-     * marked stay out of reach. TASK-049's second criterion is this node.
+     * `MediaItemFavoritesList` reads `FavoritesStorage` and nothing else, so FAV needs no
+     * connection, and it is a tab, which the connectivity gate does not stand in front of: only a
+     * row tap goes through `MainScreenModel.open`. The old screen offered FAV as a row on the root
+     * list and refused to open it offline, which is what TASK-049 was filed for. The tab is
+     * asserted to stand at its root, so FAV's own list is what answered rather than a node the
+     * tap pushed.
      */
     @Test
-    fun theFavoritesRowDoesNotOpenWithoutANetwork() {
+    fun favOpensWithoutANetwork() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val list = BrowseListView(scenario)
-            mProfile.awaitSeededRoot(list)
-            markTheStationFromTheLocalsList(scenario, list)
-            val root = list.awaitRows("the favorites node") {
-                it.contains(mProfile.favoritesRow())
-            }
-
-            // The failure this case exists to catch is the node opening, which leaves the stack
-            // inside it.
-            val navigation = JourneyNavigation(scenario)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitTabs(mProfile.cleanInstallTabs())
             try {
-                list.tapRow(MediaId.MEDIA_ID_FAVORITES_LIST)
+                markTheStationOnMine(view)
 
-                list.assertRowsStay(
-                    root,
-                    "Tapping the favorites row offline opened it. TASK-049 asks for exactly that, so " +
-                        "this test is what has to change, not the fix"
+                navigation.selectTab(Tab.FAV)
+
+                awaitTheStationOnFav(view, "FAV did not open without a network")
+                val snapshot = navigation.snapshot()
+                assertEquals("Opening FAV left another tab selected", Tab.FAV, snapshot.selectedTab)
+                assertEquals(
+                    "Opening FAV pushed a node onto it",
+                    listOf(Tab.FAV.rootId),
+                    snapshot.stacks.getValue(Tab.FAV)
                 )
             } finally {
-                navigation.returnToRoot()
+                navigation.returnToRoots()
             }
         }
     }
 
     /**
-     * Marks the seeded station through the favorite box on its own row in the locals list, and
-     * walks back out to the root.
+     * Marks the seeded station through the heart on its own row on MINE, and leaves MINE
+     * selected.
      *
-     * The box is read before it is clicked, so a station that arrived already marked, or a box
+     * The heart is read before it is tapped, so a station that arrived already marked, or a heart
      * bound to some other station's state, fails here rather than passing the case it is setting
      * up.
      */
-    private fun markTheStationFromTheLocalsList(
-        scenario: ActivityScenario<MainActivity>,
-        list: BrowseListView
-    ) {
-        val navigation = JourneyNavigation(scenario)
-        try {
-            navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-            assertEquals(
-                "The locals list does not show the seeded station",
-                listOf(BrowseRow(mStation.id, STATION_NAME)),
-                list.awaitRows("the station's own row") { it.size == 1 }
-            )
-            list.awaitRowFavorite(mStation.id, false)
+    private fun markTheStationOnMine(view: MainScreenView) {
+        assertEquals(
+            "MINE does not show the seeded station",
+            listOf(BrowseRow(mStation.id, STATION_NAME)),
+            mProfile.awaitSeededMine(view, mStation)
+        )
+        view.awaitRowFavorite(mStation.id, false)
 
-            list.tapRowFavorite(mStation.id)
+        view.tapFavorite(mStation.id)
 
-            list.awaitRowFavorite(mStation.id, true)
-            mProfile.awaitFavorites(listOf(mStation.id))
-        } finally {
-            navigation.returnToRoot()
-        }
+        view.awaitRowFavorite(mStation.id, true)
+        mProfile.awaitFavorites(listOf(mStation.id))
     }
 
-    /**
-     * @return the root list of this profile once the station is marked. `MediaItemRoot` puts the
-     *   favorites node first and the locals node last, with the clean install catalogue between
-     *   them.
-     */
-    private fun favoritesRoot(): List<BrowseRow> {
-        return listOf(mProfile.favoritesRow()) + mProfile.seededRoot()
+    private fun awaitTheStationOnFav(view: MainScreenView, reason: String) {
+        assertEquals(
+            reason,
+            listOf(BrowseRow(mStation.id, STATION_NAME)),
+            view.awaitRows("the marked station on FAV") { rows -> rows.any { it.mediaId == mStation.id } }
+        )
     }
 
     private companion object {

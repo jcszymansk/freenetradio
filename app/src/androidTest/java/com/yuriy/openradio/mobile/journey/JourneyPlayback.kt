@@ -31,21 +31,21 @@ import org.junit.Assert.assertTrue
 /**
  * Starting playback from a journey, the way selecting a station does.
  *
- * Offline, no journey can start playback by tapping a station's row.
- * `MediaPresenterImpl.handleItemSelected` refuses every tap without a connection, browsable and
- * playable alike, and it is the only tap-driven way in. TASK-049 lifts that, and
+ * Offline, no journey can start playback by tapping a station's row. `MainScreenModel.open`
+ * refuses every row tap without a connection, browsable and playable alike, and it is the only
+ * tap-driven way in. TASK-049 lifts that, and
  * [OfflinePlaybackJourneyTest.theStationRowStartsNothingWithoutANetwork] pins the refusal until
  * it does.
  *
  * So this calls the step that tap performs once past the gate:
- * [MediaResourcesManager.playFromMediaId], the same class the presenter drives, given the item
- * the adapter bound the row from and the node the presenter is standing in. Everything after it -
- * the playlist the selection expands into, the stream the service opens, the metadata it pushes
- * back and the bar the Activity puts up because of it - is the application's own.
+ * [MediaResourcesManager.playFromMediaId], the same call the model makes through its own client,
+ * given the item the row shows and the node the tab stands in. Everything after it - the playlist
+ * the selection expands into, the stream the service opens, the metadata it pushes back and the
+ * mini player the screen puts up because of it - is the application's own.
  *
  * What this manager does not do is render anything. It is a second controller of the same
- * session, next to the one the Activity built for itself, and it is the Activity's that the
- * journey reads.
+ * session, next to the one the screen's model built for itself, and it is the screen that the
+ * journey reads, through [MainScreenView] and [MiniPlayerView].
  */
 @UnstableApi
 internal class JourneyPlayback(private val mContext: Context) {
@@ -82,7 +82,7 @@ internal class JourneyPlayback(private val mContext: Context) {
      * Selects [item] from inside [parentId], which is what a tap on that row does once past the
      * connectivity gate.
      *
-     * On the main looper, because that is where the presenter makes this call and because
+     * On the main looper, because that is where the model makes this call and because
      * `playFromMediaId` reads the controller's state before it hands the work to a coroutine;
      * Media3 rejects that read from any other thread.
      */

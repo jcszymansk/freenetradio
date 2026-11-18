@@ -22,23 +22,27 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
-import android.widget.CheckBox
 import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.ProgressBar
+import android.widget.RadioGroup
 import android.widget.SeekBar
 import androidx.core.content.FileProvider
 import com.yuriy.openradio.shared.R
+import com.yuriy.openradio.shared.dependencies.CountrySettingDependency
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.LoggingLayerDependency
-import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
+import com.yuriy.openradio.shared.dependencies.ServiceCommanderDependency
+import com.yuriy.openradio.shared.model.ServiceCommander
 import com.yuriy.openradio.shared.model.logging.LoggingLayer
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
+import com.yuriy.openradio.shared.model.storage.StartPlayback
 import com.yuriy.openradio.shared.permission.PermissionChecker
-import com.yuriy.openradio.shared.presenter.MediaPresenter
+import com.yuriy.openradio.shared.presenter.main.CountrySetting
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.OpenRadioStore
 import com.yuriy.openradio.shared.service.location.LocationService
+import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.SafeToast
 import com.yuriy.openradio.shared.utils.findButton
@@ -61,14 +65,20 @@ import kotlinx.coroutines.launch
  * On 12/20/14
  * E-Mail: chernyshov.yuriy@gmail.com
  */
-class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, LoggingLayerDependency {
+class GeneralSettingsDialog : BaseDialogFragment(), ServiceCommanderDependency, CountrySettingDependency,
+    LoggingLayerDependency {
 
     private lateinit var mUserAgentEditView: EditText
-    private lateinit var mMediaPresenter: MediaPresenter
+    private lateinit var mServiceCommander: ServiceCommander
+    private lateinit var mCountrySetting: CountrySetting
     private lateinit var mLoggingLayer: LoggingLayer
 
-    override fun configureWith(mediaPresenter: MediaPresenter) {
-        mMediaPresenter = mediaPresenter
+    override fun configureWith(serviceCommander: ServiceCommander) {
+        mServiceCommander = serviceCommander
+    }
+
+    override fun configureWith(countrySetting: CountrySetting) {
+        mCountrySetting = countrySetting
     }
 
     override fun configureWith(loggingLayer: LoggingLayer) {
@@ -77,7 +87,8 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         DependencyRegistryCommonUi.injectLoggingLayer(this)
-        DependencyRegistryCommonUi.inject(this)
+        DependencyRegistryCommonUi.injectServiceCommander(this)
+        DependencyRegistryCommonUi.injectCountrySetting(this)
         val activity = requireActivity()
         val context = requireContext()
         val view = inflater.inflate(
@@ -88,14 +99,15 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
         val titleText = activity.getString(R.string.app_settings_title)
         val title = view.findTextView(R.id.dialog_settings_title_view)
         title.text = titleText
-        val lastKnownRadioStationEnabled = AppPreferencesManager.lastKnownRadioStationEnabled(context)
-        val lastKnownRadioStationEnableCheckView = view.findCheckBox(
-            R.id.settings_dialog_enable_last_known_radio_station_check_view
-        )
-        lastKnownRadioStationEnableCheckView.isChecked = lastKnownRadioStationEnabled
-        lastKnownRadioStationEnableCheckView.setOnClickListener { view1: View ->
-            val checked = (view1 as CheckBox).isChecked
-            AppPreferencesManager.lastKnownRadioStationEnabled(context, checked)
+        val startPlaybackGroup = view.findViewById<RadioGroup>(R.id.settings_dialog_start_playback_group)
+        startPlaybackGroup.check(START_PLAYBACK_BUTTONS.getValue(AppPreferencesManager.startPlayback(context)))
+        startPlaybackGroup.setOnCheckedChangeListener { _: RadioGroup, checkedId: Int ->
+            val value = START_PLAYBACK_BUTTONS.entries.firstOrNull { it.value == checkedId }?.key
+            if (value == null) {
+                AppLogger.w("No start playback setting for the button $checkedId, nothing stored")
+            } else {
+                AppPreferencesManager.startPlayback(context, value)
+            }
         }
         mUserAgentEditView = view.findEditText(R.id.user_agent_input_view)
         mUserAgentEditView.setText(AppUtils.getUserAgent(context))
@@ -127,8 +139,7 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
                 override fun onStopTrackingTouch(seekBar: SeekBar) {
                     CoroutineScope(Dispatchers.Main).launch {
                         val bundle = OpenRadioStore.makeMasterVolumeChangedBundle(seekBar.progress)
-                        mMediaPresenter.getServiceCommander()
-                            .sendCommand(OpenRadioService.CMD_MASTER_VOLUME_CHANGED, bundle)
+                        mServiceCommander.sendCommand(OpenRadioService.CMD_MASTER_VOLUME_CHANGED, bundle)
                     }
                 }
             }
@@ -149,11 +160,11 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
         val clearCache = view.findButton(R.id.clear_cache_btn)
         clearCache.setOnClickListener {
             CoroutineScope(Dispatchers.Main).launch {
-                mMediaPresenter.getServiceCommander().sendCommand(OpenRadioService.CMD_CLEAR_CACHE)
+                mServiceCommander.sendCommand(OpenRadioService.CMD_CLEAR_CACHE)
             }
         }
         val array = LocationService.getCountriesWithLocation(context)
-        val countryCode = mMediaPresenter.getCountryCode()
+        val countryCode = mCountrySetting.countryCode()
         var idx = 0
         for ((i, item) in array.withIndex()) {
             if (item.code == countryCode) {
@@ -168,7 +179,7 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
         spinner.setSelection(idx)
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                mMediaPresenter.onLocationChanged(array[position].code)
+                mCountrySetting.setCountryCode(array[position].code)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -243,6 +254,15 @@ class GeneralSettingsDialog : BaseDialogFragment(), MediaPresenterDependency, Lo
          * Tag string to use in logging message.
          */
         private val CLASS_NAME = GeneralSettingsDialog::class.java.simpleName
+
+        /**
+         * The radio button shown for each [StartPlayback] choice.
+         */
+        private val START_PLAYBACK_BUTTONS = mapOf(
+            StartPlayback.ALWAYS to R.id.settings_dialog_start_playback_always,
+            StartPlayback.IF_PLAYING to R.id.settings_dialog_start_playback_if_playing,
+            StartPlayback.NEVER to R.id.settings_dialog_start_playback_never
+        )
 
         /**
          * Tag string to use in dialog transactions.

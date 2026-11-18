@@ -96,6 +96,7 @@ com/yuriy/openradio/shared/model/translation/MediaIdBuilderDefault	com.yuriy.ope
 com/yuriy/openradio/shared/model/storage/cache/api/ApiCacheFreshness	com.yuriy.openradio.shared.model.storage.cache.api.ApiCacheFreshnessTest	:common
 com/yuriy/openradio/shared/model/storage/cache/api/InMemoryApiCache	com.yuriy.openradio.shared.model.storage.cache.api.InMemoryApiCacheTest	:common
 com/yuriy/openradio/shared/model/storage/StorageManagerLayerImpl	com.yuriy.openradio.shared.model.storage.StorageManagerLayerImplTest	:common
+com/yuriy/openradio/shared/model/storage/StartPlayback	com.yuriy.openradio.shared.model.storage.StartPlaybackTest	:common
 com/yuriy/openradio/shared/model/net/BoundedRead	com.yuriy.openradio.shared.model.net.BoundedReadTest	:common
 com/yuriy/openradio/shared/model/net/DirectUrlResolver	com.yuriy.openradio.shared.model.net.ConnectionUrlResolverTest	:common
 com/yuriy/openradio/shared/model/net/DnsMirrorUrlResolver	com.yuriy.openradio.shared.model.net.ConnectionUrlResolverTest	:common
@@ -105,6 +106,9 @@ com/yuriy/openradio/shared/model/filter/FilterImpl	com.yuriy.openradio.shared.mo
 com/yuriy/openradio/shared/model/timer/SleepTimerImpl	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/model/timer/CoroutineTimerTask	com.yuriy.openradio.shared.model.timer.SleepTimerImplTest	:common
 com/yuriy/openradio/shared/model/logging/DiagnosticReportFiles	com.yuriy.openradio.shared.model.logging.DiagnosticReportFilesTest	:common-ui
+com/yuriy/openradio/shared/presenter/main/Tab	com.yuriy.openradio.shared.presenter.main.TabTest	:common-ui
+com/yuriy/openradio/shared/presenter/main/MainScreenRows	com.yuriy.openradio.shared.presenter.main.MainScreenRowsTest	:common-ui
+com/yuriy/openradio/shared/presenter/main/MainScreenModel	com.yuriy.openradio.shared.presenter.main.MainScreenModelTest	:common-ui
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback$Exhausted	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
@@ -151,6 +155,7 @@ com/yuriy/openradio/shared/model/storage/cache/api/PersistentApiDb	EXCLUDED	rule
 com/yuriy/openradio/shared/model/storage/cache/api/PersistentApiDb_Impl	EXCLUDED	rule 2: it is Room generated code.
 com/yuriy/openradio/shared/model/timer/SleepTimerModelImpl	EXCLUDED	rule 3: its state is read from and written to SleepTimerStorage, which is SharedPreferences.
 com/yuriy/openradio/shared/model/timer/SleepTimerModelImpl$SleepTimerListenerImpl	EXCLUDED	rule 3: it writes the timer state to SleepTimerStorage, which is SharedPreferences.
+com/yuriy/openradio/shared/presenter/main/CountrySettingImpl	EXCLUDED	rule 3: it asks SharedPreferences through LocationStorage for the stored country.
 com/yuriy/openradio/shared/service/OpenRadioService	EXCLUDED	rule 3: it is the Media3 MediaLibraryService and lives by the Service lifecycle.
 com/yuriy/openradio/shared/service/OpenRadioService$NetworkMonitorListenerImpl	EXCLUDED	rule 3: it pauses or resumes the service's player and shows a Toast on connectivity changes.
 com/yuriy/openradio/shared/service/OpenRadioService$PlayerListener	EXCLUDED	rule 3: it runs on the service's coroutine scopes and publishes the active station to the media session.

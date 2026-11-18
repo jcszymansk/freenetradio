@@ -25,6 +25,11 @@ android {
             enableUnitTestCoverage = true
             enableAndroidTestCoverage = true
         }
+        release {
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
     }
 
     compileOptions {
@@ -88,6 +93,7 @@ dependencies {
     implementation project(':common')
     implementation project(':common-ui')
     implementation "com.github.jcszymansk.console:design"
+    implementation "androidx.activity:activity-compose:$activityComposeVersion"
 
     testImplementation platform("androidx.compose:compose-bom:$composeBomVersion")
     testImplementation "junit:junit:$junitVersion"
@@ -106,4 +112,7 @@ dependencies {
     // publishes. :common keeps both artifacts off the app classpath.
     androidTestImplementation "androidx.media3:media3-session:$media3Version"
     androidTestImplementation "androidx.media:media:$androidxMediaVersion"
+    // The journeys read the Compose main screen through its test tags.
+    androidTestImplementation platform("androidx.compose:compose-bom:$composeBomVersion")
+    androidTestImplementation "androidx.compose.ui:ui-test-junit4"
 }

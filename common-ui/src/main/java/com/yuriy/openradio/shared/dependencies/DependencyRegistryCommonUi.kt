@@ -17,22 +17,27 @@
 package com.yuriy.openradio.shared.dependencies
 
 import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.logging.LoggingLayer
 import com.yuriy.openradio.shared.model.logging.LoggingLayerImpl
+import com.yuriy.openradio.shared.model.media.MediaResourcesManager
 import com.yuriy.openradio.shared.model.media.RadioStationManagerLayer
 import com.yuriy.openradio.shared.model.net.NetworkLayer
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.model.storage.DeviceLocalsStorage
 import com.yuriy.openradio.shared.model.storage.FavoritesStorage
 import com.yuriy.openradio.shared.model.storage.FileStoreManager
+import com.yuriy.openradio.shared.model.storage.LatestRadioStationStorage
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayer
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayerImpl
-import com.yuriy.openradio.shared.model.timer.SleepTimerModel
-import com.yuriy.openradio.shared.presenter.MediaPresenter
-import com.yuriy.openradio.shared.presenter.MediaPresenterImpl
+import com.yuriy.openradio.shared.presenter.main.CountrySetting
+import com.yuriy.openradio.shared.presenter.main.CountrySettingImpl
+import com.yuriy.openradio.shared.presenter.main.LastPlayedStation
+import com.yuriy.openradio.shared.presenter.main.MainScreenModel
 import com.yuriy.openradio.shared.view.dialog.AddEditStationDialogPresenter
 import com.yuriy.openradio.shared.view.dialog.AddEditStationDialogPresenterImpl
 import com.yuriy.openradio.shared.view.dialog.BaseAddEditStationDialog
@@ -46,14 +51,19 @@ import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialogPresenter
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialogPresenterImpl
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.util.concurrent.atomic.AtomicBoolean
 
 object DependencyRegistryCommonUi :
     NetworkLayerDependency, LocationStorageDependency, FavoritesStorageDependency,
     DeviceLocalsStorageDependency, EqualizerLayerDependency, RadioStationManagerLayerDependency,
-    NetworkSettingsStorageDependency, SleepTimerModelDependency, SourcesLayerDependency {
+    NetworkSettingsStorageDependency, SourcesLayerDependency,
+    LatestRadioStationStorageDependency {
 
-    private lateinit var sMediaPresenter: MediaPresenter
+    private const val MAIN_SCREEN_CLIENT = "MainScreen"
+
     private lateinit var sEditStationPresenter: EditStationPresenter
     private lateinit var sEqualizerPresenter: EqualizerPresenter
     private lateinit var sRemoveStationDialogPresenter: RemoveStationDialogPresenter
@@ -66,10 +76,12 @@ object DependencyRegistryCommonUi :
     private lateinit var sNetworkSettingsStorage: NetworkSettingsStorage
     private lateinit var sEqualizerLayer: EqualizerLayer
     private lateinit var sRadioStationManagerLayer: RadioStationManagerLayer
-    private lateinit var sSleepTimerModel: SleepTimerModel
     private lateinit var sSourcesLayer: SourcesLayer
     private lateinit var sLoggingLayer: LoggingLayer
     private lateinit var sFileStoraManager: FileStoreManager
+    private lateinit var sMainScreenModel: MainScreenModel
+    private lateinit var sCountrySetting: CountrySetting
+    private lateinit var sLatestRadioStationStorage: LatestRadioStationStorage
 
     @Volatile
     private var sInit = AtomicBoolean(false)
@@ -77,6 +89,7 @@ object DependencyRegistryCommonUi :
     /**
      * Init with application's context only!
      */
+    @OptIn(UnstableApi::class)
     fun init(context: Context) {
         if (sInit.get()) {
             return
@@ -88,16 +101,20 @@ object DependencyRegistryCommonUi :
         DependencyRegistryCommon.injectEqualizerLayer(this)
         DependencyRegistryCommon.injectRadioStationManagerLayer(this)
         DependencyRegistryCommon.injectNetworkSettingsStorage(this)
-        DependencyRegistryCommon.injectSleepTimerModel(this)
         DependencyRegistryCommon.injectSourcesLayer(this)
+        DependencyRegistryCommon.injectLatestRadioStationStorage(this)
         sLoggingLayer = LoggingLayerImpl(context)
-        sMediaPresenter = MediaPresenterImpl(
-            context,
-            sNetworkLayer,
-            sLocationStorage,
-            sSleepTimerModel,
-            sSourcesLayer
+        val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        sMainScreenModel = MainScreenModel(
+            { listener -> MediaResourcesManager(context, MAIN_SCREEN_CLIENT, listener) },
+            sSourcesLayer,
+            { sNetworkLayer.checkConnectivityAndNotify(context) },
+            // A recreated service always adopts the latest station (OpenRadioService.onCreate),
+            // so a play request resumes it whenever there is one.
+            LastPlayedStation { sLatestRadioStationStorage.get() },
+            uiScope
         )
+        sCountrySetting = CountrySettingImpl(sLocationStorage, sMainScreenModel, uiScope)
         sEditStationPresenter = EditStationPresenterImpl(
             sFavoritesStorage,
             sDeviceLocalsStorage
@@ -152,12 +169,28 @@ object DependencyRegistryCommonUi :
         sNetworkSettingsStorage = networkSettingsStorage
     }
 
-    override fun configureWith(sleepTimerModel: SleepTimerModel) {
-        sSleepTimerModel = sleepTimerModel
+    override fun configureWith(latestRadioStationStorage: LatestRadioStationStorage) {
+        sLatestRadioStationStorage = latestRadioStationStorage
     }
 
-    fun inject(dependency: MediaPresenterDependency) {
-        dependency.configureWith(sMediaPresenter)
+    fun injectMainScreenModel(dependency: MainScreenModelDependency) {
+        dependency.configureWith(sMainScreenModel)
+    }
+
+    fun injectBrowseSearch(dependency: BrowseSearchDependency) {
+        dependency.configureWith(sMainScreenModel)
+    }
+
+    fun injectBrowseReload(dependency: BrowseReloadDependency) {
+        dependency.configureWith(sMainScreenModel)
+    }
+
+    fun injectScreenClose(dependency: ScreenCloseDependency) {
+        dependency.configureWith(sMainScreenModel)
+    }
+
+    fun injectCountrySetting(dependency: CountrySettingDependency) {
+        dependency.configureWith(sCountrySetting)
     }
 
     fun injectStorageManagerLayer(dependency: StorageManagerDependency) {
@@ -189,7 +222,7 @@ object DependencyRegistryCommonUi :
     }
 
     fun injectServiceCommander(dependency: ServiceCommanderDependency) {
-        dependency.configureWith(sMediaPresenter.getServiceCommander())
+        dependency.configureWith(sMainScreenModel.serviceCommander)
     }
 
     fun injectLoggingLayer(dependency: LoggingLayerDependency) {

@@ -18,11 +18,9 @@ package com.yuriy.openradio.shared.view.dialog
 import android.app.Dialog
 import android.os.Bundle
 import com.yuriy.openradio.shared.R
+import com.yuriy.openradio.shared.dependencies.BrowseSearchDependency
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
-import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
-import com.yuriy.openradio.shared.model.media.MediaId
-import com.yuriy.openradio.shared.presenter.MediaPresenter
-import com.yuriy.openradio.shared.utils.AppUtils
+import com.yuriy.openradio.shared.presenter.main.BrowseSearch
 import com.yuriy.openradio.shared.utils.SafeToast
 import com.yuriy.openradio.shared.utils.findButton
 import com.yuriy.openradio.shared.utils.findEditText
@@ -33,12 +31,12 @@ import com.yuriy.openradio.shared.utils.findEditText
  * On 12/20/14
  * E-Mail: chernyshov.yuriy@gmail.com
  */
-class SearchDialog : BaseDialogFragment(), MediaPresenterDependency {
+class SearchDialog : BaseDialogFragment(), BrowseSearchDependency {
 
-    private lateinit var mMediaPresenter: MediaPresenter
+    private lateinit var mBrowseSearch: BrowseSearch
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        DependencyRegistryCommonUi.inject(this)
+        DependencyRegistryCommonUi.injectBrowseSearch(this)
         val view = inflater.inflate(
             R.layout.dialog_search,
             requireActivity().findViewById(R.id.dialog_search_root)
@@ -54,16 +52,14 @@ class SearchDialog : BaseDialogFragment(), MediaPresenterDependency {
                 return@setOnClickListener
             }
 
-            val queryBundle = AppUtils.makeSearchQueryBundle(query)
-            mMediaPresenter.unsubscribeFromItem(MediaId.MEDIA_ID_SEARCH_FROM_APP)
-            mMediaPresenter.addMediaItemToStack(MediaId.MEDIA_ID_SEARCH_FROM_APP, bundle = queryBundle)
+            mBrowseSearch.search(query)
             dialog?.dismiss()
         }
         return createAlertDialog(view)
     }
 
-    override fun configureWith(mediaPresenter: MediaPresenter) {
-        mMediaPresenter = mediaPresenter
+    override fun configureWith(browseSearch: BrowseSearch) {
+        mBrowseSearch = browseSearch
     }
 
     companion object {

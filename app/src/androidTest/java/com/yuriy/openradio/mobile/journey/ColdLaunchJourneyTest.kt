@@ -17,19 +17,23 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
-import android.view.View
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.media3.common.util.UnstableApi
-import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
+import com.yuriy.openradio.mobile.view.main.MainScreenTags
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.storage.makeStation
-import com.yuriy.openradio.testing.withActivity
+import com.yuriy.openradio.shared.presenter.main.Tab
 import org.junit.After
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -40,21 +44,23 @@ import org.junit.runner.RunWith
  * The first phone journey: what a user sees on a first run, with the application data cleared and
  * the device offline.
  *
- * This is deliberately the whole stack rather than the service alone. The list is read out of the
- * [RecyclerView] the user looks at, by adapter position, so an item the service serves but the UI
- * never renders fails here. What the service answers for the same node is
- * `OpenRadioServiceBrowseTest`'s subject and is not repeated.
+ * This is deliberately the whole stack rather than the service alone. The screen is read through
+ * the Compose test tags the user's screen carries, so a node the service serves but the UI never
+ * renders fails here. What the service answers for the same node is `OpenRadioServiceBrowseTest`'s
+ * subject and is not repeated.
  *
- * Nothing in the root menu needs a network: [com.yuriy.openradio.shared.model.media.item.MediaItemRoot]
- * reads the favorites and locals stores and builds static entries from them. Walking into any of
- * those entries does fetch, which is why this journey stays at the root.
+ * Nothing FAV and MINE show needs a network: they list the favorites and locals stores, which a
+ * cleared profile holds empty. The other tabs fetch, which is why this journey stays on those two.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class ColdLaunchJourneyTest {
 
     @get:Rule
-    val mStack = PresenterStackRule()
+    val mStack = BrowseStacksRule()
+
+    @get:Rule
+    val mCompose = createEmptyComposeRule()
 
     private lateinit var mContext: Context
 
@@ -72,42 +78,56 @@ class ColdLaunchJourneyTest {
         mProfile.finish()
     }
 
+    /**
+     * A first run opens on FAV with every tab the bound provider offers. Nothing is stored, so FAV
+     * says it has no favourites rather than showing an empty list or an error; nothing on that
+     * screen needs the network.
+     */
     @Test
-    fun aColdLaunchListsTheCatalogueWithNothingStoredAndNoNetwork() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            assertEquals(mProfile.cleanInstallRoot(), BrowseListView(scenario).awaitRows())
+    fun aColdLaunchShowsTheTabsWithNothingStoredAndNoNetwork() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            val view = MainScreenView(mCompose)
+
+            view.awaitTabs(mProfile.cleanInstallTabs())
+            mCompose.onNode(hasAnyAncestor(hasTestTag(MainScreenTags.TABS)) and hasText(MainScreenView.label(Tab.FAV)))
+                .assertIsSelected()
+            view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
         }
     }
 
     /**
-     * An offline first run has no stations to show under any of the entries it lists, and the app
-     * has one screen that says so. Showing it at the root would tell a new user the application is
-     * broken, so the list has to arrive with both the spinner and that message down.
+     * An offline first run has nothing to show on FAV, and the screen has to arrive at saying so
+     * with the spinner down: a spinner left up would tell a new user the application is stuck.
      *
-     * The add-station button belongs to the same screen state. The list callback shows it for the
-     * root and hides it everywhere else, and adding a station by hand is the only thing a user
-     * with no connection can actually do here, so the offline root has to keep offering it.
+     * Adding a station by hand is the only thing a user with no connection can actually do here,
+     * and the add button belongs to MINE's root alone, so it is absent on FAV and offered on MINE.
      */
     @Test
-    fun aColdLaunchShowsTheAddButtonAndNeitherTheSpinnerNorTheNoDataMessage() {
+    fun aColdLaunchSettlesAndOffersAddOnMineOnly() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            BrowseListView(scenario).awaitRows()
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
 
-            assertEquals(
-                "The progress bar is still up after the root list arrived",
-                View.GONE,
-                visibility(scenario, R.id.progress_bar_view)
+            assertFalse(
+                "The progress bar is still up after FAV settled. " + view.describe(),
+                view.isShown(MainScreenTags.PROGRESS)
             )
-            assertEquals(
-                "The root list arrived and the no-data message is showing anyway",
-                View.GONE,
-                visibility(scenario, R.id.no_data_view)
+            assertFalse(
+                "FAV offers to add a station, which is MINE's. " + view.describe(),
+                view.isShown(MainScreenTags.FAB_ADD)
             )
-            assertEquals(
-                "The root list hid the only way to add a station without a connection",
-                View.VISIBLE,
-                visibility(scenario, R.id.add_station_btn)
-            )
+
+            try {
+                navigation.selectTab(Tab.MINE)
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_stations))
+                assertTrue(
+                    "MINE hid the only way to add a station without a connection. " + view.describe(),
+                    view.isShown(MainScreenTags.FAB_ADD)
+                )
+            } finally {
+                navigation.returnToRoots()
+            }
         }
     }
 
@@ -134,14 +154,24 @@ class ColdLaunchJourneyTest {
 
         mProfile.assertEveryPreferenceFileIsEmpty(mProfile.clearApplicationData())
         mProfile.refreshTree()
+        val clearedIds = mProfile.browser.mediaIds(MediaId.MEDIA_ID_ROOT)
+        assertFalse("The cleared favorite still has a node", clearedIds.contains(MediaId.MEDIA_ID_FAVORITES_LIST))
+        assertFalse(
+            "The cleared local station still has a node",
+            clearedIds.contains(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+        )
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            assertEquals(mProfile.cleanInstallRoot(), BrowseListView(scenario).awaitRows())
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
+            try {
+                navigation.selectTab(Tab.MINE)
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_stations))
+            } finally {
+                navigation.returnToRoots()
+            }
         }
-    }
-
-    private fun visibility(scenario: ActivityScenario<MainActivity>, viewId: Int): Int {
-        return scenario.withActivity { activity -> activity.findViewById<View>(viewId).visibility }
     }
 
     private companion object {

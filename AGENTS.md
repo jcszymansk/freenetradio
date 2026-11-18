@@ -75,6 +75,9 @@ The suites assert the provider they got rather than the one that is stored, and 
 it is the wrong one.
 
 Release builds are unsigned — no release signing key exists yet, and `sign.properties` must never be committed.
+Release builds are shrunk and optimized by R8, with this app's keep rules in `app/proguard-rules.pro`. Code that
+loads a class, constructor or field by name needs a rule there. The instrumented tests run on the debug build,
+which R8 does not touch, so they cannot catch a missing rule: check a release build on a device when you add such code.
 `./gradlew signReleaseBundle` increments `VERSION_CODE` in the tracked `version.properties` as a side effect.
 
 Toolchain versions live in `constants.gradle`, not in the module build files. `minSdkVersion` is 26.
@@ -125,9 +128,8 @@ newer SDKs and the build uses JDK 17). Baselines are `app/src/test/screenshots/*
   Media3 binder behavior, or lifecycle is genuinely the subject.
 - `unitTests.returnDefaultValues = true` is set in every module, so accidental Android framework calls silently
   return defaults instead of failing. Where a JVM test needs a framework value type to actually work, implement it
-  in `:android-jvm-stubs` — `android.net.Uri`, `android.os.Bundle`, `android.webkit.MimeTypeMap`, the resource
-  lookups of `android.content.Context` and the `android.database.Observable` that every `RecyclerView.Adapter`
-  notification walks live there. That module is wired as `testRuntimeOnly` in `:common` and `:common-ui`, so
+  in `:android-jvm-stubs` — `android.net.Uri`, `android.os.Bundle`, `android.webkit.MimeTypeMap` and the
+  resource lookups of `android.content.Context` live there. That module is wired as `testRuntimeOnly` in `:common` and `:common-ui`, so
   tests still compile against the real Android API and only the implementation is swapped at run time; putting
   the same class in a test source set instead makes the Kotlin compiler reject every use of the type it
   duplicates.

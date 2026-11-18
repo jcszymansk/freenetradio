@@ -19,16 +19,16 @@ package com.yuriy.openradio.mobile.journey
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import com.yuriy.openradio.shared.model.media.MediaId
+import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.isInvalid
+import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.storage.makeStation
+import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.shared.service.AppDataReset
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.ServiceBrowser
 import com.yuriy.openradio.shared.service.ServiceStorages
 import com.yuriy.openradio.shared.service.assertRadioBrowserIsBound
-import com.yuriy.openradio.shared.service.location.Country
-import com.yuriy.openradio.shared.service.location.LocationService
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import java.util.concurrent.TimeUnit
@@ -129,86 +129,21 @@ internal class JourneyProfile(private val mContext: Context) {
     }
 
     /**
-     * What the root offers with both user stores empty. Favorites and locals are absent because
-     * nothing is stored, and the country entry is the default one, since a cleared profile has no
-     * chosen country and the location lookup stays shut for anything but "use location".
+     * The tabs a cleared device shows. A cleared profile binds Radio Browser, which fills all six,
+     * and [start] has already failed the case when the run bound another provider (see AGENTS.md
+     * on `pm clear`).
      */
-    fun cleanInstallRoot(): List<BrowseRow> {
-        return listOf(
-            BrowseRow(
-                MediaId.MEDIA_ID_NEW_STATIONS,
-                mContext.getString(com.yuriy.openradio.R.string.new_stations_title)
-            ),
-            BrowseRow(
-                MediaId.MEDIA_ID_POPULAR_STATIONS,
-                mContext.getString(com.yuriy.openradio.R.string.popular_stations_title)
-            ),
-            BrowseRow(
-                MediaId.MEDIA_ID_ALL_CATEGORIES,
-                mContext.getString(com.yuriy.openradio.R.string.all_categories_title)
-            ),
-            BrowseRow(
-                MediaId.MEDIA_ID_COUNTRIES_LIST,
-                mContext.getString(com.yuriy.openradio.R.string.countries_list_title)
-            ),
-            BrowseRow(
-                MediaId.MEDIA_ID_COUNTRY_STATIONS,
-                LocationService.COUNTRY_CODE_TO_NAME.getValue(Country.COUNTRY_CODE_DEFAULT)
-            )
-        )
-    }
+    fun cleanInstallTabs(): List<Tab> = Tab.visibleFor(Source.RADIO_BROWSER)
 
     /**
-     * @return the row the root grows once a station has been marked, which `MediaItemRoot` adds
-     *   first, ahead of everything in [cleanInstallRoot].
-     */
-    fun favoritesRow(): BrowseRow {
-        return BrowseRow(
-            MediaId.MEDIA_ID_FAVORITES_LIST,
-            mContext.getString(com.yuriy.openradio.R.string.favorites_list_title)
-        )
-    }
-
-    /**
-     * @return the row the root grows once the device holds a station of the user's own, which
-     *   `MediaItemRoot` adds last.
-     */
-    fun localsRow(): BrowseRow {
-        return BrowseRow(
-            MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
-            mContext.getString(com.yuriy.openradio.R.string.local_radio_stations_list_title)
-        )
-    }
-
-    /**
-     * @return the root of a profile holding one station of the user's own: the clean install
-     *   catalogue with the locals node appended, which is what `MediaItemRoot` builds from a locals
-     *   store holding one entry.
-     */
-    fun seededRoot(): List<BrowseRow> {
-        return cleanInstallRoot() + localsRow()
-    }
-
-    /**
-     * Waits for [list] to be the [seededRoot] a seeded journey starts every case from.
-     *
-     * This is a precondition rather than a restatement of the cold launch journey. The presenter
-     * is one of the registry's singletons and its node stack outlives the Activity, so a case that
-     * left the stack inside a node would send the next case's Activity straight back there. Phase
-     * 6 asks for a suite with no order assumptions in it, so every case asserts where it starts.
+     * Selects MINE and waits for it to list [station], the one station of the user's own a seeded
+     * journey starts from.
      *
      * @return the rendered rows, for a case that has something else to say about them.
      */
-    fun awaitSeededRoot(list: BrowseListView): List<BrowseRow> {
-        val rows = list.awaitRows("the root of the seeded profile") { it == seededRoot() }
-        assertEquals(
-            "This case did not start at the root of the seeded profile. A case that walks into a " +
-                "node leaves the presenter's stack there, and it is a registry singleton that " +
-                "outlives the Activity, so the next case launches back into that node.",
-            seededRoot(),
-            rows
-        )
-        return rows
+    fun awaitSeededMine(view: MainScreenView, station: RadioStation): List<BrowseRow> {
+        view.selectTab(Tab.MINE)
+        return view.awaitRows("the seeded station on MINE") { rows -> rows.map { it.mediaId } == listOf(station.id) }
     }
 
     /**

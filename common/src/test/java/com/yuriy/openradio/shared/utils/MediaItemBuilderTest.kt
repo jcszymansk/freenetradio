@@ -22,13 +22,15 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.Util
+import com.yuriy.openradio.shared.model.media.RadioStation
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
 
 /**
  * Pins [MediaItemBuilder.withStream], which swaps the stream a playlist resolved to into the
- * station's item. The content type is asked of Media3's own [Util.inferContentTypeForUriAndMimeType],
+ * station's item, and the station fields [MediaItemBuilder.buildPlayable] carries in the item's
+ * extras. The content type is asked of Media3's own [Util.inferContentTypeForUriAndMimeType],
  * the call its default media source factory makes, so these tests show what the player would build.
  */
 class MediaItemBuilderTest {
@@ -99,6 +101,18 @@ class MediaItemBuilderTest {
 
         assertEquals(station.mediaId, resolved.mediaId)
         assertEquals(station.mediaMetadata, resolved.mediaMetadata)
+    }
+
+    @Test
+    fun aPlayableCarriesTheStationsCountryCodeAndCodec() {
+        val station = RadioStation.makeDefaultInstance("station-id")
+        station.countryCode = "NL"
+        station.codec = "MP3"
+
+        val item = MediaItemBuilder.buildPlayable(station)
+
+        assertEquals("NL", MediaItemHelper.getCountryCodeField(item))
+        assertEquals("MP3", MediaItemHelper.getCodecField(item))
     }
 
     private companion object {

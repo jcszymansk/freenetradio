@@ -62,7 +62,7 @@ class SettingsStorageTest {
 
     @Test
     fun applicationPreferencesReportTheirDefaults() {
-        assertTrue(AppPreferencesManager.lastKnownRadioStationEnabled(mContext))
+        assertEquals(StartPlayback.IF_PLAYING, AppPreferencesManager.startPlayback(mContext))
         assertFalse(AppPreferencesManager.isCustomUserAgent(mContext))
         assertEquals("fallback", AppPreferencesManager.getCustomUserAgent(mContext, "fallback"))
         assertEquals(37, AppPreferencesManager.getMasterVolume(mContext, 37))
@@ -85,7 +85,7 @@ class SettingsStorageTest {
 
     @Test
     fun applicationPreferencesKeepWhatWasWritten() {
-        AppPreferencesManager.lastKnownRadioStationEnabled(mContext, false)
+        AppPreferencesManager.startPlayback(mContext, StartPlayback.ALWAYS)
         AppPreferencesManager.isCustomUserAgent(mContext, true)
         AppPreferencesManager.setCustomUserAgent(mContext, "FreeNetRadio test agent")
         AppPreferencesManager.setMasterVolume(mContext, 42)
@@ -95,7 +95,7 @@ class SettingsStorageTest {
         AppPreferencesManager.setPlayBuffer(mContext, 333)
         AppPreferencesManager.setPlayBufferRebuffer(mContext, 444)
 
-        assertFalse(AppPreferencesManager.lastKnownRadioStationEnabled(mContext))
+        assertEquals(StartPlayback.ALWAYS, AppPreferencesManager.startPlayback(mContext))
         assertTrue(AppPreferencesManager.isCustomUserAgent(mContext))
         assertEquals(
             "FreeNetRadio test agent", AppPreferencesManager.getCustomUserAgent(mContext, "fallback")

@@ -17,14 +17,17 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.shared.model.media.MediaId
+import com.yuriy.openradio.shared.presenter.main.BrowseSnapshot
+import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.testing.onMainThread
-import com.yuriy.openradio.testing.withActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -39,21 +42,24 @@ import org.junit.runners.model.MultipleFailureException
 import org.junit.runners.model.Statement
 
 /**
- * The two helpers every journey leans on to leave the presenter where it found it:
- * [JourneyNavigation.returnToRoot], called from each navigating case's `finally`, and
- * [PresenterStackRule], which checks every journey case afterwards.
+ * The two helpers every journey leans on to leave the main screen where it found it:
+ * [JourneyNavigation.returnToRoots], called from each navigating case's `finally`, and
+ * [BrowseStacksRule], which checks every journey case afterwards.
  *
- * The stacks [JourneyNavigation.returnToRoot] has to survive are set up through the presenter
- * itself. A single non-root node is the shape that matters most: pressing back on it is "leave the
- * application", which sends `CMD_STOP_SERVICE` and ends in `Process.killProcess`, so a helper that
- * gets this wrong reports this class as crashed along with everything after it in the run.
+ * What they have to undo is set up through the screen itself: tabs are tapped, and a search, the
+ * one way deeper into a tab that needs no connection, is pushed through the model as the search
+ * field pushes it. A tab's stack always keeps its root, so the hazard the presenter's single node
+ * stack carried, a back press at the root that stops the service, has no counterpart here.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
 class JourneyNavigationTest {
 
     @get:Rule
-    val mStack = PresenterStackRule()
+    val mStack = BrowseStacksRule()
+
+    @get:Rule
+    val mCompose = createEmptyComposeRule()
 
     private lateinit var mContext: Context
 
@@ -72,109 +78,76 @@ class JourneyNavigationTest {
     }
 
     @Test
-    fun aStackSeveralNodesDeepIsWalkedBackToTheRoot() {
+    fun searchesOnTwoTabsAreWalkedBackToTheRoots() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val navigation = awaitRoot(scenario)
-            navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
-            navigation.open(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
-            assertEquals(
-                listOf(
-                    MediaId.MEDIA_ID_ROOT,
-                    MediaId.MEDIA_ID_FAVORITES_LIST,
-                    MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST
-                ),
-                navigation.stack()
-            )
-
-            navigation.returnToRoot()
-
-            assertBackAtTheRoot(scenario, navigation)
-        }
-    }
-
-    /**
-     * The hazard named in [JourneyNavigation.returnToRoot]'s own KDoc. Popping this node is what
-     * the presenter does for the root, and it stops the service.
-     */
-    @Test
-    fun aLoneNodeOnTheStackIsReplacedByTheRootRatherThanPopped() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val navigation = awaitRoot(scenario)
-            val presenter = registryPresenter()
-            scenario.withActivity {
-                presenter.unsubscribeFromItem(MediaId.MEDIA_ID_ROOT)
-                presenter.addMediaItemToStack(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST)
+            val navigation = awaitTabs(scenario)
+            try {
+                navigation.search(FIRST_QUERY)
+                navigation.selectTab(Tab.GENRE)
+                navigation.search(SECOND_QUERY)
+                val walked = navigation.snapshot()
+                assertEquals(Tab.GENRE, walked.selectedTab)
+                assertEquals(listOf(Tab.FAV.rootId, MediaId.MEDIA_ID_SEARCH_FROM_APP), walked.stacks[Tab.FAV])
+                assertEquals(listOf(Tab.GENRE.rootId, MediaId.MEDIA_ID_SEARCH_FROM_APP), walked.stacks[Tab.GENRE])
+            } finally {
+                navigation.returnToRoots()
             }
-            assertEquals(listOf(MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST), navigation.stack())
 
-            navigation.returnToRoot()
-
-            assertBackAtTheRoot(scenario, navigation)
-        }
-    }
-
-    /**
-     * The other end of the same hazard: once the stack is empty there is no node on it to read,
-     * and asking the presenter for its current node throws.
-     */
-    @Test
-    fun anEmptyStackIsGivenTheRoot() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val navigation = awaitRoot(scenario)
-            val presenter = registryPresenter()
-            scenario.withActivity { presenter.unsubscribeFromItem(MediaId.MEDIA_ID_ROOT) }
-            assertEquals(emptyList<String>(), navigation.stack())
-
-            navigation.returnToRoot()
-
-            assertBackAtTheRoot(scenario, navigation)
+            assertBackAtTheRoots(navigation)
         }
     }
 
     @Test
     fun theRuleLetsACaseThatLeftTheStackAsItFoundItPass() {
-        val found = stackOutsideAnActivity()
+        val found = snapshotOutsideAnActivity()
 
-        PresenterStackRule().apply(
+        BrowseStacksRule().apply(
             statement {
                 ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                    val navigation = awaitRoot(scenario)
-                    navigation.open(MediaId.MEDIA_ID_FAVORITES_LIST)
-                    navigation.returnToRoot()
+                    val navigation = awaitTabs(scenario)
+                    navigation.search(FIRST_QUERY)
+                    navigation.returnToRoots()
                 }
             },
             DESCRIPTION
         ).evaluate()
 
-        assertEquals(found, stackOutsideAnActivity())
+        assertEquals(found, snapshotOutsideAnActivity())
     }
 
     /**
-     * The first Activity of a process finds the stack empty and puts the root on it, which is the
-     * application's doing and not the case's. The rule takes it off again, so the next case finds
-     * the stack exactly as this one did.
+     * The selected tab outlives the Activity along with the stacks, so a case that leaves the user
+     * on another tab sends the next case's Activity there, which the rule has to catch and undo.
      */
     @Test
-    fun theRuleTakesOffTheRootAnActivityPutOnAnEmptyStack() {
-        clearStackOutsideAnActivity()
-
-        PresenterStackRule().apply(
+    fun theRuleFailsACaseThatLeftAnotherTabSelectedAndSelectsFavAgain() {
+        val found = snapshotOutsideAnActivity()
+        val rule = BrowseStacksRule().apply(
             statement {
-                ActivityScenario.launch(MainActivity::class.java).use { scenario -> awaitRoot(scenario) }
+                ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                    awaitTabs(scenario).selectTab(Tab.GENRE)
+                }
             },
             DESCRIPTION
-        ).evaluate()
+        )
 
-        assertEquals(emptyList<String>(), stackOutsideAnActivity())
+        val failure = assertThrows(AssertionError::class.java) { rule.evaluate() }
+
+        assertTrue(
+            "The failure does not name the tab the case left selected: ${failure.message}",
+            failure.message.orEmpty().contains("selectedTab=${Tab.GENRE}")
+        )
+        assertEquals(found, snapshotOutsideAnActivity())
+        assertEquals(Tab.FAV, snapshotOutsideAnActivity().selectedTab)
     }
 
     @Test
     fun theRuleFailsACaseThatLeftANodeOnTheStackAndTakesTheNodeOff() {
-        val found = stackOutsideAnActivity()
-        val rule = PresenterStackRule().apply(
+        val found = snapshotOutsideAnActivity()
+        val rule = BrowseStacksRule().apply(
             statement {
                 ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                    awaitRoot(scenario).open(MediaId.MEDIA_ID_FAVORITES_LIST)
+                    awaitTabs(scenario).search(FIRST_QUERY)
                 }
             },
             DESCRIPTION
@@ -184,23 +157,23 @@ class JourneyNavigationTest {
 
         assertTrue(
             "The failure does not name the node the case left behind: ${failure.message}",
-            failure.message.orEmpty().contains(MediaId.MEDIA_ID_FAVORITES_LIST)
+            failure.message.orEmpty().contains(MediaId.MEDIA_ID_SEARCH_FROM_APP)
         )
-        assertEquals(found, stackOutsideAnActivity())
+        assertEquals(found, snapshotOutsideAnActivity())
     }
 
     /**
-     * A case that fails part way through a node is the case the rule exists for, and its own
+     * A case that fails part way through a search is the case the rule exists for, and its own
      * failure is the one that says what broke, so the rule must add to it rather than replace it.
      */
     @Test
     fun theRuleReportsTheCasesOwnFailureAlongsideTheNodeItLeft() {
-        val found = stackOutsideAnActivity()
+        val found = snapshotOutsideAnActivity()
         val caseFailure = AssertionError("the case's own failure")
-        val rule = PresenterStackRule().apply(
+        val rule = BrowseStacksRule().apply(
             statement {
                 ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                    awaitRoot(scenario).open(MediaId.MEDIA_ID_FAVORITES_LIST)
+                    awaitTabs(scenario).search(FIRST_QUERY)
                     throw caseFailure
                 }
             },
@@ -213,35 +186,30 @@ class JourneyNavigationTest {
         assertSame(caseFailure, failure.failures[0])
         assertTrue(
             "The second failure is not the stack the case left: ${failure.failures[1].message}",
-            failure.failures[1].message.orEmpty().contains(MediaId.MEDIA_ID_FAVORITES_LIST)
+            failure.failures[1].message.orEmpty().contains(MediaId.MEDIA_ID_SEARCH_FROM_APP)
         )
-        assertEquals(found, stackOutsideAnActivity())
+        assertEquals(found, snapshotOutsideAnActivity())
     }
 
-    private fun awaitRoot(scenario: ActivityScenario<MainActivity>): JourneyNavigation {
-        BrowseListView(scenario).awaitRows("the root of a cleared profile") { it == mProfile.cleanInstallRoot() }
-        return JourneyNavigation(scenario)
+    private fun awaitTabs(scenario: ActivityScenario<MainActivity>): JourneyNavigation {
+        val view = MainScreenView(mCompose)
+        view.awaitTabs(mProfile.cleanInstallTabs())
+        return JourneyNavigation(scenario, view)
     }
 
-    private fun assertBackAtTheRoot(scenario: ActivityScenario<MainActivity>, navigation: JourneyNavigation) {
-        assertEquals(listOf(MediaId.MEDIA_ID_ROOT), navigation.stack())
-        val list = BrowseListView(scenario)
-        assertEquals(
-            "The presenter is back at the root and the list does not show it",
-            mProfile.cleanInstallRoot(),
-            list.awaitRows("the root list") { it == mProfile.cleanInstallRoot() }
-        )
-        assertEquals(MediaId.MEDIA_ID_ROOT, list.renderedNode())
+    /**
+     * Every tab holds its root alone, FAV is selected, and the screen shows FAV's root.
+     */
+    private fun assertBackAtTheRoots(navigation: JourneyNavigation) {
+        val snapshot = navigation.snapshot()
+        assertEquals(Tab.FAV, snapshot.selectedTab)
+        assertEquals(Tab.entries.associateWith { listOf(it.rootId) }, snapshot.stacks)
+        MainScreenView(mCompose).awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
     }
 
-    private fun stackOutsideAnActivity(): List<String> {
-        val presenter = registryPresenter()
-        return onMainThread { presenter.getMediaItemsStack() }
-    }
-
-    private fun clearStackOutsideAnActivity() {
-        val presenter = registryPresenter()
-        onMainThread { presenter.getMediaItemsStack().toSet().forEach(presenter::unsubscribeFromItem) }
+    private fun snapshotOutsideAnActivity(): BrowseSnapshot {
+        val model = registryModel()
+        return onMainThread { model.snapshot() }
     }
 
     private fun statement(body: () -> Unit): Statement {
@@ -257,5 +225,9 @@ class JourneyNavigationTest {
 
         val DESCRIPTION: Description =
             Description.createTestDescription(JourneyNavigationTest::class.java, "aCaseTheRuleWraps")
+
+        const val FIRST_QUERY = "rock"
+
+        const val SECOND_QUERY = "jazz"
     }
 }

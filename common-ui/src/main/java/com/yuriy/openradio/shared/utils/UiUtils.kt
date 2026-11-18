@@ -16,8 +16,6 @@
 
 package com.yuriy.openradio.shared.utils
 
-import android.app.Activity
-import android.graphics.BitmapFactory
 import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
@@ -30,11 +28,9 @@ import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.ToggleButton
-import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentTransaction
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.yuriy.openradio.shared.view.dialog.AboutDialog
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
 import com.yuriy.openradio.shared.view.dialog.BatteryOptimizationDialog
@@ -50,59 +46,7 @@ import com.yuriy.openradio.shared.view.dialog.SleepTimerDialog
 import com.yuriy.openradio.shared.view.dialog.SourceDialog
 import com.yuriy.openradio.shared.view.dialog.StreamBufferingDialog
 
-fun Activity.findTextView(id: Int): TextView {
-    return findViewById(id)
-}
-
-fun Activity.findButton(id: Int): Button {
-    return findViewById(id)
-}
-
-fun Activity.findImageButton(id: Int): ImageButton {
-    return findViewById(id)
-}
-
-fun Activity.findCheckBox(id: Int): CheckBox {
-    return findViewById(id)
-}
-
-fun Activity.findImageView(id: Int): ImageView {
-    return findViewById(id)
-}
-
-fun Activity.findView(id: Int): View {
-    return findViewById(id)
-}
-
-fun Activity.findSpinner(id: Int): Spinner {
-    return findViewById(id)
-}
-
-fun Activity.findSeekBar(id: Int): SeekBar {
-    return findViewById(id)
-}
-
-fun Activity.findToolbar(id: Int): Toolbar {
-    return findViewById(id)
-}
-
-fun Activity.findProgressBar(id: Int): ProgressBar {
-    return findViewById(id)
-}
-
-fun Activity.findLinearLayout(id: Int): LinearLayout {
-    return findViewById(id)
-}
-
 fun View.findProgressBar(id: Int): ProgressBar {
-    return findViewById(id)
-}
-
-fun Activity.findFloatingActionButton(id: Int): FloatingActionButton {
-    return findViewById(id)
-}
-
-fun Activity.findEditText(id: Int): EditText {
     return findViewById(id)
 }
 
@@ -160,14 +104,6 @@ fun View.findSpinner(id: Int): Spinner {
 
 fun View.findSeekBar(id: Int): SeekBar {
     return findViewById(id)
-}
-
-fun ImageView.setImageBitmap(bytes: ByteArray) {
-    if (bytes.isEmpty()) {
-        return
-    }
-    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-    this.setImageBitmap(bitmap)
 }
 
 object UiUtils {

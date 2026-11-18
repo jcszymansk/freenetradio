@@ -23,15 +23,18 @@ import android.widget.NumberPicker
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import com.yuriy.openradio.shared.R
+import com.yuriy.openradio.shared.dependencies.BrowseReloadDependency
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
-import com.yuriy.openradio.shared.dependencies.MediaPresenterDependency
+import com.yuriy.openradio.shared.dependencies.ServiceCommanderDependency
+import com.yuriy.openradio.shared.model.ServiceCommander
 import com.yuriy.openradio.shared.model.media.MediaId
-import com.yuriy.openradio.shared.presenter.MediaPresenter
+import com.yuriy.openradio.shared.presenter.main.BrowseReload
 import com.yuriy.openradio.shared.service.OpenRadioService
 import com.yuriy.openradio.shared.service.OpenRadioStore
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.MediaItemHelper
+import com.yuriy.openradio.shared.utils.UiUtils
 import com.yuriy.openradio.shared.utils.findImageView
 import com.yuriy.openradio.shared.utils.findTextView
 import com.yuriy.openradio.shared.utils.findView
@@ -45,16 +48,21 @@ import kotlinx.coroutines.launch
  * On 12/20/14
  * E-Mail: chernyshov.yuriy@gmail.com
  */
-class RSSettingsDialog : BaseDialogFragment(), MediaPresenterDependency {
+class RSSettingsDialog : BaseDialogFragment(), ServiceCommanderDependency, BrowseReloadDependency {
 
     private var mParentCategoryId = AppUtils.EMPTY_STRING
     private var mSortMediaId = AppUtils.EMPTY_STRING
     private var mSortNewPosition = 0
     private var mSortOriginalPosition = 0
-    private lateinit var mMediaPresenter: MediaPresenter
+    private lateinit var mServiceCommander: ServiceCommander
+    private lateinit var mBrowseReload: BrowseReload
 
-    override fun configureWith(mediaPresenter: MediaPresenter) {
-        mMediaPresenter = mediaPresenter
+    override fun configureWith(serviceCommander: ServiceCommander) {
+        mServiceCommander = serviceCommander
+    }
+
+    override fun configureWith(browseReload: BrowseReload) {
+        mBrowseReload = browseReload
     }
 
     override fun onCreateDialog(savedInstance: Bundle?): Dialog {
@@ -64,7 +72,8 @@ class RSSettingsDialog : BaseDialogFragment(), MediaPresenterDependency {
         )
         setWindowDimensions(view, 0.8f, 0.3f)
 
-        DependencyRegistryCommonUi.inject(this)
+        DependencyRegistryCommonUi.injectServiceCommander(this)
+        DependencyRegistryCommonUi.injectBrowseReload(this)
 
         val item = extractMediaItem(arguments)
         if (item != null) {
@@ -80,8 +89,8 @@ class RSSettingsDialog : BaseDialogFragment(), MediaPresenterDependency {
         if (mSortNewPosition != mSortOriginalPosition) {
             CoroutineScope(Dispatchers.Main).launch {
                 val bundle = OpenRadioStore.makeUpdateSortIdsBundle(mSortMediaId, mSortNewPosition, mParentCategoryId)
-                mMediaPresenter.getServiceCommander().sendCommand(OpenRadioService.CMD_UPDATE_SORT_IDS, bundle)
-                mMediaPresenter.handleCurrentIndexOnQueueChanged(mSortNewPosition)
+                mServiceCommander.sendCommand(OpenRadioService.CMD_UPDATE_SORT_IDS, bundle)
+                mBrowseReload.reload()
             }
         }
         super.onPause()
@@ -98,11 +107,22 @@ class RSSettingsDialog : BaseDialogFragment(), MediaPresenterDependency {
             if (isSortable) View.VISIBLE else View.GONE
 
         val editButton = view.findView(R.id.dialog_rs_settings_edit_btn)
-        editButton.tag = item
-        editButton.setOnClickListener { mMediaPresenter.handleEditRadioStationMenu(it) }
+        editButton.setOnClickListener {
+            showStationDialog(
+                EditStationDialog::class.java.name,
+                EditStationDialog.DIALOG_TAG,
+                EditStationDialog.makeBundle(item.mediaId)
+            )
+        }
         val removeButton = view.findView(R.id.dialog_rs_settings_remove_btn)
-        removeButton.tag = item
-        removeButton.setOnClickListener { mMediaPresenter.handleRemoveRadioStationMenu(it) }
+        removeButton.setOnClickListener {
+            val name = item.mediaMetadata.title?.toString() ?: AppUtils.EMPTY_STRING
+            showStationDialog(
+                RemoveStationDialog::class.java.name,
+                RemoveStationDialog.DIALOG_TAG,
+                RemoveStationDialog.makeBundle(item.mediaId, name)
+            )
+        }
         val name = view.findTextView(R.id.dialog_rs_settings_rs_name)
         name.text = item.mediaMetadata.title
 
@@ -120,6 +140,20 @@ class RSSettingsDialog : BaseDialogFragment(), MediaPresenterDependency {
         if (isSortable) {
             handleSortUi(view, item, args)
         }
+    }
+
+    /**
+     * Replaces this dialog with the edit or remove dialog for the station, as the presenter did.
+     */
+    private fun showStationDialog(className: String, tag: String, arguments: Bundle) {
+        val manager = requireActivity().supportFragmentManager
+        if (manager.isStateSaved) {
+            AppLogger.w("$CLASS_NAME can not show $tag after the state was saved")
+            return
+        }
+        val transaction = manager.beginTransaction()
+        UiUtils.clearDialogs(manager, transaction)
+        BaseDialogFragment.newInstance(className, arguments).show(transaction, tag)
     }
 
     private fun handleSortUi(view: View, item: MediaItem, args: Bundle?) {

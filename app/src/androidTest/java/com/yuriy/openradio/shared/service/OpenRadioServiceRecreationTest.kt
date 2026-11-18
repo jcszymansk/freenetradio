@@ -25,6 +25,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
+import com.yuriy.openradio.shared.model.storage.StartPlayback
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -36,7 +37,7 @@ import org.junit.runner.RunWith
  * when a media button or the system media controls reach a process that was killed.
  *
  * A new service remembers no queue, so the only record of what was playing is the latest station,
- * which `onCreate` adopts as the active station while the "last known station" setting is on. A
+ * which `onCreate` adopts as the active station whenever there is one. A
  * play request with the queue empty is answered by building the same playlist around it that a
  * page-0 browse builds. That playlist comes out of the favorites, or out of the provider's new
  * stations when there are none, so every case here seeds favorites and nothing asks the network.
@@ -58,13 +59,17 @@ class OpenRadioServiceRecreationTest {
 
     private lateinit var mStations: LocalStationsFixture
 
-    private var mWasLastKnownStationEnabled = true
+    private var mWasStartPlayback = StartPlayback.IF_PLAYING
+
+    private var mWasPlayingAtExit = false
 
     @Before
     fun setUp() {
         mContext = InstrumentationRegistry.getInstrumentation().targetContext
-        mWasLastKnownStationEnabled = AppPreferencesManager.lastKnownRadioStationEnabled(mContext)
-        AppPreferencesManager.lastKnownRadioStationEnabled(mContext, true)
+        mWasStartPlayback = AppPreferencesManager.startPlayback(mContext)
+        mWasPlayingAtExit = AppPreferencesManager.wasPlayingAtExit(mContext)
+        AppPreferencesManager.startPlayback(mContext, StartPlayback.ALWAYS)
+        AppPreferencesManager.wasPlayingAtExit(mContext, false)
         mAudio = LocalAudioFixture(mContext)
         mStorages = ServiceStorages(mContext)
         mStorages.clear()
@@ -93,7 +98,8 @@ class OpenRadioServiceRecreationTest {
         mBrowser.command(OpenRadioService.CMD_UPDATE_TREE)
         mBrowser.release()
         mAudio.delete()
-        AppPreferencesManager.lastKnownRadioStationEnabled(mContext, mWasLastKnownStationEnabled)
+        AppPreferencesManager.startPlayback(mContext, mWasStartPlayback)
+        AppPreferencesManager.wasPlayingAtExit(mContext, mWasPlayingAtExit)
     }
 
     /**

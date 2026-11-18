@@ -30,7 +30,10 @@
     <string name="about_playlist_title">Playlist</string>
     <string name="about_playlist_url">Java Playlist Parser</string>
     <string name="link_text">Link</string>
-    <string name="enable_last_known_radio_station_label">Play last known Radio Station\n(enables application to play last known Radio Station automatically on start)</string>
+    <string name="start_playback_title">On start, play the last station</string>
+    <string name="start_playback_always">Always</string>
+    <string name="start_playback_if_playing">If it was playing</string>
+    <string name="start_playback_never">Never</string>
     <string name="bt_auto_restart_descr">Resume playback when re-connected to the same Bluetooth Device</string>
     <string name="custom_user_agent_label">Custom User Agent</string>
     <string name="custom_user_agent_hint">Custom User Agent empty</string>
@@ -49,7 +52,6 @@
     <string name="stream_buffering_descr">Restart playback when values are changed\nRange is %1$d - %2$d milliseconds\n(%3$d second - %4$d minutes)</string>
     <string name="invalid_buffer_desc">Invalid value of buffer : </string>
     <string name="search_label">Search</string>
-    <string name="content_description_category_icon">Icon</string>
     <string name="search_description">Type the word that you want to use as the search pattern</string>
     <string name="add_station_dialog_title">Add Radio Station</string>
     <string name="add_station_dialog_button_label">Add</string>

@@ -249,6 +249,8 @@ object MediaItemBuilder {
         MediaItemHelper.updateBitrateField(bundle, radioStation.getStreamBitrate())
         MediaItemHelper.updateFavoriteField(bundle, isFavorite)
         MediaItemHelper.updateSortIdField(bundle, radioStation.sortId)
+        MediaItemHelper.updateCountryCodeField(bundle, radioStation.countryCode)
+        MediaItemHelper.updateCodecField(bundle, radioStation.codec)
         MediaItemHelper.setDrawableId(bundle, R.drawable.ic_radio_station_empty)
         val uri = Uri.parse(radioStation.getStreamUrlFixed())
         return MediaItem.Builder()

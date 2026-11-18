@@ -16,6 +16,27 @@
 -->
 <resources>
     <string name="eq_label">Equalizer</string>
-    <string name="navigation_drawer_open">Open navigation drawer</string>
-    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="main_title">Radio</string>
+    <string name="main_tab_fav">Fav</string>
+    <string name="main_tab_mine">Mine</string>
+    <string name="main_tab_popular">Popular</string>
+    <string name="main_tab_new">New</string>
+    <string name="main_tab_country">Country</string>
+    <string name="main_tab_genre">Genre</string>
+    <string name="main_empty_favorites">No favourites yet</string>
+    <string name="main_empty_stations">No stations added</string>
+    <string name="main_empty_nothing">Nothing found</string>
+    <string name="main_error">Could not load this list</string>
+    <string name="main_retry">Retry</string>
+    <string name="main_add">Add</string>
+    <string name="main_search">Search</string>
+    <string name="main_more">More options</string>
+    <string name="main_back">Back</string>
+    <string name="main_favorite_add">Add to favourites</string>
+    <string name="main_favorite_remove">Remove from favourites</string>
+    <string name="main_play">Play</string>
+    <string name="main_pause">Pause</string>
+    <string name="main_live">Live</string>
+    <string name="main_section_your_country">Your country</string>
+    <string name="main_section_all_countries">All countries</string>
 </resources>

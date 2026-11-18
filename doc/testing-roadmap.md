@@ -248,8 +248,9 @@ is a class moved into a package that holds nothing listed; a new package in `:co
 Two consequences are the point rather than side effects. A decision worth gating that sits inside a
 class the rule excludes gets extracted, rather than the class admitted: `PlaybackErrorClassifier`
 came out of the player that way and `DnsMirrorUrlResolver` out of the URL layer.
-`MediaPresenterImpl.handleChildrenLoaded` is the next candidate, and the exclusion reasons for
-`AppUtils` and `NetUtils` point at pure helpers that would follow. And a
+The browse decisions that used to sit in the View-era presenter now live in `MainScreenModel`,
+which is in the set, and the exclusion reasons for `AppUtils` and `NetUtils` point at pure helpers
+that would follow. And a
 class that passes the rule but whose test needs a device means the test is misplaced, not the rule:
 that was the URL layer, and `StorageManagerLayerImpl` after it.
 

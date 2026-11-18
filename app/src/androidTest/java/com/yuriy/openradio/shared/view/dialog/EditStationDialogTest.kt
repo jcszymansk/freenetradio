@@ -57,7 +57,7 @@ import java.lang.ref.WeakReference
  * The dialog is shown directly rather than reached through the settings dialog because what is
  * under test is the load, and the real `EditStationPresenterImpl` and the real
  * [DeviceLocalsStorage] behind it are the only collaborators that load anything. The bundle is the
- * one `MediaPresenterImpl` builds.
+ * one `RSSettingsDialog` builds when its edit button is tapped.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)

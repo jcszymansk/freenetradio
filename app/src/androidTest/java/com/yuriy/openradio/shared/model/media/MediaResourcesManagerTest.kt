@@ -121,7 +121,7 @@ class MediaResourcesManagerTest {
     /**
      * The phone's search, end to end over a real connection: [com.yuriy.openradio.shared.view.dialog.SearchDialog]
      * pushes [MediaId.MEDIA_ID_SEARCH_FROM_APP] onto the browse stack and
-     * [com.yuriy.openradio.shared.presenter.MediaPresenter.addMediaItemToStack] hands it straight to
+     * `com.yuriy.openradio.shared.presenter.main.MainScreenModel.search` hands it straight to
      * [MediaResourcesManager.subscribe] with the query bundle, which is what is reproduced here.
      *
      * Nothing in the service browses that id, so the manager has to answer it with `getSearchResult`
@@ -152,6 +152,21 @@ class MediaResourcesManagerTest {
             loaded.children.map { it.mediaId }
         )
         assertEquals(SEARCH_STATION_NAME, loaded.children.single().mediaMetadata.title)
+    }
+
+    /**
+     * The service answers a node it has no command for with an error code. The manager used to
+     * hand that on as an empty list, so a screen could not tell a failed load from an empty node.
+     */
+    @Test
+    fun aNodeTheServiceCannotBrowseIsReportedAsAnError() {
+        val manager = connectedManager()
+        val results = LinkedBlockingQueue<ChildrenResult>()
+
+        manager.subscribe(UNKNOWN_NODE, subscription(results))
+
+        val answer = awaitChildren(results) { it.parentId == UNKNOWN_NODE }
+        assertTrue("A node the service cannot browse was answered as a list", answer.error)
     }
 
     /**
@@ -236,6 +251,11 @@ class MediaResourcesManagerTest {
 
     private companion object {
         const val TIMEOUT_SECONDS = 10L
+
+        /**
+         * A parent id no browse command answers, so the service replies with an error code.
+         */
+        const val UNKNOWN_NODE = "__NO_SUCH_NODE__"
 
         /**
          * The service files a search under its query string in the browse tree and never
