@@ -109,6 +109,7 @@ com/yuriy/openradio/shared/model/logging/DiagnosticReportFiles	com.yuriy.openrad
 com/yuriy/openradio/shared/presenter/main/Tab	com.yuriy.openradio.shared.presenter.main.TabTest	:common-ui
 com/yuriy/openradio/shared/presenter/main/MainScreenRows	com.yuriy.openradio.shared.presenter.main.MainScreenRowsTest	:common-ui
 com/yuriy/openradio/shared/presenter/main/MainScreenModel	com.yuriy.openradio.shared.presenter.main.MainScreenModelTest	:common-ui
+com/yuriy/openradio/shared/presenter/main/StationDetails	com.yuriy.openradio.shared.presenter.main.StationDetailsTest	:common-ui
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback$Exhausted	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common

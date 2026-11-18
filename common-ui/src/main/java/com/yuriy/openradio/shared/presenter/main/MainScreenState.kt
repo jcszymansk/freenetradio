@@ -115,3 +115,43 @@ data class BrowseSnapshot(val selectedTab: Tab, val stacks: Map<Tab, List<String
  * What the station settings dialog needs for a long-pressed row.
  */
 data class StationSettingsTarget(val item: MediaItem, val parentId: String, val itemsCount: Int)
+
+/**
+ * Which player screen covers the main screen, if any. Station details is a level inside Now
+ * playing: back from it returns to Now playing.
+ */
+enum class PlayerScreen { NONE, NOW_PLAYING, STATION_DETAILS }
+
+/**
+ * Now playing and its Station details, as one value.
+ *
+ * @param track the stream's text as the stream sends it, empty when it sends none.
+ * @param artworkUri the station's artwork, or null when it has none and the initials are shown.
+ * @param isPlaying the button offers Pause: the player plays, or buffers a station it was asked
+ *   to play.
+ * @param isBuffering the player is filling its buffer for a station it was asked to play.
+ * @param isFavorite the heart, as the lists show it for the same station.
+ * @param streamUrl the station's listed stream address, empty when it has none.
+ * @param details the Station details rows, in screen order.
+ */
+data class NowPlayingState(
+    val name: String,
+    val initials: String,
+    val track: String,
+    val artworkUri: String?,
+    val isPlaying: Boolean,
+    val isBuffering: Boolean,
+    val isFavorite: Boolean,
+    val streamUrl: String,
+    val details: List<StationDetail>,
+)
+
+/**
+ * The rows Station details can show, in screen order.
+ */
+enum class DetailKind { COUNTRY, GENRE, STREAM, URL, WEB }
+
+/**
+ * One row of Station details. [link] is the address a WEB row opens; no other row has one.
+ */
+data class StationDetail(val kind: DetailKind, val value: String, val link: String? = null)
