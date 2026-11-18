@@ -26,6 +26,7 @@ import com.yuriy.openradio.shared.model.media.Category
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.media.MediaStream
 import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.getListedStreamUrl
 import com.yuriy.openradio.shared.model.media.getStreamBitrate
 import com.yuriy.openradio.shared.model.media.getStreamUrlFixed
 import com.yuriy.openradio.shared.service.location.Country
@@ -251,6 +252,9 @@ object MediaItemBuilder {
         MediaItemHelper.updateSortIdField(bundle, radioStation.sortId)
         MediaItemHelper.updateCountryCodeField(bundle, radioStation.countryCode)
         MediaItemHelper.updateCodecField(bundle, radioStation.codec)
+        MediaItemHelper.updateCountryNameField(bundle, radioStation.country)
+        MediaItemHelper.updateHomePageField(bundle, radioStation.homePage)
+        MediaItemHelper.updateStreamUrlField(bundle, radioStation.getListedStreamUrl())
         MediaItemHelper.setDrawableId(bundle, R.drawable.ic_radio_station_empty)
         val uri = Uri.parse(radioStation.getStreamUrlFixed())
         return MediaItem.Builder()

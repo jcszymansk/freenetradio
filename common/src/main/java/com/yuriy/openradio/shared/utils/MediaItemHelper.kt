@@ -37,6 +37,9 @@ object MediaItemHelper {
     private const val KEY_BITRATE = "KEY_BITRATE"
     private const val KEY_COUNTRY_CODE = "KEY_COUNTRY_CODE"
     private const val KEY_CODEC = "KEY_CODEC"
+    private const val KEY_HOME_PAGE = "KEY_HOME_PAGE"
+    private const val KEY_STREAM_URL = "KEY_STREAM_URL"
+    private const val KEY_COUNTRY_NAME = "KEY_COUNTRY_NAME"
     private const val KEY_DRAWABLE_ID = "DRAWABLE_ID"
 
     fun setDrawableId(bundle: Bundle?, drawableId: Int) {
@@ -83,6 +86,62 @@ object MediaItemHelper {
      */
     fun getCodecField(mediaItem: MediaItem?): String {
         return mediaItem?.mediaMetadata?.extras?.getString(KEY_CODEC, AppUtils.EMPTY_STRING)
+            ?: AppUtils.EMPTY_STRING
+    }
+
+    /**
+     * Stores the station's home page. An empty one is not written, so the item reads exactly as
+     * one built before the field existed.
+     */
+    fun updateHomePageField(bundle: Bundle, homePage: String) {
+        putIfNotEmpty(bundle, KEY_HOME_PAGE, homePage)
+    }
+
+    /**
+     * @return the home page of the station [mediaItem] plays, or an empty string when it has none.
+     */
+    fun getHomePageField(mediaItem: MediaItem?): String {
+        return getString(mediaItem, KEY_HOME_PAGE)
+    }
+
+    /**
+     * Stores the stream address the station was listed with, which a controller cannot read from
+     * the item's URI. An empty one is not written.
+     */
+    fun updateStreamUrlField(bundle: Bundle, streamUrl: String) {
+        putIfNotEmpty(bundle, KEY_STREAM_URL, streamUrl)
+    }
+
+    /**
+     * @return the listed stream address of the station [mediaItem] plays, or an empty string.
+     */
+    fun getStreamUrlField(mediaItem: MediaItem?): String {
+        return getString(mediaItem, KEY_STREAM_URL)
+    }
+
+    /**
+     * Stores the station's country name. The subtitle holds it too, until the player replaces the
+     * subtitle with the track text. An empty one is not written.
+     */
+    fun updateCountryNameField(bundle: Bundle, countryName: String) {
+        putIfNotEmpty(bundle, KEY_COUNTRY_NAME, countryName)
+    }
+
+    /**
+     * @return the country name of the station [mediaItem] plays, or an empty string.
+     */
+    fun getCountryNameField(mediaItem: MediaItem?): String {
+        return getString(mediaItem, KEY_COUNTRY_NAME)
+    }
+
+    private fun putIfNotEmpty(bundle: Bundle, key: String, value: String) {
+        if (value.isNotEmpty()) {
+            bundle.putString(key, value)
+        }
+    }
+
+    private fun getString(mediaItem: MediaItem?, key: String): String {
+        return mediaItem?.mediaMetadata?.extras?.getString(key, AppUtils.EMPTY_STRING)
             ?: AppUtils.EMPTY_STRING
     }
 

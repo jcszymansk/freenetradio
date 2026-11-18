@@ -128,6 +128,60 @@ class MediaItemHelperTest {
     }
 
     @Test
+    fun aHomePageStoredInTheExtrasIsReadFromTheItem() {
+        val bundle = Bundle()
+        MediaItemHelper.updateHomePageField(bundle, "https://arrow.nl")
+
+        assertEquals("https://arrow.nl", MediaItemHelper.getHomePageField(item(bundle)))
+    }
+
+    @Test
+    fun anEmptyHomePageIsNotWrittenAndAMissingOneReadsAsEmpty() {
+        val bundle = Bundle()
+        MediaItemHelper.updateHomePageField(bundle, "")
+
+        assertFalse(bundle.containsKey("KEY_HOME_PAGE"))
+        assertEquals("", MediaItemHelper.getHomePageField(item(bundle)))
+        assertEquals("", MediaItemHelper.getHomePageField(null))
+    }
+
+    @Test
+    fun aStreamUrlStoredInTheExtrasIsReadFromTheItem() {
+        val bundle = Bundle()
+        MediaItemHelper.updateStreamUrlField(bundle, "https://example.com/station.pls")
+
+        assertEquals("https://example.com/station.pls", MediaItemHelper.getStreamUrlField(item(bundle)))
+    }
+
+    @Test
+    fun anEmptyStreamUrlIsNotWrittenAndAMissingOneReadsAsEmpty() {
+        val bundle = Bundle()
+        MediaItemHelper.updateStreamUrlField(bundle, "")
+
+        assertFalse(bundle.containsKey("KEY_STREAM_URL"))
+        assertEquals("", MediaItemHelper.getStreamUrlField(item(bundle)))
+        assertEquals("", MediaItemHelper.getStreamUrlField(null))
+    }
+
+    @Test
+    fun aCountryNameStoredInTheExtrasIsReadFromTheItem() {
+        val bundle = Bundle()
+        MediaItemHelper.updateCountryNameField(bundle, "Netherlands")
+
+        assertEquals("Netherlands", MediaItemHelper.getCountryNameField(item(bundle)))
+    }
+
+    @Test
+    fun anEmptyCountryNameIsNotWrittenAndAMissingOneReadsAsEmpty() {
+        val bundle = Bundle()
+        MediaItemHelper.updateCountryNameField(bundle, "")
+
+        assertFalse(bundle.containsKey("KEY_COUNTRY_NAME"))
+        assertEquals("", MediaItemHelper.getCountryNameField(item(bundle)))
+        assertEquals("", MediaItemHelper.getCountryNameField(null))
+    }
+
+    @Test
     fun theFavoriteFlagSetThroughTheMetadataIsReadBackAndCanBeCleared() {
         val metadata = metadata(extras = Bundle())
 
