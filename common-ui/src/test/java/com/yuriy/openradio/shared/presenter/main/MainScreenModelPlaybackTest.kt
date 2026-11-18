@@ -45,7 +45,7 @@ class MainScreenModelPlaybackTest {
     fun aChosenStationPutsTheMiniPlayerUp() {
         val m = ModelUnderTest().startAndConnect()
         m.client.currentMediaItem = MediaItem.Builder().setMediaId("s1").build()
-        m.client.isPlaying = true
+        m.client.playbackState = PlaybackState(Player.STATE_READY, true)
 
         m.client.listener.onMetadataChanged(metadata("Arrow Classic Rock", "Iggy Pop - Candy"))
 
@@ -71,7 +71,7 @@ class MainScreenModelPlaybackTest {
         m.model.start()
         m.client.currentMediaItem = MediaItem.Builder().setMediaId("s1").build()
         m.client.mediaMetadata = metadata("Arrow Classic Rock", "Iggy Pop - Candy")
-        m.client.isPlaying = true
+        m.client.playbackState = PlaybackState(Player.STATE_READY, true)
 
         m.client.listener.onConnected()
 
@@ -218,7 +218,7 @@ class MainScreenModelPlaybackTest {
     private fun playing(): ModelUnderTest {
         val m = ModelUnderTest().startAndConnect()
         m.client.currentMediaItem = MediaItem.Builder().setMediaId("s1").build()
-        m.client.isPlaying = true
+        m.client.playbackState = PlaybackState(Player.STATE_READY, true)
         m.client.listener.onMetadataChanged(metadata("Arrow Classic Rock", "Iggy Pop - Candy"))
         return m
     }

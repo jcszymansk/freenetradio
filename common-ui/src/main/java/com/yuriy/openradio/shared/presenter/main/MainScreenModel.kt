@@ -410,7 +410,7 @@ class MainScreenModel(
             name = title,
             initials = MainScreenRows.initials(title),
             track = MediaItemHelper.getDisplayDescription(metadata, AppUtils.EMPTY_STRING),
-            isPlaying = client.isPlaying,
+            isPlaying = client.playbackState.isPlaying,
         )
         emit()
     }

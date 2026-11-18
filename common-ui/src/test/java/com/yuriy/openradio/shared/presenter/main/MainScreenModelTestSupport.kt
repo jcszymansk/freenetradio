@@ -22,6 +22,7 @@ import androidx.media3.common.MediaMetadata
 import com.yuriy.openradio.shared.model.media.MediaItemsSubscription
 import com.yuriy.openradio.shared.model.media.MediaLibraryClient
 import com.yuriy.openradio.shared.model.media.MediaResourceManagerListener
+import com.yuriy.openradio.shared.model.media.PlaybackState
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.source.SourcesLayer
@@ -49,7 +50,7 @@ internal class FakeLibraryClient(val listener: MediaResourceManagerListener) : M
 
     override var mediaMetadata: MediaMetadata? = null
     override var currentMediaItem: MediaItem? = null
-    override var isPlaying: Boolean = false
+    override var playbackState: PlaybackState = PlaybackState()
 
     override fun subscribe(parentId: String, callback: MediaItemsSubscription?, page: Int, bundle: Bundle) {
         mSubscriber = callback
