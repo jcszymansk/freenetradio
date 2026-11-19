@@ -89,6 +89,8 @@ A typical browse request follows this path:
 `MediaResourcesManager.kt` is the client-side Media3 wrapper. It connects to the service with a `SessionToken`, requests library roots and children, listens for player state and metadata, and sends custom session commands.
 The children it fetches reach the screen only through `MainScreenModel`, which keeps one browse stack per tab and drops an answer for any node but the top of the selected tab's stack: a fetch can come back after the user has walked to another node or tab.
 
+What plays is held by `NowPlayingTracker`, which `MainScreenModel` feeds with the library's playback and metadata events. It owns the current station, its track and playback flags, the cold-start station restored from `LastPlayedStation`, and the one map of hearts tapped since the service last answered, keyed by the normalized media id. The mini player, every list's playing row and heart, and the Now playing screen all read it, so they agree without syncing code. Now playing and its Station details are a second screen in `MainActivity`'s Compose tree: `MainScreenState.playerScreen` says which one covers the main screen, and system back closes them before it pops a tab. Station details reads the station's country, home page and listed stream URL from extras that `MediaItemBuilder.buildPlayable` writes, because the player replaces the item's subtitle with the track text and the item's URI is the resolved address, not the listed one.
+
 ## Browsable content model
 
 `MediaId.kt` defines identifiers for:
@@ -309,9 +311,9 @@ The repository contains these test classes, counted as files holding JUnit `@Tes
 | Source set | Runs on | Classes | Subject |
 | --- | --- | ---: | --- |
 | `common/src/test` | JVM | 56 | Playlist parsers, URL and parser layers, API caches, the model layer, browse commands and `BrowseTree`, media IDs and media-item building, station serialization and validation, sorting and filtering, network policy and recovery, playback state and error classification, equalizer serialization, sleep timer, artwork grants |
-| `common-ui/src/test` | JVM | 7 | `MainScreenModel` tabs, browse stacks, child delivery, paging, search and playback, its row mapping and tabs, the country setting, `ServiceCommander`, diagnostic report files |
+| `common-ui/src/test` | JVM | 9 | `MainScreenModel` tabs, browse stacks, child delivery, paging, search and the player screens, `NowPlayingTracker` playback and hearts, Station details rows, row mapping and tabs, the country setting, `ServiceCommander`, diagnostic report files |
 | `android-jvm-stubs/src/test` | JVM | 3 | The stubs themselves: `Uri`, `Bundle`, `MimeTypeMap` |
-| `app/src/androidTest` | Device | 42 | SharedPreferences storages, the Room API cache and its schema upgrade, `ImagesProvider` access, file import and export, receivers, `OpenRadioService` browse, search, playback, commands and recovery, `OpenRadioPlayer`, `MediaResourcesManager`, the sleep timer, playlist resolution, station dialogs, end-to-end journeys through `MainActivity`, and the offline test harness itself |
+| `app/src/androidTest` | Device | 48 | SharedPreferences storages, the Room API cache and its schema upgrade, `ImagesProvider` access, file import and export, receivers, `OpenRadioService` browse, search, playback, commands and recovery, `OpenRadioPlayer`, `MediaResourcesManager`, the sleep timer, playlist resolution, station dialogs, end-to-end journeys through `MainActivity` including Now playing, and the offline test harness itself |
 
 The instrumented suite runs under `OfflineTestRunner`, which refuses to run on a device that
 reports a network; the urls its fixtures hand the app point at loopback or at an unreachable
