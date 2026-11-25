@@ -17,8 +17,6 @@ package com.yuriy.openradio.shared.model.storage
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultLoadControl
 import com.yuriy.openradio.shared.utils.AppLogger
 
 /**
@@ -47,6 +45,16 @@ object AppPreferencesManager {
     private const val PREFS_KEY_BT_AUTO_PLAY = "PREFS_KEY_BT_AUTO_PLAY"
     private const val PREFS_KEY_START_PLAYBACK = "START_PLAYBACK"
     private const val PREFS_KEY_WAS_PLAYING_AT_EXIT = "WAS_PLAYING_AT_EXIT"
+
+    /**
+     * The stream buffering this app shipped with, used until the user sets other values. They
+     * are the app's own rather than read from Media3's `DefaultLoadControl`, whose defaults have
+     * changed between releases before, so that a Media3 upgrade cannot change how streams buffer.
+     */
+    const val DEFAULT_MIN_BUFFER_MS = 50_000
+    const val DEFAULT_MAX_BUFFER_MS = 50_000
+    const val DEFAULT_BUFFER_FOR_PLAYBACK_MS = 2_500
+    const val DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5_000
 
     /**
      * @return [StartPlayback] to apply on app start. A setting that was never stored is migrated from
@@ -167,9 +175,8 @@ object AppPreferencesManager {
         editor.apply()
     }
 
-    @UnstableApi
     fun getMinBuffer(context: Context): Int {
-        return getSharedPreferences(context).getInt(PREFS_KEY_MIN_BUFFER, DefaultLoadControl.DEFAULT_MIN_BUFFER_MS)
+        return getSharedPreferences(context).getInt(PREFS_KEY_MIN_BUFFER, DEFAULT_MIN_BUFFER_MS)
     }
 
     fun setMinBuffer(context: Context, value: Int) {
@@ -178,9 +185,8 @@ object AppPreferencesManager {
         editor.apply()
     }
 
-    @UnstableApi
     fun getMaxBuffer(context: Context): Int {
-        return getSharedPreferences(context).getInt(PREFS_KEY_MAX_BUFFER, DefaultLoadControl.DEFAULT_MAX_BUFFER_MS)
+        return getSharedPreferences(context).getInt(PREFS_KEY_MAX_BUFFER, DEFAULT_MAX_BUFFER_MS)
     }
 
     fun setMaxBuffer(context: Context, value: Int) {
@@ -191,7 +197,7 @@ object AppPreferencesManager {
 
     fun getPlayBuffer(context: Context): Int {
         return getSharedPreferences(context).getInt(
-                PREFS_KEY_BUFFER_FOR_PLAYBACK, DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS
+                PREFS_KEY_BUFFER_FOR_PLAYBACK, DEFAULT_BUFFER_FOR_PLAYBACK_MS
         )
     }
 
@@ -203,7 +209,7 @@ object AppPreferencesManager {
 
     fun getPlayBufferRebuffer(context: Context): Int {
         return getSharedPreferences(context).getInt(
-                PREFS_KEY_BUFFER_FOR_REBUFFER_PLAYBACK, DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                PREFS_KEY_BUFFER_FOR_REBUFFER_PLAYBACK, DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
         )
     }
 
