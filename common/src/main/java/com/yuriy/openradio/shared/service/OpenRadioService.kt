@@ -697,36 +697,26 @@ class OpenRadioService : MediaLibraryService() {
     /**
      * Builds the playlist the service plays around [rs] when it has no queue of its own: the
      * favorites, or the provider's new stations when there are none, with [rs] at the head when
-     * neither holds it. [onBuilt] gets it on the main thread, positioned on [rs].
+     * neither holds it. Every item carries its station's favorite flag. [onBuilt] gets the queue
+     * on the main thread, positioned on [rs].
      */
     private fun buildInitialPlaylist(
         rs: RadioStation,
         onBuilt: (MediaSession.MediaItemsWithStartPosition) -> Unit
     ) {
         mScope.launch {
-            AppLogger.d("$TAG create init npl")
-            val radioStations = TreeSet<RadioStation>()
-            val favorites = mPresenter.getAllFavorites()
-            if (favorites.isEmpty().not()) {
-                AppLogger.d("$TAG create init npl fill with fav")
-                radioStations.addAll(favorites)
-            } else {
-                AppLogger.d("$TAG create init npl fill with new stations")
-                radioStations.addAll(mPresenter.getNewStations())
-            }
-            AppLogger.d("$TAG create init npl with ${radioStations.size}")
-            val list = radioStations.map { MediaItemBuilder.buildPlayable(it) }.toMutableList()
-            val playlistStations = radioStations.toMutableSet()
-            if (radioStations.none { it.id == rs.id }) {
-                list.add(0, MediaItemBuilder.buildPlayable(rs))
-                playlistStations.add(rs)
-            }
-            val pos = list.indexOfFirst { it.mediaId == rs.id }
+            val playlist = InitialPlaylist.build(rs, mPresenter)
             mUiScope.launch {
                 // The playlist is what keeps every station of the queue resolvable, the one at its
                 // head included, which no list may hold:
-                mBrowseTree.setPlaylist(BrowseTree.BrowseData(list, playlistStations))
-                onBuilt(MediaSession.MediaItemsWithStartPosition(list, pos, C.TIME_UNSET))
+                mBrowseTree.setPlaylist(BrowseTree.BrowseData(playlist.items, playlist.stations))
+                onBuilt(
+                    MediaSession.MediaItemsWithStartPosition(
+                        playlist.items,
+                        playlist.startIndex,
+                        C.TIME_UNSET
+                    )
+                )
             }
         }
     }
