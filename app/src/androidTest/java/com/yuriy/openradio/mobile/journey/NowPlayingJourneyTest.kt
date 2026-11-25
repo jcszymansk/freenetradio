@@ -20,20 +20,25 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.mobile.view.main.PlayerMenuItem
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.media.getListedStreamUrl
 import com.yuriy.openradio.shared.model.media.getStreamBitrate
+import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
+import com.yuriy.openradio.shared.model.storage.StartPlayback
 import com.yuriy.openradio.shared.presenter.main.StationDetails
 import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LocalStationsFixture
+import com.yuriy.openradio.shared.service.ServiceRecreation
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
 import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
@@ -53,6 +58,9 @@ import org.junit.runner.RunWith
  * `file://`, as in [OfflinePlaybackJourneyTest], selected the way that class explains. Its home
  * page points at [UNREACHABLE_ORIGIN], and the browser and the share chooser are caught by a
  * [LaunchRecorder] before they open, so nothing leaves the device.
+ *
+ * One case recreates the service, as [OfflinePlaybackJourneyTest] does, to reach the restored
+ * queue rather than a queue the screen built by starting a station from a list.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
@@ -71,6 +79,8 @@ class NowPlayingJourneyTest {
     private lateinit var mPlayback: JourneyPlayback
     private lateinit var mStation: RadioStation
     private val mLaunches = LaunchRecorder(Intent.ACTION_CHOOSER, Intent.ACTION_VIEW)
+    private var mWasStartPlayback = StartPlayback.IF_PLAYING
+    private var mWasPlayingAtExit = false
 
     @Before
     fun setUp() {
@@ -78,6 +88,8 @@ class NowPlayingJourneyTest {
         mAudio = LocalAudioFixture(mContext)
         mProfile = JourneyProfile(mContext)
         mProfile.start()
+        mWasStartPlayback = AppPreferencesManager.startPlayback(mContext)
+        mWasPlayingAtExit = AppPreferencesManager.wasPlayingAtExit(mContext)
         mProfile.browser.stop()
         mStations = LocalStationsFixture(mProfile.storages, mProfile.browser)
         mStation = mStations.seed(mAudio.wav(WAV_NAME)) {
@@ -91,13 +103,22 @@ class NowPlayingJourneyTest {
         mLaunches.install()
     }
 
+    /**
+     * A restart case releases the profile's browser to let the service go, and reconnects it to
+     * the new one; one that failed in between leaves it released, and parking the player needs it.
+     */
     @After
     fun tearDown() {
         mLaunches.remove()
         mPlayback.release()
+        if (!mProfile.browser.isConnected()) {
+            mProfile.browser.connectUnchecked()
+        }
         mStations.parkThePlayer()
         mProfile.finish()
         mAudio.delete()
+        AppPreferencesManager.startPlayback(mContext, mWasStartPlayback)
+        AppPreferencesManager.wasPlayingAtExit(mContext, mWasPlayingAtExit)
     }
 
     @Test
@@ -260,6 +281,52 @@ class NowPlayingJourneyTest {
     }
 
     /**
+     * The bug this journey was added for: a recreated service restores the latest station with a
+     * queue whose items said no station was a favorite, so Now playing showed a favorite's heart
+     * outlined after a cold start.
+     *
+     * The station is marked before the service is recreated and no tab is opened before Now
+     * playing, so the heart can only come from the restored station.
+     */
+    @Test
+    fun aRestoredFavouriteShowsItsHeartOnNowPlayingAndUnmarks() {
+        AppPreferencesManager.startPlayback(mContext, StartPlayback.IF_PLAYING)
+        mProfile.storages.favorites.add(mStation)
+        playTheStationUntilItIsTheLatest()
+        mProfile.browser.pause()
+        mProfile.browser.awaitPlayback("the station to pause and the pause to be recorded") {
+            !mProfile.browser.isPlaying() && !AppPreferencesManager.wasPlayingAtExit(mContext)
+        }
+
+        recreateTheService()
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val miniPlayer = MiniPlayerView(mCompose)
+            val view = MainScreenView(mCompose)
+            val navigation = JourneyNavigation(scenario, view)
+            val nowPlaying = NowPlayingView(mCompose)
+            awaitTheStationHeldPaused(miniPlayer)
+            try {
+                miniPlayer.tapName()
+                nowPlaying.awaitName(mStation.name)
+                nowPlaying.awaitFavorite(true)
+
+                nowPlaying.tapFavorite()
+
+                nowPlaying.awaitFavorite(false)
+                mProfile.awaitFavorites(emptyList())
+                nowPlaying.tapClose()
+                navigation.selectTab(Tab.FAV)
+                view.awaitEmptyLine(mContext.getString(R.string.main_empty_favorites))
+                navigation.selectTab(Tab.MINE)
+                view.awaitRowFavorite(mStation.id, false)
+            } finally {
+                navigation.returnToRoots()
+            }
+        }
+    }
+
+    /**
      * Launches the main screen with the seeded station playing and its mini player up, runs
      * [case], and leaves every tab at its root and the player screen shut.
      */
@@ -276,6 +343,45 @@ class NowPlayingJourneyTest {
                 navigation.returnToRoots()
             }
         }
+    }
+
+    /**
+     * Plays the station from MINE in an activity of its own, and waits until the service has
+     * stored it as the latest station, which it does from a background coroutine.
+     */
+    private fun playTheStationUntilItIsTheLatest() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            selectTheStationFromMine(scenario, mCompose, mProfile, mPlayback, mStation)
+            mProfile.browser.awaitPlaying()
+            mProfile.browser.awaitPlayback("the station to be stored as the latest one") {
+                mProfile.storages.freshLatest().get().id == mStation.id
+            }
+        }
+    }
+
+    /**
+     * Stops playback and destroys the service, so the next connection creates a new one with an
+     * empty queue, which the service restores the latest station into. [ServiceRecreation] needs
+     * every binding released, and this class holds two of them.
+     */
+    private fun recreateTheService() {
+        mProfile.browser.stop()
+        mProfile.browser.awaitPlaybackState(Player.STATE_IDLE)
+        mPlayback.release()
+        mProfile.browser.release()
+        ServiceRecreation(mContext).destroyTheService()
+        mProfile.browser.connectUnchecked()
+        assertEquals("The recreated service holds a queue", 0, mProfile.browser.mediaItemCount())
+    }
+
+    /**
+     * Waits for the mini player to show the station paused and for the player to become ready.
+     * That the station then stays paused is pinned by [OfflinePlaybackJourneyTest].
+     */
+    private fun awaitTheStationHeldPaused(miniPlayer: MiniPlayerView) {
+        miniPlayer.awaitName(mStation.name)
+        miniPlayer.awaitPlaying(false)
+        mProfile.browser.awaitPlaybackState(Player.STATE_READY)
     }
 
     /**
