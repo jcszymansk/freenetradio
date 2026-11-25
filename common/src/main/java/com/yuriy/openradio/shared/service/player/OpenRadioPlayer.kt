@@ -22,6 +22,7 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
+import androidx.annotation.OptIn
 import androidx.annotation.StringRes
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -37,6 +38,7 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
+import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -162,10 +164,26 @@ class OpenRadioPlayer(
      */
     private var mStreamRetry: Job = NO_STREAM_RETRY
 
-    private val mExoPlayer: Player by lazy {
+    private val mExoPlayer: Player by lazy { buildExoPlayer() }
+
+    @OptIn(markerClass = [ExperimentalApi::class])
+    private fun buildExoPlayer(): ExoPlayer {
         AppLogger.i("Init ExoPlayer")
         val trackSelector = DefaultTrackSelector(mContext)
-        trackSelector.parameters = DefaultTrackSelector.Parameters.Builder().build()
+        trackSelector.parameters = DefaultTrackSelector.Parameters.Builder()
+            // Offload lets the DSP decode the stream while the CPU sleeps. Media3 falls back to
+            // the normal path for a stream the device cannot offload. Neither gapless playback
+            // nor speed changes are required, so neither can keep a stream off the offload path.
+            .setAudioOffloadPreferences(
+                TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(
+                        TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                    )
+                    .setIsGaplessSupportRequired(false)
+                    .setIsSpeedChangeSupportRequired(false)
+                    .build()
+            )
+            .build()
         val builder = ExoPlayer.Builder(
             mContext, ExoPlayerUtils.buildRenderersFactory(mContext)
         )
@@ -182,6 +200,11 @@ class OpenRadioPlayer(
                 .build()
         )
         builder.setWakeMode(C.WAKE_MODE_NETWORK)
+        // It lets the playback loop sleep until the renderers can make progress, instead of waking
+        // on a fixed interval: ExoPlayer:Playback took about 31 s of CPU in 10 minutes of
+        // screen-off playback on the owner's phone (2026-11-25). Media3 1.11 already defaults it
+        // to on, but the method is experimental and its default may change, so it is explicit.
+        builder.experimentalSetDynamicSchedulingEnabled(true)
         // Do not handle this via player - it handles OFF but doesnt ON.
         //builder.setHandleAudioBecomingNoisy(true)
         val audioAttributes = AudioAttributes.Builder()
@@ -193,8 +216,9 @@ class OpenRadioPlayer(
         builder.setAudioAttributes(audioAttributes, true)
         val player = builder.build()
         player.addListener(mComponentListener)
+        player.addAudioOffloadListener(AudioOffloadLog())
         player.playWhenReady = true
-        player
+        return player
     }
 
     init {
