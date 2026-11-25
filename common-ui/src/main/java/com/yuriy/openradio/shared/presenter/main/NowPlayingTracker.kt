@@ -35,7 +35,8 @@ import kotlinx.coroutines.launch
 /**
  * What plays, for every view of it: the mini player, the playing row of each list, and Now playing
  * with its Station details. It also owns the hearts tapped since the service last answered, keyed
- * by the normalized media id, so a station's heart agrees wherever the station is shown.
+ * by the normalized media id, so a station's heart agrees wherever the station is shown, and it
+ * remembers the flag of each station in the answers it accepts, under the same key.
  *
  * It holds no View, Activity or Compose type. [MainScreenModel] hands it the library's events and
  * builds its state from it. Main thread only.
@@ -55,7 +56,8 @@ class NowPlayingTracker(
      *
      * @param id its media id as the player or the store names it, or null when the player named
      *   none.
-     * @param isFavorite its flag as the service last delivered it, in its item or in a list.
+     * @param isFavorite its flag as the service last delivered it, an accepted answer's flag for
+     *   the station winning over its item's.
      */
     private data class Current(
         val id: String?,
@@ -75,6 +77,13 @@ class NowPlayingTracker(
      * fresh answer wins.
      */
     private val mFavoriteOverrides = HashMap<String, Boolean>()
+
+    /**
+     * Each station's flag from the latest accepted answer that held it, by normalized media id,
+     * so the shown station's heart does not depend on whether its metadata or a list answer came
+     * first.
+     */
+    private val mAnsweredFavorites = HashMap<String, Boolean>()
 
     /** The media id of the station shown, or null while there is none. */
     val playingId: String?
@@ -152,7 +161,9 @@ class NowPlayingTracker(
             track = MediaItemHelper.getDisplayDescription(metadata, AppUtils.EMPTY_STRING),
             artworkUri = if (item == null) previous?.artworkUri else MainScreenRows.artworkUri(item),
             facts = item?.let { StationDetails.of(it) } ?: previous?.facts ?: StationFacts.NONE,
-            isFavorite = item?.let { MediaItemHelper.isFavoriteField(it.mediaMetadata) } ?: previous?.isFavorite ?: false,
+            isFavorite = item?.let {
+                mAnsweredFavorites[key(it.mediaId)] ?: MediaItemHelper.isFavoriteField(it.mediaMetadata)
+            } ?: previous?.isFavorite ?: false,
         )
         mPlayback = client.playbackState
     }
@@ -207,16 +218,19 @@ class NowPlayingTracker(
 
     /**
      * Takes an answer of the service that the screen accepted: its flags win over the hearts
-     * tapped before it, and the shown station's flag is learnt from it when it holds that station.
+     * tapped before it, and it is learnt as the flag of every station it holds, so the shown
+     * station's heart follows it even when the station is shown after the answer arrives.
      */
     @MainThread
     fun onAnswer(children: List<MediaItem>) {
         val currentKey = mCurrent?.id?.let(::key)
         for (child in children) {
             val childKey = key(child.mediaId)
+            val isFavorite = MediaItemHelper.isFavoriteField(child.mediaMetadata)
             mFavoriteOverrides.remove(childKey)
+            mAnsweredFavorites[childKey] = isFavorite
             if (childKey == currentKey) {
-                mCurrent = mCurrent?.copy(isFavorite = MediaItemHelper.isFavoriteField(child.mediaMetadata))
+                mCurrent = mCurrent?.copy(isFavorite = isFavorite)
             }
         }
     }

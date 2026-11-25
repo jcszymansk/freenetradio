@@ -327,6 +327,72 @@ class NowPlayingTrackerTest {
         assertFalse(t.tracker.isFavorite(station("s1", favorite = false)))
     }
 
+    @Test
+    fun anAnswerBeforeTheMetadataGivesTheShownStationItsHeart() {
+        val t = TrackerUnderTest().connect()
+        t.tracker.onAnswer(listOf(station("s1", favorite = true)))
+
+        t.play(station("s1", "Arrow Classic Rock", favorite = false))
+
+        assertTrue(t.tracker.nowPlaying()!!.isFavorite)
+    }
+
+    @Test
+    fun anAnswerBeforeTheMetadataOutlinesAStationItsItemMarks() {
+        val t = TrackerUnderTest().connect()
+        t.tracker.onAnswer(listOf(station("s1", favorite = false)))
+
+        t.play(station("s1", "Arrow Classic Rock", favorite = true))
+
+        assertFalse(t.tracker.nowPlaying()!!.isFavorite)
+    }
+
+    @Test
+    fun theMetadataBeforeAnAnswerTakesTheAnswersHeart() {
+        val t = TrackerUnderTest().connect().play(station("s1", "Arrow Classic Rock", favorite = false))
+
+        t.tracker.onAnswer(listOf(station("s1", favorite = true)))
+
+        assertTrue(t.tracker.nowPlaying()!!.isFavorite)
+    }
+
+    @Test
+    fun aLaterAnswerReplacesAnEarlierOne() {
+        val t = TrackerUnderTest().connect()
+        t.tracker.onAnswer(listOf(station("s1", favorite = true)))
+        t.tracker.onAnswer(listOf(station("s1", favorite = false)))
+
+        t.play(station("s1", "Arrow Classic Rock", favorite = true))
+
+        assertFalse(t.tracker.nowPlaying()!!.isFavorite)
+    }
+
+    @Test
+    fun aHeartTappedSinceTheLastAnswerStillShowsTheTap() {
+        val t = TrackerUnderTest().connect()
+        t.tracker.onAnswer(listOf(station("s1", favorite = true)))
+        t.play(station("s1", "Arrow Classic Rock", favorite = false))
+
+        t.tracker.toggleCurrentFavorite()
+
+        assertFalse(t.tracker.nowPlaying()!!.isFavorite)
+
+        val item = station("s1", "Arrow Classic Rock", favorite = false)
+        t.play(item, track = "Iggy Pop - Candy (live)")
+
+        assertFalse("A later metadata push keeps the tap", t.tracker.nowPlaying()!!.isFavorite)
+    }
+
+    @Test
+    fun anAnswerOfASearchResultGivesThePlainStationItsHeart() {
+        val t = TrackerUnderTest().connect()
+        t.tracker.onAnswer(listOf(station(MediaId.makeSearchId("s1"), favorite = true)))
+
+        t.play(station("s1", "Arrow Classic Rock", favorite = false))
+
+        assertTrue(t.tracker.nowPlaying()!!.isFavorite)
+    }
+
     private class TrackerUnderTest {
 
         var lastStation: RadioStation = RadioStation.INVALID_INSTANCE
