@@ -24,6 +24,7 @@ import androidx.annotation.MainThread
 import androidx.media.utils.MediaConstants
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaLibraryInfo
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -32,7 +33,9 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -238,6 +241,8 @@ class OpenRadioService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        // An idle player keeps no notification, as on Media3 1.2.1, so a stopped service can be destroyed.
+        setShowNotificationForIdlePlayer(MediaSessionService.SHOW_NOTIFICATION_FOR_IDLE_PLAYER_NEVER)
         AppLogger.i("$TAG on create")
         setActiveRS(mPresenter.getLastRadioStation())
         registerReceivers()
@@ -260,16 +265,16 @@ class OpenRadioService : MediaLibraryService() {
             build()
         }
 
-        mMarkFavoriteButton = CommandButton.Builder()
+        mMarkFavoriteButton = CommandButton.Builder(CommandButton.ICON_HEART_UNFILLED)
             .setDisplayName(getString(R.string.favorite))
             .setEnabled(true)
-            .setIconResId(R.drawable.ic_favorite_off)
+            .setCustomIconResId(R.drawable.ic_favorite_off)
             .setSessionCommand(SessionCommand(CMD_MARK_FAVORITE, Bundle()))
             .build()
-        mUnmarkFavoriteButton = CommandButton.Builder()
+        mUnmarkFavoriteButton = CommandButton.Builder(CommandButton.ICON_HEART_FILLED)
             .setDisplayName(getString(R.string.favorite))
             .setEnabled(true)
-            .setIconResId(R.drawable.ic_favorite_on)
+            .setCustomIconResId(R.drawable.ic_favorite_on)
             .setSessionCommand(SessionCommand(CMD_UNMARK_FAVORITE, Bundle()))
             .build()
 
@@ -803,8 +808,8 @@ class OpenRadioService : MediaLibraryService() {
 
         private val mSessionCmdSuccess = Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         private val mSessionCmdNotSupported =
-            Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
-        private val mSessionCmdSkipped = Futures.immediateFuture(SessionResult(SessionResult.RESULT_INFO_SKIPPED))
+            Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+        private val mSessionCmdSkipped = Futures.immediateFuture(SessionResult(SessionError.INFO_CANCELLED))
 
         /**
          * Answers a play request that finds the queue empty with the queue the player had before
@@ -814,18 +819,22 @@ class OpenRadioService : MediaLibraryService() {
          */
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
-            controller: MediaSession.ControllerInfo
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val resumption = mPlayer.getResumption()
             val rs = mActiveRS
             if (resumption.mediaItems.isNotEmpty() || rs.isInvalid()) {
                 AppLogger.d(
-                    "$TAG [$controller] Playback Resumption of ${resumption.mediaItems.size} items " +
-                            "at ${resumption.startIndex}"
+                    "$TAG [$controller] Playback Resumption (for playback $isForPlayback) of " +
+                            "${resumption.mediaItems.size} items at ${resumption.startIndex}"
                 )
                 return Futures.immediateFuture(resumption)
             }
-            AppLogger.i("$TAG [$controller] Playback Resumption builds a playlist around ${rs.id}")
+            AppLogger.i(
+                "$TAG [$controller] Playback Resumption (for playback $isForPlayback) builds a playlist " +
+                        "around ${rs.id}"
+            )
             val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
             buildInitialPlaylist(rs) { future.set(it) }
             return future
@@ -919,7 +928,7 @@ class OpenRadioService : MediaLibraryService() {
             AppLogger.d("$TAG [$browser] GetItem for $mediaId")
             val item = mBrowseTree.getMediaItemByMediaId(mediaId)
                 ?: return Futures.immediateFuture(
-                    LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 )
             mArtworkGrants.grant(browser, listOf(item))
             return Futures.immediateFuture(LibraryResult.ofItem(item, LibraryParams.Builder().build()))
@@ -1023,7 +1032,9 @@ class OpenRadioService : MediaLibraryService() {
                     .add(SessionCommand(CMD_UPDATE_SORT_IDS, Bundle()))
                     .add(SessionCommand(CMD_UPDATE_TREE, Bundle()))
                     .build()
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+            // Every controller, Android Auto included, keeps the full player commands it had on 1.2.1.
+            return MediaSession.ConnectionResult.AcceptedResultBuilder()
+                .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
                 .setAvailableSessionCommands(sessionCommands)
                 .build()
         }
@@ -1070,7 +1081,7 @@ class OpenRadioService : MediaLibraryService() {
                     // Skip media items that can not be played.
                     if (item.localConfiguration == null) {
                         val msg = try {
-                            "${item.mediaId}-${IntentUtils.bundleToString(item.mediaMetadata.toBundle())}"
+                            "${item.mediaId}-${IntentUtils.bundleToString(item.mediaMetadata.toBundle(MediaLibraryInfo.INTERFACE_VERSION))}"
                         } catch (exception: Exception) {
                             "Can't create a message: ${exception.message}"
                         }
@@ -1287,7 +1298,7 @@ class OpenRadioService : MediaLibraryService() {
                 )
             } else {
                 AppLogger.w("$TAG no command for parentId: $parentId")
-                future.set(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
+                future.set(LibraryResult.ofError(SessionError.ERROR_BAD_VALUE))
             }
             return future
         }
@@ -1410,8 +1421,8 @@ class OpenRadioService : MediaLibraryService() {
          * Marks or unmarks the station [args] name as a favorite.
          *
          * The answer tells the three outcomes apart: success when the favorites store changed,
-         * [SessionResult.RESULT_INFO_SKIPPED] when the station already was in the requested
-         * state, and [SessionResult.RESULT_ERROR_NOT_SUPPORTED] when the station is unknown. A
+         * [SessionError.INFO_CANCELLED] when the station already was in the requested
+         * state, and [SessionError.ERROR_NOT_SUPPORTED] when the station is unknown. A
          * caller that only wants the station in that state, such as a button pressed twice or
          * one of two racing clients, can take a skip as success; a caller that sent the wrong
          * command or acted on stale metadata learns that nothing happened. Only a change is

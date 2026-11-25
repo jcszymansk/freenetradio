@@ -192,7 +192,7 @@ class PlaybackErrorClassifierTest {
 
     private fun unrecognizedFormat(): PlaybackException {
         val cause = UnrecognizedInputFormatException(
-            "None of the available extractors could read the stream.", Uri.parse(STREAM_URL)
+            "None of the available extractors could read the stream.", Uri.parse(STREAM_URL), emptyList()
         )
         return PlaybackException(
             cause.message, cause, PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED

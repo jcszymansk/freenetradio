@@ -165,7 +165,7 @@ class OpenRadioPlayer(
     private val mExoPlayer: Player by lazy {
         AppLogger.i("Init ExoPlayer")
         val trackSelector = DefaultTrackSelector(mContext)
-        trackSelector.parameters = DefaultTrackSelector.Parameters.Builder(mContext).build()
+        trackSelector.parameters = DefaultTrackSelector.Parameters.Builder().build()
         val builder = ExoPlayer.Builder(
             mContext, ExoPlayerUtils.buildRenderersFactory(mContext)
         )
@@ -226,6 +226,14 @@ class OpenRadioPlayer(
 
     override fun setVolume(value: Float) {
         mPlayer.volume = value
+    }
+
+    override fun mute() {
+        mPlayer.mute()
+    }
+
+    override fun unmute() {
+        mPlayer.unmute()
     }
 
     override fun pause() {
@@ -484,28 +492,8 @@ class OpenRadioPlayer(
         mPlayer.seekForward()
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun hasPrevious(): Boolean {
-        return mPlayer.hasPrevious()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun hasPreviousWindow(): Boolean {
-        return mPlayer.hasPreviousWindow()
-    }
-
     override fun hasPreviousMediaItem(): Boolean {
         return mPlayer.hasPreviousMediaItem()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun previous() {
-        mPlayer.previous()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun seekToPreviousWindow() {
-        mPlayer.seekToPreviousWindow()
     }
 
     override fun seekToPreviousMediaItem() {
@@ -520,28 +508,8 @@ class OpenRadioPlayer(
         mPlayer.seekToPrevious()
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun hasNext(): Boolean {
-        return mPlayer.hasNext()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun hasNextWindow(): Boolean {
-        return mPlayer.hasNextWindow()
-    }
-
     override fun hasNextMediaItem(): Boolean {
         return mPlayer.hasNextMediaItem()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun next() {
-        mPlayer.next()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun seekToNextWindow() {
-        mPlayer.seekToNextWindow()
     }
 
     override fun seekToNextMediaItem() {

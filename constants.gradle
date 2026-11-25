@@ -34,7 +34,7 @@ project.ext {
     exifinterfaceVersion = "1.3.7"
     constraintlayoutAndroidXVersion = "2.1.4"
     concurrentFuturesVersion = "1.1.0"
-    media3Version = "1.2.1"
+    media3Version = "1.11.1"
 
     /**
      * Test Libraries versions
