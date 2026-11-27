@@ -112,6 +112,8 @@ com/yuriy/openradio/shared/presenter/main/MainScreenModel	com.yuriy.openradio.sh
 com/yuriy/openradio/shared/presenter/main/StationDetails	com.yuriy.openradio.shared.presenter.main.StationDetailsTest	:common-ui
 com/yuriy/openradio/shared/presenter/main/NowPlayingTracker	com.yuriy.openradio.shared.presenter.main.NowPlayingTrackerTest	:common-ui
 com/yuriy/openradio/shared/presenter/screen/ScreenStack	com.yuriy.openradio.shared.presenter.screen.ScreenStackTest	:common-ui
+com/yuriy/openradio/shared/presenter/settings/BufferingValidationKt	com.yuriy.openradio.shared.presenter.settings.BufferingValidationTest	:common-ui
+com/yuriy/openradio/shared/presenter/settings/BufferTexts	com.yuriy.openradio.shared.presenter.settings.BufferingValidationTest	:common-ui
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/InitialPlaylist	com.yuriy.openradio.shared.service.InitialPlaylistTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
