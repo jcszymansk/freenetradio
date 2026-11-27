@@ -152,7 +152,9 @@ class SettingsModel(
     @MainThread
     fun stepMasterVolume(delta: Int) {
         val stored = mGeneral.masterVolume
-        val next = (stored + delta).coerceIn(MIN_VOLUME, MAX_VOLUME)
+        val next = (stored.toLong() + delta.toLong())
+            .coerceIn(MIN_VOLUME.toLong(), MAX_VOLUME.toLong())
+            .toInt()
         if (next == stored) {
             return
         }

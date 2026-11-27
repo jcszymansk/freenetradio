@@ -260,6 +260,7 @@ class SettingsModelTest {
 
         model.stepMasterVolume(SettingsModel.VOLUME_STEP)
         model.stepMasterVolume(SettingsModel.VOLUME_STEP)
+        model.stepMasterVolume(Int.MAX_VALUE)
 
         assertEquals(listOf("masterVolume=100"), mGeneral.writes)
         assertEquals(100, model.state.value.masterVolume)
@@ -274,6 +275,7 @@ class SettingsModelTest {
 
         model.stepMasterVolume(-SettingsModel.VOLUME_STEP)
         model.stepMasterVolume(-SettingsModel.VOLUME_STEP)
+        model.stepMasterVolume(Int.MIN_VALUE)
 
         assertEquals(listOf("masterVolume=0"), mGeneral.writes)
         assertEquals(0, model.state.value.masterVolume)
