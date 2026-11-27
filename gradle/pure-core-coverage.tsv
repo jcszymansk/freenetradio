@@ -114,6 +114,7 @@ com/yuriy/openradio/shared/presenter/main/NowPlayingTracker	com.yuriy.openradio.
 com/yuriy/openradio/shared/presenter/screen/ScreenStack	com.yuriy.openradio.shared.presenter.screen.ScreenStackTest	:common-ui
 com/yuriy/openradio/shared/presenter/settings/BufferingValidationKt	com.yuriy.openradio.shared.presenter.settings.BufferingValidationTest	:common-ui
 com/yuriy/openradio/shared/presenter/settings/BufferTexts	com.yuriy.openradio.shared.presenter.settings.BufferingValidationTest	:common-ui
+com/yuriy/openradio/shared/presenter/settings/AboutRowsKt	com.yuriy.openradio.shared.presenter.settings.AboutRowsTest	:common-ui
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/InitialPlaylist	com.yuriy.openradio.shared.service.InitialPlaylistTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
