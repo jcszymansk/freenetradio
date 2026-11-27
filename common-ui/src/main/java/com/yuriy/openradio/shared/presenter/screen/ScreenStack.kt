@@ -43,6 +43,9 @@ class ScreenStack {
      * screen does.
      */
     fun interface LeaveListener {
+        /**
+         * Called with [destination] as it leaves the stack, before the new top is published.
+         */
         fun onLeave(destination: Destination)
     }
 
