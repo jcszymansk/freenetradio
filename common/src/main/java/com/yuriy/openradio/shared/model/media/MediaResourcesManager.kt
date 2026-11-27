@@ -257,9 +257,10 @@ class MediaResourcesManager(
     override val currentMediaItem: MediaItem?
         get() = mPlayer?.currentMediaItem
 
-    override val isPlaying: Boolean
-        get()  {
-            return mPlayer?.isPlaying ?: false
+    override val playbackState: PlaybackState
+        get() {
+            val player = mPlayer ?: return PlaybackState()
+            return PlaybackState(player.playbackState, player.playWhenReady)
         }
 
     private fun updateNowPlaying(player: Player?) {

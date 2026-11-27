@@ -39,4 +39,17 @@
     <string name="main_live">Live</string>
     <string name="main_section_your_country">Your country</string>
     <string name="main_section_all_countries">All countries</string>
+    <string name="now_playing_title">Now playing</string>
+    <string name="now_playing_open">Open Now playing</string>
+    <string name="now_playing_close">Close player</string>
+    <string name="now_playing_menu_details">Station details</string>
+    <string name="now_playing_menu_copy_url">Copy stream URL</string>
+    <string name="now_playing_menu_share_url">Share stream URL</string>
+    <string name="now_playing_url_copied">Stream URL copied</string>
+    <string name="now_playing_url_clip_label">Stream URL</string>
+    <string name="details_country">Country</string>
+    <string name="details_genre">Genre</string>
+    <string name="details_stream">Stream</string>
+    <string name="details_url">URL</string>
+    <string name="details_web">Web</string>
 </resources>

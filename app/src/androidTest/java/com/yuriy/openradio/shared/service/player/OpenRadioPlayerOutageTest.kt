@@ -22,10 +22,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.service.LocalAudioFixture
 import com.yuriy.openradio.shared.service.LoopbackHttpFixture
 import com.yuriy.openradio.testing.UNREACHABLE_ORIGIN
@@ -356,7 +356,7 @@ class OpenRadioPlayerOutageTest {
         val RESUME_SECONDS = SLACK_FACTOR * toSeconds(
             GIVE_UP_LIVE_MILLIS
                 + StreamRetrySchedule.DEFAULT_DELAYS_MS[1]
-                + DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS
+                + AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_MS
         )
 
         /**

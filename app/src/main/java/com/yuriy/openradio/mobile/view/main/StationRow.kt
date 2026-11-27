@@ -16,7 +16,6 @@
 
 package com.yuriy.openradio.mobile.view.main
 
-import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -36,13 +35,9 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -56,7 +51,6 @@ import com.github.jcszymansk.console.design.ConsoleShapes
 import com.github.jcszymansk.console.design.InitialsTile
 import com.github.jcszymansk.console.design.bottomHairline
 import com.yuriy.openradio.mobile.R
-import com.yuriy.openradio.shared.model.storage.images.ImagesStore
 import com.yuriy.openradio.shared.presenter.main.RowState
 
 /**
@@ -150,21 +144,4 @@ private fun StationTile(row: RowState.Station) {
     } else {
         InitialsTile(row.initials, active = row.isCurrent)
     }
-}
-
-/**
- * The logo at [uri] from the [LocalArtworkCache]. The cached bitmap is the initial value, so a row
- * that scrolls back into view shows its logo on the first frame. The revision of the image id is
- * read, so a finished download reloads only the rows that show that logo, and the old bitmap stays
- * until the new one is loaded.
- */
-@Composable
-private fun rememberArtwork(uri: String): ImageBitmap? {
-    val cache = LocalArtworkCache.current
-    val imageId = remember(uri) { ImagesStore.getId(Uri.parse(uri)) }
-    val revision = cache.revision(imageId)
-    val artwork by produceState(initialValue = cache.cached(imageId), cache, imageId, uri, revision) {
-        value = cache.load(imageId, uri)
-    }
-    return artwork
 }

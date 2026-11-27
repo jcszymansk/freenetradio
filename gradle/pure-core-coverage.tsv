@@ -109,7 +109,10 @@ com/yuriy/openradio/shared/model/logging/DiagnosticReportFiles	com.yuriy.openrad
 com/yuriy/openradio/shared/presenter/main/Tab	com.yuriy.openradio.shared.presenter.main.TabTest	:common-ui
 com/yuriy/openradio/shared/presenter/main/MainScreenRows	com.yuriy.openradio.shared.presenter.main.MainScreenRowsTest	:common-ui
 com/yuriy/openradio/shared/presenter/main/MainScreenModel	com.yuriy.openradio.shared.presenter.main.MainScreenModelTest	:common-ui
+com/yuriy/openradio/shared/presenter/main/StationDetails	com.yuriy.openradio.shared.presenter.main.StationDetailsTest	:common-ui
+com/yuriy/openradio/shared/presenter/main/NowPlayingTracker	com.yuriy.openradio.shared.presenter.main.NowPlayingTrackerTest	:common-ui
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
+com/yuriy/openradio/shared/service/InitialPlaylist	com.yuriy.openradio.shared.service.InitialPlaylistTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback$Exhausted	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback$Resolving	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
@@ -117,6 +120,7 @@ com/yuriy/openradio/shared/service/PlaylistFallback$Trying	com.yuriy.openradio.s
 com/yuriy/openradio/shared/service/player/PlaybackErrorClassifier	com.yuriy.openradio.shared.service.player.PlaybackErrorClassifierTest	:common
 com/yuriy/openradio/shared/service/player/NetworkRecovery	com.yuriy.openradio.shared.service.player.NetworkRecoveryTest	:common
 com/yuriy/openradio/shared/service/player/StreamRetrySchedule	com.yuriy.openradio.shared.service.player.StreamRetryScheduleTest	:common
+com/yuriy/openradio/shared/service/player/AudioOffloadLog	com.yuriy.openradio.shared.service.player.AudioOffloadLogTest	:common
 com/yuriy/openradio/shared/utils/GatedInputStream	com.yuriy.openradio.shared.utils.GatedInputStreamTest	:common
 com/yuriy/openradio/shared/utils/NetworkPermit	com.yuriy.openradio.shared.utils.NetworkPermitTest	:common
 com/yuriy/openradio/shared/utils/JsonUtils	com.yuriy.openradio.shared.utils.JsonUtilsTest	:common

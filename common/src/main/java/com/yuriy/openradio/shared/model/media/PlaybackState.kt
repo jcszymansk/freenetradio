@@ -29,4 +29,11 @@ class PlaybackState(
                     || mPlaybackState == Player.STATE_READY)
                     && mPlayWhenReady
         }
+
+    /**
+     * The player is filling its buffer for a station it was asked to play. The screen shows a
+     * progress line then and still offers Pause, because [isPlaying] counts this as playing.
+     */
+    val isBuffering: Boolean
+        get() = mPlaybackState == Player.STATE_BUFFERING && mPlayWhenReady
 }

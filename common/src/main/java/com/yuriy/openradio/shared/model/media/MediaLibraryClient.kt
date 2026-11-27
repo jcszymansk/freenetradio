@@ -56,7 +56,11 @@ interface MediaLibraryClient {
 
     val currentMediaItem: MediaItem?
 
-    val isPlaying: Boolean
+    /**
+     * The player's state and play-when-ready as they stand now: an idle player that was not asked
+     * to play while no browser is connected.
+     */
+    val playbackState: PlaybackState
 
     fun clean()
 }

@@ -55,10 +55,11 @@ import com.yuriy.openradio.shared.presenter.main.MiniPlayerState
 
 /**
  * The persistent mini player: tile, name, LIVE and the track, and the square play/pause button.
- * Only the button acts; the rest does nothing until a Now playing screen exists.
+ * A tap anywhere but the button opens Now playing; the button only toggles playback, and its
+ * click does not reach the row.
  */
 @Composable
-internal fun MiniPlayer(state: MiniPlayerState, onToggle: () -> Unit) {
+internal fun MiniPlayer(state: MiniPlayerState, onOpen: () -> Unit, onToggle: () -> Unit) {
     val c = Console.colors
     Row(
         Modifier
@@ -66,6 +67,7 @@ internal fun MiniPlayer(state: MiniPlayerState, onToggle: () -> Unit) {
             .height(62.dp)
             .background(c.surface1)
             .drawBehind { drawLine(c.divider, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1f) }
+            .clickable(onClickLabel = stringResource(R.string.now_playing_open), onClick = onOpen)
             .padding(start = 16.dp, end = 10.dp)
             .testTag(MainScreenTags.MINI_PLAYER),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

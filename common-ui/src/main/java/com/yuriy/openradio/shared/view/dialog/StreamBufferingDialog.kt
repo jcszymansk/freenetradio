@@ -22,7 +22,6 @@ import android.os.Bundle
 import android.text.TextUtils
 import android.widget.EditText
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultLoadControl
 import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.utils.SafeToast.showAnyThread
@@ -92,10 +91,10 @@ class StreamBufferingDialog : BaseDialogFragment() {
             playBuffer: EditText,
             playBufferRebuffer: EditText
         ) {
-            minBuffer.setText(DefaultLoadControl.DEFAULT_MIN_BUFFER_MS.toString())
-            maxBuffer.setText(DefaultLoadControl.DEFAULT_MAX_BUFFER_MS.toString())
-            playBuffer.setText(DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS.toString())
-            playBufferRebuffer.setText(DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS.toString())
+            minBuffer.setText(AppPreferencesManager.DEFAULT_MIN_BUFFER_MS.toString())
+            maxBuffer.setText(AppPreferencesManager.DEFAULT_MAX_BUFFER_MS.toString())
+            playBuffer.setText(AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_MS.toString())
+            playBufferRebuffer.setText(AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS.toString())
         }
 
         fun handleOnCreate(

@@ -20,19 +20,28 @@ package android.os
  * JVM replacement for the Android [Bundle]. The framework class ships as a stub whose accessors
  * silently return defaults, which makes every extras-carrying value object untestable off a device.
  */
-class Bundle {
+class Bundle private constructor(private val mReadOnly: Boolean) {
 
     private val mValues = LinkedHashMap<String, Any?>()
 
+    constructor() : this(false)
+
     fun putString(key: String, value: String?) {
-        mValues[key] = value
+        put(key, value)
     }
 
     fun putInt(key: String, value: Int) {
-        mValues[key] = value
+        put(key, value)
     }
 
     fun putBoolean(key: String, value: Boolean) {
+        put(key, value)
+    }
+
+    private fun put(key: String, value: Any?) {
+        if (mReadOnly) {
+            throw UnsupportedOperationException("Bundle.EMPTY is read-only")
+        }
         mValues[key] = value
     }
 
@@ -82,5 +91,14 @@ class Bundle {
 
     override fun toString(): String {
         return "Bundle$mValues"
+    }
+
+    companion object {
+        /**
+         * The shared read-only empty bundle, as on Android. Media3's `PlaybackException`
+         * constructor reads it, so JVM tests that build one need it to exist.
+         */
+        @JvmField
+        val EMPTY: Bundle = Bundle(true)
     }
 }

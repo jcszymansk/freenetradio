@@ -21,6 +21,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.NumberPicker
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaLibraryInfo
 import androidx.media3.common.util.UnstableApi
 import com.yuriy.openradio.shared.R
 import com.yuriy.openradio.shared.dependencies.BrowseReloadDependency
@@ -189,7 +190,7 @@ class RSSettingsDialog : BaseDialogFragment(), ServiceCommanderDependency, Brows
             mediaItem: MediaItem,
             parentId: String, maxSortId: Int
         ) {
-            bundle.putBundle(KEY_MEDIA_ITEM, mediaItem.toBundle())
+            bundle.putBundle(KEY_MEDIA_ITEM, mediaItem.toBundle(MediaLibraryInfo.INTERFACE_VERSION))
             bundle.putString(KEY_PARENT_ID, parentId)
             bundle.putInt(KEY_MAX_SORT_ID, maxSortId)
         }
@@ -219,7 +220,9 @@ class RSSettingsDialog : BaseDialogFragment(), ServiceCommanderDependency, Brows
             }
             return if (!bundle.containsKey(KEY_MEDIA_ITEM)) {
                 null
-            } else MediaItem.CREATOR.fromBundle(bundle.getBundle(KEY_MEDIA_ITEM) ?: Bundle())
+            } else MediaItem.fromBundle(
+                bundle.getBundle(KEY_MEDIA_ITEM) ?: Bundle(), MediaLibraryInfo.INTERFACE_VERSION
+            )
         }
     }
 }

@@ -44,6 +44,15 @@ fun RadioStation.getStreamUrlFixed(): String {
     return mediaStream.getVariant(0).url
 }
 
+/**
+ * @return the stream address the station was listed or added with, before any playlist it
+ *   points at was resolved, or an empty string when it has none. This is the address a user
+ *   copies or shares; [getStreamUrlFixed] is the one the player opens.
+ */
+fun RadioStation.getListedStreamUrl(): String {
+    return mediaStream.getVariant(0).url
+}
+
 fun RadioStation.getStreamBitrate(): Int {
     return mediaStream.getVariant(0).bitrate
 }

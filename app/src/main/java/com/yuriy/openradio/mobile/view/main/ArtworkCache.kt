@@ -21,13 +21,18 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.LruCache
 import androidx.annotation.MainThread
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import com.yuriy.openradio.shared.model.storage.images.ImagesStore
 import com.yuriy.openradio.shared.utils.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -109,15 +114,23 @@ internal class ArtworkCache(
         }
 
         /** A cache that decodes from the images provider, sampled down to [targetPx]. */
-        fun forProvider(context: Context, targetPx: Int): ArtworkCache {
+        fun forProvider(context: Context, targetPx: Int, maxBytes: Int = MAX_BYTES): ArtworkCache {
             val appContext = context.applicationContext
-            return ArtworkCache({ uri -> readArtwork(appContext, uri, targetPx) })
+            return ArtworkCache({ uri -> readArtwork(appContext, uri, targetPx) }, maxBytes)
         }
     }
 }
 
 /** Without a provided cache nothing loads, so the tiles show their initials. */
 internal val LocalArtworkCache: ProvidableCompositionLocal<ArtworkCache> =
+    staticCompositionLocalOf { ArtworkCache({ null }) }
+
+/**
+ * Logos sampled for Now playing's 200 dp artwork box. A list tile's sample would be blurry there,
+ * so the player has a cache of its own. Without a provided one nothing loads and the box shows
+ * the initials.
+ */
+internal val LocalPlayerArtworkCache: ProvidableCompositionLocal<ArtworkCache> =
     staticCompositionLocalOf { ArtworkCache({ null }) }
 
 private fun readArtwork(context: Context, uri: String, targetPx: Int): ImageBitmap? {
@@ -137,4 +150,20 @@ private fun readArtwork(context: Context, uri: String, targetPx: Int): ImageBitm
         AppLogger.w("ArtworkCache $uri not readable: $failure")
         null
     }
+}
+
+/**
+ * The logo at [uri] from [cache]. The cached bitmap is the initial value, so a row that scrolls
+ * back into view shows its logo on the first frame. The revision of the image id is read, so a
+ * finished download reloads only what shows that logo, and the old bitmap stays until the new one
+ * is loaded.
+ */
+@Composable
+internal fun rememberArtwork(uri: String, cache: ArtworkCache = LocalArtworkCache.current): ImageBitmap? {
+    val imageId = remember(uri) { ImagesStore.getId(Uri.parse(uri)) }
+    val revision = cache.revision(imageId)
+    val artwork by produceState(initialValue = cache.cached(imageId), cache, imageId, uri, revision) {
+        value = cache.load(imageId, uri)
+    }
+    return artwork
 }

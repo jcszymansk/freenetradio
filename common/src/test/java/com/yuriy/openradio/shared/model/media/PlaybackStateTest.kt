@@ -25,6 +25,7 @@ import org.junit.Test
  * Pins [PlaybackState.isPlaying]: a player counts as playing only while it is buffering or ready
  * and was asked to play when ready. Every Media3 player state is crossed with both values of
  * playWhenReady, and the constructor defaults describe an idle player that is not playing.
+ * Also pins [PlaybackState.isBuffering]: buffering a station the player was asked to play.
  */
 class PlaybackStateTest {
 
@@ -73,6 +74,27 @@ class PlaybackStateTest {
     @Test
     fun playWhenReadyDefaultsToFalseSoAReadyPlayerAloneIsNotPlaying() {
         assertFalse(PlaybackState(Player.STATE_READY).isPlaying)
+    }
+
+    @Test
+    fun aBufferingPlayerAskedToPlayIsBuffering() {
+        assertTrue(PlaybackState(Player.STATE_BUFFERING, true).isBuffering)
+    }
+
+    @Test
+    fun aBufferingPlayerThatIsPausedIsNotBuffering() {
+        assertFalse(PlaybackState(Player.STATE_BUFFERING, false).isBuffering)
+    }
+
+    @Test
+    fun aReadyPlayerIsNotBufferingWhateverPlayWhenReadySays() {
+        assertFalse(PlaybackState(Player.STATE_READY, true).isBuffering)
+        assertFalse(PlaybackState(Player.STATE_READY, false).isBuffering)
+    }
+
+    @Test
+    fun theDefaultsDescribeAPlayerThatIsNotBuffering() {
+        assertFalse(PlaybackState().isBuffering)
     }
 
     companion object {

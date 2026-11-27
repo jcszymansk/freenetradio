@@ -21,7 +21,6 @@ import android.widget.Spinner
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -347,22 +346,22 @@ class SettingsPersistenceJourneyTest {
         )
         assertEquals(
             "This journey starts from a cleared profile, and the minimum buffer was already changed",
-            DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+            AppPreferencesManager.DEFAULT_MIN_BUFFER_MS,
             AppPreferencesManager.getMinBuffer(mContext)
         )
         assertEquals(
             "This journey starts from a cleared profile, and the maximum buffer was already changed",
-            DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
+            AppPreferencesManager.DEFAULT_MAX_BUFFER_MS,
             AppPreferencesManager.getMaxBuffer(mContext)
         )
         assertEquals(
             "This journey starts from a cleared profile, and the playback buffer was already changed",
-            DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+            AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
             AppPreferencesManager.getPlayBuffer(mContext)
         )
         assertEquals(
             "This journey starts from a cleared profile, and the rebuffer buffer was already changed",
-            DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+            AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
             AppPreferencesManager.getPlayBufferRebuffer(mContext)
         )
         assertEquals(

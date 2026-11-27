@@ -157,4 +157,18 @@ class RadioStationTest {
         assertTrue(RadioStation.INVALID_INSTANCE.isInvalid())
         assertTrue(RadioStation.makeDefaultInstance("").isInvalid())
     }
+
+    @Test
+    fun theListedStreamUrlIsTheOneTheStationWasListedWithNotTheResolvedOne() {
+        val station = RadioStation.makeDefaultInstance("listed")
+        station.setVariant(192, "https://example.com/station.pls")
+        station.setVariantFixed(192, "https://example.com/resolved.mp3")
+
+        assertEquals("https://example.com/station.pls", station.getListedStreamUrl())
+    }
+
+    @Test
+    fun aStationWithoutAStreamHasNoListedStreamUrl() {
+        assertEquals("", RadioStation.makeDefaultInstance("none").getListedStreamUrl())
+    }
 }

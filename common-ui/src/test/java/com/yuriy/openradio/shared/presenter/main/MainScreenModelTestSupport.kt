@@ -19,9 +19,11 @@ package com.yuriy.openradio.shared.presenter.main
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import com.yuriy.openradio.shared.model.media.MediaItemsSubscription
 import com.yuriy.openradio.shared.model.media.MediaLibraryClient
 import com.yuriy.openradio.shared.model.media.MediaResourceManagerListener
+import com.yuriy.openradio.shared.model.media.PlaybackState
 import com.yuriy.openradio.shared.model.media.RadioStation
 import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.source.SourcesLayer
@@ -49,7 +51,7 @@ internal class FakeLibraryClient(val listener: MediaResourceManagerListener) : M
 
     override var mediaMetadata: MediaMetadata? = null
     override var currentMediaItem: MediaItem? = null
-    override var isPlaying: Boolean = false
+    override var playbackState: PlaybackState = PlaybackState()
 
     override fun subscribe(parentId: String, callback: MediaItemsSubscription?, page: Int, bundle: Bundle) {
         mSubscriber = callback
@@ -123,13 +125,15 @@ internal class ModelUnderTest(source: Source = Source.RADIO_BROWSER) {
     val sources = FakeSourcesLayer(source)
     var online = true
     var lastStation: RadioStation = RadioStation.INVALID_INSTANCE
+    val favoriteIds = mutableSetOf<String>()
     private var mClient: FakeLibraryClient? = null
+    private val mScope = CoroutineScope(Dispatchers.Unconfined)
     val model = MainScreenModel(
         { listener -> FakeLibraryClient(listener).also { mClient = it } },
         sources,
         { online },
-        { lastStation },
-        CoroutineScope(Dispatchers.Unconfined)
+        NowPlayingTracker({ lastStation }, { favoriteIds.contains(it.id) }, mScope),
+        mScope
     )
 
     val client: FakeLibraryClient
@@ -147,6 +151,38 @@ internal class ModelUnderTest(source: Source = Source.RADIO_BROWSER) {
     fun rows(): List<RowState> = (state.content as ListContent.Loaded).rows
 
     fun rowIds(): List<String> = rows().map { it.key }
+}
+
+/**
+ * A listener for clients the tracker tests build themselves; the tracker is fed directly.
+ */
+internal val SILENT_LISTENER = object : MediaResourceManagerListener {
+    override fun onConnected() = Unit
+    override fun onPlaybackStateChanged(state: PlaybackState) = Unit
+    override fun onMetadataChanged(metadata: MediaMetadata) = Unit
+}
+
+/**
+ * The metadata the service pushes for [item] while it plays: the item's own, with the subtitle
+ * replaced by the stream's [track], as `OpenRadioPlayer.updateStreamMetadata` does.
+ */
+internal fun pushedMetadata(item: MediaItem, track: String): MediaMetadata {
+    return item.mediaMetadata.buildUpon().setSubtitle(track).build()
+}
+
+/**
+ * Makes the fake player hold the station [id] and play it, and pushes its metadata.
+ */
+internal fun ModelUnderTest.play(
+    id: String = "s1",
+    name: String = "Arrow Classic Rock",
+    track: String = "Iggy Pop - Candy",
+): ModelUnderTest {
+    val item = station(id, name)
+    client.currentMediaItem = item
+    client.playbackState = PlaybackState(Player.STATE_READY, true)
+    client.listener.onMetadataChanged(pushedMetadata(item, track))
+    return this
 }
 
 internal fun station(id: String, name: String = id, favorite: Boolean = false): MediaItem {

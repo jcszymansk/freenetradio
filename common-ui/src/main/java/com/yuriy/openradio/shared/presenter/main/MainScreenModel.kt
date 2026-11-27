@@ -27,13 +27,10 @@ import com.yuriy.openradio.shared.model.media.MediaItemsSubscription
 import com.yuriy.openradio.shared.model.media.MediaLibraryClient
 import com.yuriy.openradio.shared.model.media.MediaResourceManagerListener
 import com.yuriy.openradio.shared.model.media.PlaybackState
-import com.yuriy.openradio.shared.model.media.isInvalid
 import com.yuriy.openradio.shared.model.source.SourcesLayer
 import com.yuriy.openradio.shared.service.OpenRadioService
-import com.yuriy.openradio.shared.service.OpenRadioStore
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
-import com.yuriy.openradio.shared.utils.MediaItemHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,9 +40,9 @@ import kotlinx.coroutines.launch
 
 /**
  * The main screen's state holder: one browse stack per tab, the answers of the media library
- * filtered to the node on top of the selected tab's stack, paging, scroll positions and now
- * playing, published as one [StateFlow]. It holds no View, Activity or Compose type, so a JVM
- * test drives it with a fake [MediaLibraryClient].
+ * filtered to the node on top of the selected tab's stack, paging and scroll positions, and what
+ * [NowPlayingTracker] says plays, published as one [StateFlow]. It holds no View, Activity or
+ * Compose type, so a JVM test drives it with a fake [MediaLibraryClient].
  *
  * It is a process singleton: [start] builds a client when the screen comes up and [stop] releases
  * it, and the tabs and stacks outlive the activity in between. All calls are on the main thread,
@@ -53,15 +50,14 @@ import kotlinx.coroutines.launch
  *
  * @param mClientFactory builds the client for [start], handing it the listener for playback events.
  * @param connectivity asked before a row tap opens or plays anything; tabs are not gated.
- * @param mLastStation the station a service with an empty queue would resume, which the mini
- *   player shows until something plays.
+ * @param mTracker what plays and every station's heart; the model hands it the library's events.
  * @param scope runs the service commands the model sends.
  */
 class MainScreenModel(
     private val mClientFactory: (MediaResourceManagerListener) -> MediaLibraryClient,
     private val mSourcesLayer: SourcesLayer,
     private val mConnectivity: ConnectivityGate,
-    private val mLastStation: LastPlayedStation,
+    private val mTracker: NowPlayingTracker,
     private val mScope: CoroutineScope,
 ) : BrowseSearch, BrowseReload, ScreenClose {
 
@@ -77,14 +73,10 @@ class MainScreenModel(
      */
     private var mCountryItem: MediaItem? = null
 
-    /**
-     * Hearts tapped since the service last answered for the station; a fresh answer wins.
-     */
-    private val mFavoriteOverrides = HashMap<String, Boolean>()
-
-    private var mMiniPlayer: MiniPlayerState? = null
-    private var mPlayingId: String? = null
     private var mClosed = false
+
+    /** Declared before [mState], whose initial [buildState] reads it. */
+    private var mPlayerScreen = PlayerScreen.NONE
 
     private val mState = MutableStateFlow(buildState())
 
@@ -103,7 +95,7 @@ class MainScreenModel(
 
         override fun onChildrenLoaded(parentId: String, children: List<MediaItem>, replace: Boolean) {
             val top = shownTop(parentId, "${children.size} children") ?: return
-            children.forEach { mFavoriteOverrides.remove(it.mediaId) }
+            mTracker.onAnswer(children)
             val updated = when {
                 replace -> top.copy(
                     items = children, inFlight = false, failed = false,
@@ -151,17 +143,18 @@ class MainScreenModel(
         override fun onConnected() {
             showTop()
             refreshRoot()
-            showWhatTheServiceHolds()
+            mTracker.onConnected()
+            emit()
         }
 
         override fun onPlaybackStateChanged(state: PlaybackState) {
-            mPlayingId = mClient?.currentMediaItem?.mediaId ?: mPlayingId
-            mMiniPlayer = mMiniPlayer?.copy(isPlaying = state.isPlaying)
+            mTracker.onPlaybackStateChanged(state)
             emit()
         }
 
         override fun onMetadataChanged(metadata: MediaMetadata) {
-            updateNowPlaying(metadata)
+            mTracker.onMetadataChanged(metadata)
+            emit()
         }
     }
 
@@ -176,7 +169,9 @@ class MainScreenModel(
         if (mSelected !in mTabs) {
             mSelected = Tab.FAV
         }
-        mClient = mClientFactory(mLibraryListener)
+        val client = mClientFactory(mLibraryListener)
+        mClient = client
+        mTracker.attach(client)
         emit()
     }
 
@@ -184,6 +179,7 @@ class MainScreenModel(
     fun stop() {
         val client = mClient ?: return
         mClient = null
+        mTracker.detach()
         client.clean()
         for (tab in Tab.entries) {
             mStacks[tab] = stack(tab).map { it.copy(inFlight = false, pageInFlight = false) }
@@ -210,12 +206,22 @@ class MainScreenModel(
     }
 
     /**
-     * Pops one level of the selected tab.
+     * Closes Station details, else Now playing, else pops one level of the selected tab.
      *
-     * @return false at the tab's root, where back leaves the screen.
+     * @return false at the tab's root with no player screen open, where back leaves the screen.
      */
     @MainThread
     fun back(): Boolean {
+        when (mPlayerScreen) {
+            PlayerScreen.STATION_DETAILS -> mPlayerScreen = PlayerScreen.NOW_PLAYING
+            PlayerScreen.NOW_PLAYING -> mPlayerScreen = PlayerScreen.NONE
+            PlayerScreen.NONE -> return popSelectedTab()
+        }
+        emit()
+        return true
+    }
+
+    private fun popSelectedTab(): Boolean {
         val levels = stack(mSelected)
         if (levels.size < 2) {
             return false
@@ -223,6 +229,45 @@ class MainScreenModel(
         mStacks[mSelected] = levels.dropLast(1)
         showTop()
         return true
+    }
+
+    /**
+     * The mini player's tap: Now playing for the station shown. Nothing opens while none is.
+     */
+    @MainThread
+    fun openNowPlaying() {
+        if (!mTracker.hasStation) {
+            AppLogger.w("$TAG no station for Now playing")
+            return
+        }
+        mPlayerScreen = PlayerScreen.NOW_PLAYING
+        emit()
+    }
+
+    /** Now playing's "Station details". */
+    @MainThread
+    fun openStationDetails() {
+        if (mPlayerScreen != PlayerScreen.NOW_PLAYING) {
+            AppLogger.w("$TAG station details asked from $mPlayerScreen")
+            return
+        }
+        mPlayerScreen = PlayerScreen.STATION_DETAILS
+        emit()
+    }
+
+    /** Now playing's chevron: Now playing and Station details close together. */
+    @MainThread
+    fun closePlayer() {
+        mPlayerScreen = PlayerScreen.NONE
+        emit()
+    }
+
+    /** Now playing's heart ([NowPlayingTracker.toggleCurrentFavorite]). */
+    @MainThread
+    fun toggleCurrentFavorite() {
+        if (mTracker.toggleCurrentFavorite()) {
+            emit()
+        }
     }
 
     /**
@@ -305,11 +350,8 @@ class MainScreenModel(
             AppLogger.w("$TAG no station '$rowId' to mark")
             return
         }
-        val marked = !(mFavoriteOverrides[rowId] ?: MediaItemHelper.isFavoriteField(item.mediaMetadata))
-        mFavoriteOverrides[rowId] = marked
+        mTracker.toggleFavorite(item)
         emit()
-        val command = if (marked) OpenRadioService.CMD_MARK_FAVORITE else OpenRadioService.CMD_UNMARK_FAVORITE
-        mScope.launch { mClient?.sendCommand(command, OpenRadioStore.makeUpdateIsFavoriteBundle(item.mediaId)) }
     }
 
     /**
@@ -338,7 +380,11 @@ class MainScreenModel(
 
     @VisibleForTesting
     fun snapshot(): BrowseSnapshot {
-        return BrowseSnapshot(mSelected, Tab.entries.associateWith { tab -> stack(tab).map { it.mediaId } })
+        return BrowseSnapshot(
+            mSelected,
+            Tab.entries.associateWith { tab -> stack(tab).map { it.mediaId } },
+            mPlayerScreen,
+        )
     }
 
     /**
@@ -360,19 +406,10 @@ class MainScreenModel(
         }
     }
 
-    /**
-     * Pauses the playing station or resumes the last played one. With nothing loaded, as after a
-     * cold start, the toggle command would find an empty player and do nothing, so the session is
-     * asked to play instead, which resumes the latest station ([MediaLibraryClient.play]).
-     */
+    /** The mini player's and Now playing's button ([NowPlayingTracker.togglePlayback]). */
     @MainThread
     fun togglePlayback() {
-        val client = mClient ?: return
-        if (client.currentMediaItem == null) {
-            client.play()
-            return
-        }
-        mScope.launch { client.sendCommand(OpenRadioService.CMD_TOGGLE_LAST_PLAYED_ITEM, Bundle()) }
+        mTracker.togglePlayback()
     }
 
     /**
@@ -392,54 +429,7 @@ class MainScreenModel(
         mStacks.putAll(rootStacks())
         mSelected = Tab.FAV
         mClosed = true
-        emit()
-    }
-
-    /**
-     * Puts the mini player up for [metadata], or leaves it as it is when [metadata] names no
-     * station: once a station was chosen the mini player stays.
-     */
-    private fun updateNowPlaying(metadata: MediaMetadata?) {
-        val client = mClient ?: return
-        val title = metadata?.title?.toString()
-        if (metadata == null || title.isNullOrEmpty()) {
-            return
-        }
-        mPlayingId = client.currentMediaItem?.mediaId ?: mPlayingId
-        mMiniPlayer = MiniPlayerState(
-            name = title,
-            initials = MainScreenRows.initials(title),
-            track = MediaItemHelper.getDisplayDescription(metadata, AppUtils.EMPTY_STRING),
-            isPlaying = client.isPlaying,
-        )
-        emit()
-    }
-
-    /**
-     * What the mini player shows when the screen connects. A service that holds a station has
-     * pushed its metadata already. One with an empty queue, as after the process was killed,
-     * pushes none, and a play request would resume [mLastStation]'s station, so that one is shown,
-     * paused. Without one the mini player goes down, because the button would resume nothing.
-     */
-    private fun showWhatTheServiceHolds() {
-        val client = mClient ?: return
-        if (client.currentMediaItem != null) {
-            updateNowPlaying(client.mediaMetadata)
-            return
-        }
-        val last = mLastStation.get()
-        if (last.isInvalid()) {
-            mMiniPlayer = null
-            mPlayingId = null
-        } else {
-            mMiniPlayer = MiniPlayerState(
-                name = last.name,
-                initials = MainScreenRows.initials(last.name),
-                track = AppUtils.EMPTY_STRING,
-                isPlaying = false,
-            )
-            mPlayingId = last.id
-        }
+        mPlayerScreen = PlayerScreen.NONE
         emit()
     }
 
@@ -491,7 +481,14 @@ class MainScreenModel(
 
     private fun isCountryRoot(level: BrowseLevel): Boolean = level.mediaId == MediaId.MEDIA_ID_COUNTRIES_LIST
 
+    /**
+     * Publishes the state. Now playing and Station details close when no station is shown any
+     * more (REQ-015), so the screen never covers the main screen with nothing.
+     */
     private fun emit() {
+        if (!mTracker.hasStation) {
+            mPlayerScreen = PlayerScreen.NONE
+        }
         mState.value = buildState()
     }
 
@@ -508,10 +505,12 @@ class MainScreenModel(
             content = content(top),
             isRefreshing = top.inFlight && top.items != null,
             isLoadingPage = top.pageInFlight,
-            playingId = mPlayingId,
-            miniPlayer = mMiniPlayer,
+            playingId = mTracker.playingId,
+            miniPlayer = mTracker.miniPlayer(),
             showAddFab = top.mediaId == MediaId.MEDIA_ID_LOCAL_RADIO_STATIONS_LIST,
             isClosed = mClosed,
+            playerScreen = mPlayerScreen,
+            nowPlaying = mTracker.nowPlaying(),
         )
     }
 
@@ -547,15 +546,10 @@ class MainScreenModel(
         }
         return MainScreenRows.station(
             item,
-            isFavorite = mFavoriteOverrides[item.mediaId] ?: MediaItemHelper.isFavoriteField(item.mediaMetadata),
-            isCurrent = isCurrent(item.mediaId),
+            isFavorite = mTracker.isFavorite(item),
+            isCurrent = mTracker.isCurrent(item.mediaId),
             canLongPress = longPress,
         )
-    }
-
-    private fun isCurrent(mediaId: String): Boolean {
-        val playing = mPlayingId ?: return false
-        return mediaId == playing || MediaId.normalizeFromSearchId(mediaId) == playing
     }
 
     private companion object {

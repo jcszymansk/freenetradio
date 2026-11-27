@@ -18,7 +18,6 @@ package com.yuriy.openradio.shared.model.storage.images
 
 import android.net.Uri
 import android.os.Bundle
-import androidx.media.MediaSessionManager
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaSession
@@ -114,11 +113,14 @@ class ArtworkGrantsTest {
 
     private fun browser(packageName: String): MediaSession.ControllerInfo {
         return MediaSession.ControllerInfo.createTestOnlyControllerInfo(
-            MediaSessionManager.RemoteUserInfo(packageName, 0, 0),
+            packageName,
+            0,
+            0,
             MediaSession.ControllerInfo.LEGACY_CONTROLLER_VERSION,
             MediaSession.ControllerInfo.LEGACY_CONTROLLER_INTERFACE_VERSION,
             false,
-            Bundle()
+            Bundle(),
+            false
         )
     }
 

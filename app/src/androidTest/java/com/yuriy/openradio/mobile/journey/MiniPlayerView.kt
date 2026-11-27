@@ -49,9 +49,9 @@ internal class MiniPlayerView(private val mCompose: ComposeTestRule) {
         mCompose.onNodeWithTag(MainScreenTags.MINI_TOGGLE).performClick()
     }
 
-    /** Taps the station's name, which acts on nothing until a Now playing screen exists. */
+    /** Taps the station's name, which opens Now playing (REQ-001). */
     fun tapName() {
-        mCompose.onNodeWithTag(MainScreenTags.MINI_NAME).performClick()
+        mCompose.onNodeWithTag(MainScreenTags.MINI_NAME, useUnmergedTree = true).performClick()
     }
 
     fun describe(): String {
@@ -74,7 +74,8 @@ internal class MiniPlayerView(private val mCompose: ComposeTestRule) {
     }
 
     private fun text(tag: String): String? {
-        return mCompose.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes(atLeastOneRootRequired = false)
+        return mCompose.onAllNodes(hasTestTag(tag), useUnmergedTree = true)
+            .fetchSemanticsNodes(atLeastOneRootRequired = false)
             .firstOrNull()?.config?.getOrNull(SemanticsProperties.Text)?.firstOrNull()?.text
     }
 

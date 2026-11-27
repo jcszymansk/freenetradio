@@ -19,6 +19,7 @@ package android.os
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -96,5 +97,21 @@ class BundleTest {
         assertEquals(128, bundle.get("bitrate"))
         assertNull(bundle.get("name"))
         assertNull(bundle.get("missing"))
+    }
+
+    @Test
+    fun emptyHoldsNothing() {
+        assertTrue(Bundle.EMPTY.isEmpty())
+        assertEquals(0, Bundle.EMPTY.size())
+        assertNull(Bundle.EMPTY.getString("any"))
+    }
+
+    @Test
+    fun emptyRefusesWrites() {
+        assertThrows(UnsupportedOperationException::class.java) { Bundle.EMPTY.putString("name", "Station") }
+        assertThrows(UnsupportedOperationException::class.java) { Bundle.EMPTY.putInt("bitrate", 128) }
+        assertThrows(UnsupportedOperationException::class.java) { Bundle.EMPTY.putBoolean("favorite", true) }
+
+        assertTrue(Bundle.EMPTY.isEmpty())
     }
 }

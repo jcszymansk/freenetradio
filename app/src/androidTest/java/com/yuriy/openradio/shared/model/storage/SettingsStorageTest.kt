@@ -18,7 +18,6 @@ package com.yuriy.openradio.shared.model.storage
 
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.shared.service.location.Country
@@ -68,19 +67,31 @@ class SettingsStorageTest {
         assertEquals(37, AppPreferencesManager.getMasterVolume(mContext, 37))
         assertFalse(AppPreferencesManager.isBtAutoPlay(mContext))
         assertEquals(
-            DefaultLoadControl.DEFAULT_MIN_BUFFER_MS, AppPreferencesManager.getMinBuffer(mContext)
+            AppPreferencesManager.DEFAULT_MIN_BUFFER_MS, AppPreferencesManager.getMinBuffer(mContext)
         )
         assertEquals(
-            DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, AppPreferencesManager.getMaxBuffer(mContext)
+            AppPreferencesManager.DEFAULT_MAX_BUFFER_MS, AppPreferencesManager.getMaxBuffer(mContext)
         )
         assertEquals(
-            DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+            AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
             AppPreferencesManager.getPlayBuffer(mContext)
         )
         assertEquals(
-            DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+            AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
             AppPreferencesManager.getPlayBufferRebuffer(mContext)
         )
+    }
+
+    /**
+     * The buffering the app shipped with is spelled out here rather than read from Media3, so a
+     * Media3 upgrade that moves its own defaults cannot change how streams buffer unnoticed.
+     */
+    @Test
+    fun streamBufferingDefaultsAreTheOnesTheAppShippedWith() {
+        assertEquals(50_000, AppPreferencesManager.DEFAULT_MIN_BUFFER_MS)
+        assertEquals(50_000, AppPreferencesManager.DEFAULT_MAX_BUFFER_MS)
+        assertEquals(2_500, AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_MS)
+        assertEquals(5_000, AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
     }
 
     @Test

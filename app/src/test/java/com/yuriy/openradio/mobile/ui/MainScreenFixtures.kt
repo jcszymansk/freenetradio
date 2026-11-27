@@ -24,6 +24,7 @@ import com.yuriy.openradio.shared.presenter.main.ListContent
 import com.yuriy.openradio.shared.presenter.main.MainScreenRows
 import com.yuriy.openradio.shared.presenter.main.MainScreenState
 import com.yuriy.openradio.shared.presenter.main.MiniPlayerState
+import com.yuriy.openradio.shared.presenter.main.PlayerScreen
 import com.yuriy.openradio.shared.presenter.main.RowState
 import com.yuriy.openradio.shared.presenter.main.ScrollPosition
 import com.yuriy.openradio.shared.presenter.main.SectionKind
@@ -109,6 +110,7 @@ internal object MainScreenFixtures {
         override fun onLoadMore() = Unit
         override fun onRetry() = Unit
         override fun onTogglePlayback() = Unit
+        override fun onOpenNowPlaying() = Unit
         override fun onAddStation() = Unit
         override fun onScroll(levelKey: String, position: ScrollPosition) = Unit
     }
@@ -133,6 +135,8 @@ internal object MainScreenFixtures {
         miniPlayer = miniPlayer,
         showAddFab = tab == Tab.MINE,
         isClosed = false,
+        playerScreen = PlayerScreen.NONE,
+        nowPlaying = null,
     )
 
     private fun station(

@@ -23,6 +23,8 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.Util
 import com.yuriy.openradio.shared.model.media.RadioStation
+import com.yuriy.openradio.shared.model.media.setVariant
+import com.yuriy.openradio.shared.model.media.setVariantFixed
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import wseemann.media.jplaylistparser.playlist.PlaylistEntry
@@ -113,6 +115,35 @@ class MediaItemBuilderTest {
 
         assertEquals("NL", MediaItemHelper.getCountryCodeField(item))
         assertEquals("MP3", MediaItemHelper.getCodecField(item))
+    }
+
+    /**
+     * The client reads these back for Station details: the player overwrites the subtitle, where
+     * the country name also is, with the track text, and the item's URI is the address resolved
+     * from a playlist, not the one the station was listed with.
+     */
+    @Test
+    fun aPlayableCarriesTheCountryNameHomePageAndListedStreamUrl() {
+        val station = RadioStation.makeDefaultInstance("station-id")
+        station.country = "Netherlands"
+        station.homePage = "https://arrow.nl"
+        station.setVariant(192, "https://example.com/station.pls")
+        station.setVariantFixed(192, "https://example.com/resolved.mp3")
+
+        val item = MediaItemBuilder.buildPlayable(station)
+
+        assertEquals("Netherlands", MediaItemHelper.getCountryNameField(item))
+        assertEquals("https://arrow.nl", MediaItemHelper.getHomePageField(item))
+        assertEquals("https://example.com/station.pls", MediaItemHelper.getStreamUrlField(item))
+    }
+
+    @Test
+    fun aPlayableOfAStationWithoutThemCarriesNone() {
+        val item = MediaItemBuilder.buildPlayable(RadioStation.makeDefaultInstance("bare"))
+
+        assertEquals("", MediaItemHelper.getCountryNameField(item))
+        assertEquals("", MediaItemHelper.getHomePageField(item))
+        assertEquals("", MediaItemHelper.getStreamUrlField(item))
     }
 
     private companion object {

@@ -20,7 +20,6 @@ import android.app.Application
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultLoadControl
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import kotlinx.coroutines.CoroutineScope
@@ -64,20 +63,20 @@ open class MainAppCommon : Application() {
             val playBufferMs = AppPreferencesManager.getPlayBuffer(context)
             val playBufferRebufferMs = AppPreferencesManager.getPlayBufferRebuffer(context)
             if (maxBufferMs < minBufferMs) {
-                AppPreferencesManager.setMaxBuffer(context, DefaultLoadControl.DEFAULT_MAX_BUFFER_MS)
-                AppPreferencesManager.setMinBuffer(context, DefaultLoadControl.DEFAULT_MIN_BUFFER_MS)
+                AppPreferencesManager.setMaxBuffer(context, AppPreferencesManager.DEFAULT_MAX_BUFFER_MS)
+                AppPreferencesManager.setMinBuffer(context, AppPreferencesManager.DEFAULT_MIN_BUFFER_MS)
             }
             if (minBufferMs < playBufferMs) {
                 AppPreferencesManager.setPlayBuffer(
-                    context, DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS
+                    context, AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_MS
                 )
-                AppPreferencesManager.setMinBuffer(context, DefaultLoadControl.DEFAULT_MIN_BUFFER_MS)
+                AppPreferencesManager.setMinBuffer(context, AppPreferencesManager.DEFAULT_MIN_BUFFER_MS)
             }
             if (minBufferMs < playBufferRebufferMs) {
                 AppPreferencesManager.setPlayBufferRebuffer(
-                    context, DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                    context, AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
                 )
-                AppPreferencesManager.setMinBuffer(context, DefaultLoadControl.DEFAULT_MIN_BUFFER_MS)
+                AppPreferencesManager.setMinBuffer(context, AppPreferencesManager.DEFAULT_MIN_BUFFER_MS)
             }
         }
     }

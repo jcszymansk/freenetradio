@@ -36,8 +36,10 @@ import com.yuriy.openradio.shared.model.storage.StorageManagerLayer
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayerImpl
 import com.yuriy.openradio.shared.presenter.main.CountrySetting
 import com.yuriy.openradio.shared.presenter.main.CountrySettingImpl
+import com.yuriy.openradio.shared.presenter.main.FavoriteLookup
 import com.yuriy.openradio.shared.presenter.main.LastPlayedStation
 import com.yuriy.openradio.shared.presenter.main.MainScreenModel
+import com.yuriy.openradio.shared.presenter.main.NowPlayingTracker
 import com.yuriy.openradio.shared.view.dialog.AddEditStationDialogPresenter
 import com.yuriy.openradio.shared.view.dialog.AddEditStationDialogPresenterImpl
 import com.yuriy.openradio.shared.view.dialog.BaseAddEditStationDialog
@@ -105,13 +107,18 @@ object DependencyRegistryCommonUi :
         DependencyRegistryCommon.injectLatestRadioStationStorage(this)
         sLoggingLayer = LoggingLayerImpl(context)
         val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val nowPlaying = NowPlayingTracker(
+            // A recreated service always adopts the latest station (OpenRadioService.onCreate),
+            // so a play request resumes it whenever there is one.
+            LastPlayedStation { sLatestRadioStationStorage.get() },
+            FavoriteLookup { sFavoritesStorage.isFavorite(it) },
+            uiScope
+        )
         sMainScreenModel = MainScreenModel(
             { listener -> MediaResourcesManager(context, MAIN_SCREEN_CLIENT, listener) },
             sSourcesLayer,
             { sNetworkLayer.checkConnectivityAndNotify(context) },
-            // A recreated service always adopts the latest station (OpenRadioService.onCreate),
-            // so a play request resumes it whenever there is one.
-            LastPlayedStation { sLatestRadioStationStorage.get() },
+            nowPlaying,
             uiScope
         )
         sCountrySetting = CountrySettingImpl(sLocationStorage, sMainScreenModel, uiScope)

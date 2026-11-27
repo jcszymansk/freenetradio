@@ -42,10 +42,11 @@ internal class LocalStationsFixture(
 
     /**
      * Adds one station per url, in the order given, and browses the node they land in.
+     * [describe] fills in what a test needs beyond the name and the url, such as a home page.
      *
      * @return the stations, in the order the service offers them.
      */
-    fun seed(vararg urls: String): List<RadioStation> {
+    fun seed(vararg urls: String, describe: RadioStation.() -> Unit = {}): List<RadioStation> {
         val stations = urls.mapIndexed { index, url ->
             val id = nextId()
             makeStation(
@@ -54,7 +55,7 @@ internal class LocalStationsFixture(
                 url = url,
                 sortId = index,
                 isLocal = true
-            )
+            ).apply(describe)
         }
         for (station in stations) {
             mStorages.locals.add(station)
