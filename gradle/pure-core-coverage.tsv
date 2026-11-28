@@ -118,6 +118,9 @@ com/yuriy/openradio/shared/presenter/settings/AboutRowsKt	com.yuriy.openradio.sh
 com/yuriy/openradio/shared/presenter/settings/SettingsModel	com.yuriy.openradio.shared.presenter.settings.SettingsModelTest	:common-ui
 com/yuriy/openradio/shared/presenter/settings/SourceChoiceModel	com.yuriy.openradio.shared.presenter.settings.SourceChoiceModelTest	:common-ui
 com/yuriy/openradio/shared/presenter/settings/StreamBufferingModel	com.yuriy.openradio.shared.presenter.settings.StreamBufferingModelTest	:common-ui
+com/yuriy/openradio/shared/presenter/settings/UserAgentModel	com.yuriy.openradio.shared.presenter.settings.UserAgentModelTest	:common-ui
+com/yuriy/openradio/shared/presenter/settings/UserAgentState	com.yuriy.openradio.shared.presenter.settings.UserAgentModelTest	:common-ui
+com/yuriy/openradio/shared/presenter/settings/UserAgentModelKt	com.yuriy.openradio.shared.presenter.settings.UserAgentModelTest	:common-ui
 com/yuriy/openradio/shared/service/OpenRadioServicePresenterImpl	com.yuriy.openradio.shared.service.OpenRadioServicePresenterImplTest	:common
 com/yuriy/openradio/shared/service/InitialPlaylist	com.yuriy.openradio.shared.service.InitialPlaylistTest	:common
 com/yuriy/openradio/shared/service/PlaylistFallback	com.yuriy.openradio.shared.service.PlaylistFallbackTest	:common
