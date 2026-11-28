@@ -495,14 +495,14 @@ class OpenRadioServiceBrowseTest {
     fun theCountryStationsEntryFollowsACountryChosenAfterItWasBrowsed() {
         seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
         seedCountryStations(SECOND_COUNTRY_CODE, SECOND_COUNTRY_STATIONS_RESPONSE)
-        chooseCountry(FIRST_COUNTRY_CODE)
+        storeCountryAndUpdateTree(FIRST_COUNTRY_CODE)
         assertEquals(
             listOf("first-one", "first-two"),
             mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
         )
         mBrowser.mediaIds(MediaId.MEDIA_ID_ROOT)
 
-        chooseCountry(SECOND_COUNTRY_CODE)
+        storeCountryAndUpdateTree(SECOND_COUNTRY_CODE)
         val children = mBrowser.children(MediaId.MEDIA_ID_COUNTRY_STATIONS)
 
         assertEquals(
@@ -527,13 +527,13 @@ class OpenRadioServiceBrowseTest {
     fun theCountryStationsEntryStartsOverForACountryChosenWhileItWasOpen() {
         seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
         seedCountryStations(SECOND_COUNTRY_CODE, SECOND_COUNTRY_STATIONS_RESPONSE)
-        chooseCountry(FIRST_COUNTRY_CODE)
+        storeCountryAndUpdateTree(FIRST_COUNTRY_CODE)
         assertEquals(
             listOf("first-one", "first-two"),
             mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
         )
 
-        chooseCountry(SECOND_COUNTRY_CODE)
+        storeCountryAndUpdateTree(SECOND_COUNTRY_CODE)
 
         assertEquals(
             "The country stations entry did not start the new country's list over",
@@ -552,13 +552,13 @@ class OpenRadioServiceBrowseTest {
     fun aLaterPageOfTheCountryStationsEntryAddsNothingOnceTheCountryChanged() {
         seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
         seedCountryStations(SECOND_COUNTRY_CODE, SECOND_COUNTRY_STATIONS_RESPONSE)
-        chooseCountry(FIRST_COUNTRY_CODE)
+        storeCountryAndUpdateTree(FIRST_COUNTRY_CODE)
         assertEquals(
             listOf("first-one", "first-two"),
             mBrowser.mediaIds(MediaId.MEDIA_ID_COUNTRY_STATIONS)
         )
 
-        chooseCountry(SECOND_COUNTRY_CODE)
+        storeCountryAndUpdateTree(SECOND_COUNTRY_CODE)
         val result = mBrowser.childrenResult(MediaId.MEDIA_ID_COUNTRY_STATIONS, page = 1)
 
         assertEquals(LibraryResult.RESULT_SUCCESS, result.resultCode)
@@ -778,7 +778,7 @@ class OpenRadioServiceBrowseTest {
     private fun seedFirstCountryWithTwoPages() {
         seedCountryStations(FIRST_COUNTRY_CODE, FIRST_COUNTRY_STATIONS_RESPONSE)
         seedResponse(firstCountrySecondPageUrl(), FIRST_COUNTRY_SECOND_PAGE_RESPONSE, MediaId.MEDIA_ID_COUNTRY_STATIONS)
-        chooseCountry(FIRST_COUNTRY_CODE)
+        storeCountryAndUpdateTree(FIRST_COUNTRY_CODE)
     }
 
     private fun firstCountrySecondPageUrl(): String {
@@ -813,7 +813,7 @@ class OpenRadioServiceBrowseTest {
     /**
      * Stores [countryCode] and sends the command the general dialog sends after storing it.
      */
-    private fun chooseCountry(countryCode: String) {
+    private fun storeCountryAndUpdateTree(countryCode: String) {
         mLocation.setCountryCode(countryCode)
         assertEquals(
             SessionResult.RESULT_SUCCESS,

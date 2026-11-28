@@ -48,12 +48,25 @@ internal class LaunchRecorder(private vararg val mActions: String) : Instrumenta
         InstrumentationRegistry.getInstrumentation().removeMonitor(this)
     }
 
-    fun await(timeoutSeconds: Long = TIMEOUT_SECONDS): Intent {
-        return mStarts.poll(timeoutSeconds, TimeUnit.SECONDS)
-            ?: throw AssertionError("No start of ${mActions.toList()} within $timeoutSeconds seconds")
+    /**
+     * Waits for the first start of one of the actions and returns its intent.
+     *
+     * [pump] runs between polls for a caller that has to keep something moving before the start
+     * can happen, such as the Compose frames of a start the application makes only after an
+     * asynchronous result.
+     */
+    fun await(timeoutSeconds: Long = TIMEOUT_SECONDS, pump: () -> Unit = {}): Intent {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds)
+        while (System.nanoTime() < deadline) {
+            mStarts.poll(POLL_MILLIS, TimeUnit.MILLISECONDS)?.let { return it }
+            pump()
+        }
+        throw AssertionError("No start of ${mActions.toList()} within $timeoutSeconds seconds")
     }
 
     private companion object {
         const val TIMEOUT_SECONDS = 10L
+
+        const val POLL_MILLIS = 50L
     }
 }

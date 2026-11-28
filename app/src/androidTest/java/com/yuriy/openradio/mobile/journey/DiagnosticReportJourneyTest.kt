@@ -21,19 +21,16 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.view.inspector.WindowInspector
-import android.widget.Button
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.view.activity.MainActivity
-import com.yuriy.openradio.mobile.view.main.OverflowItem
-import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
-import com.yuriy.openradio.testing.withActivity
+import com.yuriy.openradio.mobile.view.main.MainScreenTags
+import com.yuriy.openradio.mobile.view.settings.SettingsTags
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
@@ -49,8 +46,9 @@ import org.junit.runner.RunWith
 import com.yuriy.openradio.shared.R as DialogR
 
 /**
- * The diagnostic report journey (TASK-015): the user asks for a report in the general settings,
- * confirms, and the application hands an `ACTION_SEND` to the Android chooser.
+ * The diagnostic report journey (TASK-015): the user asks for a report in Settings › Send
+ * diagnostic report, reads what it contains, creates it, and the application hands an
+ * `ACTION_SEND` to the Android chooser.
  *
  * The chooser itself is intercepted, because it is another application's screen and the receiving
  * application is the user's choice. What is asserted is everything the receiving application
@@ -60,12 +58,10 @@ import com.yuriy.openradio.shared.R as DialogR
  * here rather than in the receiving application.
  *
  * Intercepting a start without blocking every other one needs the filterless
- * [Instrumentation.ActivityMonitor] of API 26, and the warning the user confirms is a dialog this
- * application keeps no handle to, so its window is found through the [WindowInspector] of API 29.
+ * [Instrumentation.ActivityMonitor] of API 26.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
-@SdkSuppress(minSdkVersion = Build.VERSION_CODES.Q)
 class DiagnosticReportJourneyTest {
 
     @get:Rule
@@ -174,45 +170,25 @@ class DiagnosticReportJourneyTest {
     }
 
     /**
-     * Opens the general settings, asks for a report, confirms the warning, and returns the
-     * `ACTION_SEND` the chooser was started with.
+     * Opens Settings › Send diagnostic report, reads the warning, creates the report, and returns
+     * the `ACTION_SEND` the chooser was started with.
      */
     private fun prepareReport(): Intent {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario, mCompose)
+        ActivityScenario.launch(MainActivity::class.java).use { _ ->
+            val settings = SettingsView(mCompose)
             MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
-            val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GeneralSettingsDialog.DIALOG_TAG)
-            dialogs.click(general, DialogR.id.send_logs_btn)
-            confirmTheWarning(scenario)
-            val chooser = mChooser.await(CHOOSER_TIMEOUT_SECONDS)
-            dialogs.dismiss(GeneralSettingsDialog.DIALOG_TAG)
+            settings.openFromOverflow()
+            settings.open(SettingsTags.DIAGNOSTICS, SettingsTags.DIAGNOSTICS_SCREEN)
+            mCompose.onNodeWithText(mContext.getString(DialogR.string.diagnostic_report_warning))
+                .assertIsDisplayed()
+            settings.click(SettingsTags.CREATE_REPORT)
+            val chooser = mChooser.await(CHOOSER_TIMEOUT_SECONDS) { mCompose.waitForIdle() }
+            settings.back(SettingsTags.SCREEN)
+            settings.back(MainScreenTags.TABS)
             @Suppress("DEPRECATION")
             return chooser.getParcelableExtra(Intent.EXTRA_INTENT)
                 ?: throw AssertionError("The chooser was started without the intent to share")
         }
-    }
-
-    /**
-     * Presses the button that confirms the warning about what a report contains.
-     */
-    private fun confirmTheWarning(scenario: ActivityScenario<MainActivity>) {
-        val label = mContext.getString(DialogR.string.diagnostic_report_continue)
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WARNING_TIMEOUT_SECONDS)
-        while (System.nanoTime() < deadline) {
-            val clicked = scenario.withActivity { _ ->
-                WindowInspector.getGlobalWindowViews()
-                    .firstNotNullOfOrNull { root ->
-                        root.findViewById<Button>(android.R.id.button1)
-                            ?.takeIf { it.isShown && it.text.toString() == label }
-                    }
-                    ?.performClick()
-            }
-            if (clicked == true) {
-                return
-            }
-            Thread.sleep(POLL_MILLIS)
-        }
-        throw AssertionError("The warning did not come up within $WARNING_TIMEOUT_SECONDS seconds")
     }
 
     @Suppress("DEPRECATION")
@@ -247,10 +223,6 @@ class DiagnosticReportJourneyTest {
          * megabytes.
          */
         const val CHOOSER_TIMEOUT_SECONDS = 30L
-
-        const val WARNING_TIMEOUT_SECONDS = 10L
-
-        const val POLL_MILLIS = 50L
 
         val REPORT_BYTES = byteArrayOf(1, 2, 3)
     }

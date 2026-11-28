@@ -25,14 +25,13 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.mobile.view.activity.MainActivity
 import com.yuriy.openradio.mobile.view.main.MainScreenTags
-import com.yuriy.openradio.mobile.view.main.OverflowItem
+import com.yuriy.openradio.mobile.view.settings.SettingsTags
 import com.yuriy.openradio.shared.model.media.MediaId
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.presenter.main.SectionKind
 import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.shared.service.location.LocationService
-import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
 import java.lang.ref.WeakReference
 import java.util.concurrent.TimeUnit
 import org.junit.After
@@ -44,8 +43,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The country the user picks in the general dialog reaches the COUNTRY tab's "Your country"
- * section, whichever tab the user is on when picking it.
+ * The country the user picks in Settings › Default country reaches the COUNTRY tab's "Your
+ * country" section, whichever tab the user is on when picking it.
  *
  * The section's row is the service root's country stations row, which `MediaItemRoot` titles
  * after the stored country. The service caches the root it built, so a country change has to drop
@@ -91,7 +90,7 @@ class CountryChangeJourneyTest {
     fun choosingACountryShowsItUnderYourCountry() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val view = MainScreenView(mCompose)
-            val dialogs = JourneyDialogs(scenario, mCompose)
+            val settings = SettingsView(mCompose)
             val navigation = JourneyNavigation(scenario, view)
             view.awaitTabs(mProfile.cleanInstallTabs())
 
@@ -99,7 +98,7 @@ class CountryChangeJourneyTest {
                 navigation.selectTab(Tab.COUNTRY)
                 awaitYourCountry(view, Country.COUNTRY_CODE_DEFAULT)
 
-                chooseTheCountry(dialogs)
+                chooseTheCountry(settings)
 
                 awaitYourCountry(view, CHOSEN_COUNTRY_CODE)
             } finally {
@@ -118,7 +117,7 @@ class CountryChangeJourneyTest {
     fun choosingACountryOnAnotherTabShowsItOnCountry() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val view = MainScreenView(mCompose)
-            val dialogs = JourneyDialogs(scenario, mCompose)
+            val settings = SettingsView(mCompose)
             val navigation = JourneyNavigation(scenario, view)
             view.awaitTabs(mProfile.cleanInstallTabs())
 
@@ -126,7 +125,7 @@ class CountryChangeJourneyTest {
                 navigation.selectTab(Tab.MINE)
                 view.awaitEmptyLine(mContext.getString(R.string.main_empty_stations))
 
-                chooseTheCountry(dialogs)
+                chooseTheCountry(settings)
                 assertEquals(
                     "Choosing a country moved the user off the tab they were on",
                     Tab.MINE,
@@ -141,11 +140,13 @@ class CountryChangeJourneyTest {
         }
     }
 
-    private fun chooseTheCountry(dialogs: JourneyDialogs) {
-        val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GENERAL_TAG)
-        dialogs.chooseCountry(general, CHOSEN_COUNTRY_CODE)
+    private fun chooseTheCountry(settings: SettingsView) {
+        settings.openFromOverflow()
+        settings.open(SettingsTags.DEFAULT_COUNTRY, SettingsTags.CHOICE_SCREEN)
+        settings.choose(CHOSEN_COUNTRY_CODE)
+        settings.await(SettingsTags.SCREEN)
         awaitChosenCountry()
-        dialogs.dismiss(GENERAL_TAG)
+        settings.back(MainScreenTags.TABS)
     }
 
     /**
@@ -166,8 +167,9 @@ class CountryChangeJourneyTest {
 
     /**
      * Waits for the chosen country to reach the store, so that a section still showing the old
-     * country means the root was not rebuilt rather than that the spinner never reported the
-     * selection. A spinner reports it from its next layout pass, not from the call that set it.
+     * country means the root was not rebuilt rather than that the choice screen never reported
+     * the selection. The choice screen hands the code to `CountrySetting`, which stores it
+     * asynchronously.
      */
     private fun awaitChosenCountry() {
         val storage = LocationStorage(WeakReference(mContext))
@@ -183,12 +185,10 @@ class CountryChangeJourneyTest {
 
     private companion object {
 
-        val GENERAL_TAG = GeneralSettingsDialog.DIALOG_TAG
-
         /**
-         * Anything but the default country, and not the "use location" entry the spinner carries
-         * first: choosing that one makes the Activity ask for the location permission when it
-         * resumes.
+         * Anything but the default country, and not the "use location" entry the country screen
+         * carries first: choosing that one makes the Activity ask for the location permission
+         * when it resumes.
          */
         const val CHOSEN_COUNTRY_CODE = "PL"
 
