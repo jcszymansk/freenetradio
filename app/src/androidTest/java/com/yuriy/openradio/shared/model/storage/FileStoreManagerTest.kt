@@ -205,23 +205,6 @@ class FileStoreManagerTest {
         assertEquals("text/plain", intent.type)
     }
 
-    @Test
-    fun anUnknownRequestCodeReportsNothingAtAll() {
-        // Goes with the request codes in the last task of this build.
-        var reports = 0
-
-        mManager.onActivityResult(
-            mContext,
-            UNKNOWN_REQUEST_CODE,
-            Activity.RESULT_OK,
-            Intent().setData(uriOfFile()),
-            { reports++ },
-            { reports++ }
-        )
-
-        assertEquals(0, reports)
-    }
-
     private fun uriOfFile(): Uri {
         return Uri.fromFile(mFile)
     }
@@ -246,7 +229,5 @@ class FileStoreManagerTest {
     private companion object {
 
         const val FILE_NAME = "file-store-manager-test.dat"
-
-        const val UNKNOWN_REQUEST_CODE = 4321
     }
 }

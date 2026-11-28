@@ -66,7 +66,6 @@ import com.yuriy.openradio.shared.view.dialog.EditStationPresenterImpl
 import com.yuriy.openradio.shared.view.dialog.EqualizerDialog
 import com.yuriy.openradio.shared.view.dialog.EqualizerPresenter
 import com.yuriy.openradio.shared.view.dialog.EqualizerPresenterImpl
-import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialogPresenter
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialogPresenterImpl
@@ -295,15 +294,7 @@ object DependencyRegistryCommonUi :
         dependency.configureWith(sAddEditStationDialogPresenter)
     }
 
-    fun inject(dependency: NetworkDialog) {
-        dependency.configureWith(sNetworkSettingsStorage)
-    }
-
     fun injectServiceCommander(dependency: ServiceCommanderDependency) {
         dependency.configureWith(sMainScreenModel.serviceCommander)
-    }
-
-    fun injectLoggingLayer(dependency: LoggingLayerDependency) {
-        dependency.configureWith(sLoggingLayer)
     }
 }

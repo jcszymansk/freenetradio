@@ -20,14 +20,15 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.DialogFragment
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
 import com.yuriy.openradio.shared.dependencies.StorageManagerDependency
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
-import com.yuriy.openradio.shared.utils.IntentUtils
 
+/**
+ * The stations data file: the document UI intents that ask where it goes, and its writing and
+ * merging. The activity's result launchers start the intents and hand back the chosen document.
+ */
 class FileStoreManager : StorageManagerDependency {
 
     private lateinit var mStorageManagerLayer: StorageManagerLayer
@@ -38,74 +39,6 @@ class FileStoreManager : StorageManagerDependency {
 
     override fun configureWith(storageManagerLayer: StorageManagerLayer) {
         mStorageManagerLayer = storageManagerLayer
-    }
-
-    fun upload(activity: AppCompatActivity, onFailure: () -> Unit) {
-        // Even though it is deprecated, Android officially recommends this approach:
-        // https://developer.android.com/training/data-storage/shared/documents-files
-        // Was what recommended as alternative to deprecation require much more time to implement as it relies
-        // on APIs available since Android 13.
-        if (IntentUtils.startActivityForResultSafe(activity, exportIntent(), REQUEST_CODE_CREATE_FILE).not()) {
-            onFailure()
-        }
-    }
-
-    fun upload(dialogFragment: DialogFragment, onFailure: () -> Unit) {
-        // Even though it is deprecated, Android officially recommends this approach:
-        // https://developer.android.com/training/data-storage/shared/documents-files
-        // Was what recommended as alternative to deprecation require much more time to implement as it relies
-        // on APIs available since Android 13.
-        if (IntentUtils.startActivityForResultSafe(dialogFragment, exportIntent(), REQUEST_CODE_CREATE_FILE).not()) {
-            onFailure()
-        }
-    }
-
-    fun download(activity: AppCompatActivity, onFailure: () -> Unit) {
-        // Even though it is deprecated, Android officially recommends this approach:
-        // https://developer.android.com/training/data-storage/shared/documents-files
-        // Was what recommended as alternative to deprecation require much more time to implement as it relies
-        // on APIs available since Android 13.
-        if (IntentUtils.startActivityForResultSafe(activity, importIntent(), REQUEST_CODE_OPEN_FILE).not()) {
-            onFailure()
-        }
-    }
-
-    fun download(dialogFragment: DialogFragment, onFailure: () -> Unit) {
-        // Even though it is deprecated, Android officially recommends this approach:
-        // https://developer.android.com/training/data-storage/shared/documents-files
-        // Was what recommended as alternative to deprecation require much more time to implement as it relies
-        // on APIs available since Android 13.
-        if (IntentUtils.startActivityForResultSafe(dialogFragment, importIntent(), REQUEST_CODE_OPEN_FILE).not()) {
-            onFailure()
-        }
-    }
-
-    fun onActivityResult(
-        context: Context,
-        requestCode: Int,
-        resultCode: Int,
-        intent: Intent?,
-        onSuccess: () -> Unit,
-        onFailure: () -> Unit
-    ) {
-        val document = documentOf(resultCode, intent)
-        when (requestCode) {
-            REQUEST_CODE_CREATE_FILE -> {
-                if (document != null && exportTo(context, document)) {
-                    onSuccess()
-                } else {
-                    onFailure()
-                }
-            }
-
-            REQUEST_CODE_OPEN_FILE -> {
-                if (document != null && importFrom(context, document)) {
-                    onSuccess()
-                } else {
-                    onFailure()
-                }
-            }
-        }
     }
 
     /**
@@ -199,16 +132,6 @@ class FileStoreManager : StorageManagerDependency {
         private const val KEY_LOC = "locals"
         private const val FILE_NAME = "openradio_data"
         private const val FILE_TYPE = "text/plain"
-
-        /**
-         * Request code of the "save the data file" activity result.
-         */
-        const val REQUEST_CODE_CREATE_FILE = 1234
-
-        /**
-         * Request code of the "open the data file" activity result.
-         */
-        const val REQUEST_CODE_OPEN_FILE = 5678
 
         /**
          * Returns the document an activity result carries, or null when the result is not OK,

@@ -98,8 +98,8 @@ sealed interface BufferValidation {
 }
 
 /**
- * Applies the rules of `StreamBufferingDialog.handleOnPause` to [texts], using [bounds] instead of
- * the resources, and reports every failed rule at once instead of stopping at the first.
+ * Applies the stream buffering rules to [texts], using [bounds], and reports every failed rule
+ * at once instead of stopping at the first.
  *
  * A field that cannot be read produces [BufferRule.INVALID_VALUE] under its own field. The
  * cross-field rules run only when min is readable, and each also needs the other field it

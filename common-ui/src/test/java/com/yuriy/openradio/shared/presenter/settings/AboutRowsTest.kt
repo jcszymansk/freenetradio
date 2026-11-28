@@ -65,7 +65,7 @@ class AboutRowsTest {
     }
 
     @Test
-    fun everyLinkTheAboutDialogHadIsKept() {
+    fun everyAboutLinkIsKept() {
         assertEquals(
             mapOf(
                 AboutKey.MEDIA3 to "https://github.com/google/ExoPlayer",

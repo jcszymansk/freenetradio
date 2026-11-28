@@ -22,7 +22,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.util.Base64
 import android.util.DisplayMetrics
 import android.webkit.MimeTypeMap
@@ -219,22 +218,6 @@ object AppUtils {
 
     fun getDensityDpi(context: Context): Int {
         return context.resources.displayMetrics.densityDpi
-    }
-
-    /**
-     * Return whether the given application package name is on the device's power allowlist.
-     * Apps can be placed on the allowlist through the settings UI invoked by
-     * android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS.
-     * Being on the power allowlist means that the system will not apply most power saving features to the app.
-     * Guardrails for extreme cases may still be applied.
-     */
-    fun isIgnoringBatteryOptimizations(context: Context): Boolean {
-//        val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-//            .setData(Uri.parse("package:$packageName"))
-//        getContext().startActivity(settingsIntent)
-        val pwrm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
-        val name = context.applicationContext.packageName
-        return pwrm.isIgnoringBatteryOptimizations(name)
     }
 
     fun isSameCatalogue(newMediaId: String, prevMediaId: String): Boolean {
