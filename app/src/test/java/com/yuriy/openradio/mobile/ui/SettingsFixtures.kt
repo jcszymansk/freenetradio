@@ -21,6 +21,7 @@ import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.storage.StartPlayback
 import com.yuriy.openradio.shared.presenter.settings.AboutRow
 import com.yuriy.openradio.shared.presenter.settings.BufferField
+import com.yuriy.openradio.shared.presenter.settings.SettingsState
 import com.yuriy.openradio.shared.presenter.settings.SourceChoiceState
 import com.yuriy.openradio.shared.presenter.settings.aboutRows
 import com.yuriy.openradio.shared.service.location.Country
@@ -55,6 +56,30 @@ internal object SettingsFixtures {
     )
 
     val about: List<AboutRow> = aboutRows(VERSION, "1.11.1")
+
+    val defaults: SettingsState = SettingsState(
+        startPlayback = StartPlayback.IF_PLAYING,
+        masterVolume = 100,
+        btAutoPlay = false,
+        bufferingCustom = false,
+        source = Source.RADIO_BROWSER,
+        countryCode = "CA",
+        useMobileData = true,
+        userAgentCustom = false,
+        version = VERSION,
+    )
+
+    val changed: SettingsState = SettingsState(
+        startPlayback = StartPlayback.NEVER,
+        masterVolume = 73,
+        btAutoPlay = true,
+        bufferingCustom = true,
+        source = Source.WEB_RADIO,
+        countryCode = "PL",
+        useMobileData = false,
+        userAgentCustom = true,
+        version = VERSION,
+    )
 
     val noActions: SettingsActions = object : SettingsActions {
 

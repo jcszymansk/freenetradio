@@ -31,6 +31,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.yuriy.openradio.mobile.view.settings.AboutScreen
 import com.yuriy.openradio.mobile.view.settings.ChoiceScreen
 import com.yuriy.openradio.mobile.view.settings.MasterVolumeScreen
+import com.yuriy.openradio.mobile.view.settings.SettingsScreen
 import com.yuriy.openradio.mobile.view.settings.SettingsTags
 import com.yuriy.openradio.mobile.view.settings.countryRows
 import com.yuriy.openradio.mobile.view.settings.sourceRows
@@ -113,9 +114,26 @@ class SettingsScreenshotTest(private val mTheme: String, private val mDark: Bool
         AboutScreen(SettingsFixtures.about, SettingsFixtures.noActions)
     }
 
+    @Test
+    @Config(qualifiers = "w360dp-h1400dp-xhdpi")
+    fun settingsWithDefaults() = capture("defaults") {
+        SettingsScreen(SettingsFixtures.defaults, transferring = false, actions = SettingsFixtures.noActions)
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h1400dp-xhdpi")
+    fun settingsWithChangedValues() = capture("changed") {
+        SettingsScreen(SettingsFixtures.changed, transferring = false, actions = SettingsFixtures.noActions)
+    }
+
+    @Test
+    fun settingsWhileAFileIsWritten() = capture("export_progress", PROGRESS_FRAME_MILLIS) {
+        SettingsScreen(SettingsFixtures.defaults, transferring = true, actions = SettingsFixtures.noActions)
+    }
+
     /**
      * Captures [content] after [settleMillis] of the held clock, so an indeterminate progress line
-     * is drawn at one fixed frame; zero captures the first frame. Task 12 uses the delay.
+     * is drawn at one fixed frame; zero captures the first frame.
      */
     private fun capture(name: String, settleMillis: Long = 0L, content: @Composable () -> Unit) {
         composeRule.mainClock.autoAdvance = false
@@ -130,6 +148,8 @@ class SettingsScreenshotTest(private val mTheme: String, private val mDark: Bool
     }
 
     companion object {
+
+        private const val PROGRESS_FRAME_MILLIS = 500L
 
         private fun startPlaybackLabel(value: StartPlayback): String = when (value) {
             StartPlayback.ALWAYS -> "Always"
