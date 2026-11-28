@@ -39,32 +39,33 @@ import com.yuriy.openradio.mobile.view.main.NowPlayingActions
 import com.yuriy.openradio.mobile.view.main.NowPlayingScreen
 import com.yuriy.openradio.mobile.view.main.OverflowItem
 import com.yuriy.openradio.mobile.view.main.PlayerMenuItem
+import com.yuriy.openradio.mobile.view.settings.DestinationScreen
+import com.yuriy.openradio.mobile.view.settings.SettingsEffectsHost
 import com.yuriy.openradio.shared.dependencies.CountrySettingDependency
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommon
 import com.yuriy.openradio.shared.dependencies.DependencyRegistryCommonUi
+import com.yuriy.openradio.shared.dependencies.FileStoreManagerDependency
 import com.yuriy.openradio.shared.dependencies.MainScreenModelDependency
+import com.yuriy.openradio.shared.dependencies.ScreenCloseDependency
+import com.yuriy.openradio.shared.dependencies.SettingsModels
+import com.yuriy.openradio.shared.dependencies.SettingsModelsDependency
 import com.yuriy.openradio.shared.dependencies.SleepTimerModelDependency
+import com.yuriy.openradio.shared.model.storage.FileStoreManager
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.presenter.main.CountrySetting
 import com.yuriy.openradio.shared.presenter.main.MainScreenModel
 import com.yuriy.openradio.shared.presenter.main.PlayerScreen
+import com.yuriy.openradio.shared.presenter.main.ScreenClose
 import com.yuriy.openradio.shared.presenter.main.ScrollPosition
 import com.yuriy.openradio.shared.presenter.main.Tab
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.UiUtils
-import com.yuriy.openradio.shared.view.dialog.AboutDialog
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
 import com.yuriy.openradio.shared.view.dialog.BaseDialogFragment
-import com.yuriy.openradio.shared.view.dialog.BatteryOptimizationDialog
 import com.yuriy.openradio.shared.view.dialog.EqualizerDialog
-import com.yuriy.openradio.shared.view.dialog.FileStorageDialog
-import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
-import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.RSSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.SearchDialog
 import com.yuriy.openradio.shared.view.dialog.SleepTimerDialog
-import com.yuriy.openradio.shared.view.dialog.SourceDialog
-import com.yuriy.openradio.shared.view.dialog.StreamBufferingDialog
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -74,18 +75,24 @@ import kotlinx.coroutines.launch
  * Date: 19.12.14
  * Time: 15:13
  *
- * The main screen. It renders [MainScreen], or [NowPlayingScreen] while the model says a player
- * screen is open, from the registry's [MainScreenModel], launches the dialogs and platform actions
- * their controls ask for, and starts and stops the model with its own lifecycle; the model keeps
- * the tabs and stacks across a recreation.
+ * The main screen. It renders the top of the settings screen stack when there is one, otherwise
+ * [NowPlayingScreen] while the model says a player screen is open, otherwise [MainScreen]; system
+ * back pops the stack before the model's own back. It launches the dialogs and platform actions
+ * their controls ask for, and starts and stops the model with its own lifecycle; the model and the
+ * stack keep the tabs, stacks and open screens across a recreation.
  */
 class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySettingDependency,
-    SleepTimerModelDependency, MainScreenActions, NowPlayingActions {
+    SleepTimerModelDependency, SettingsModelsDependency, FileStoreManagerDependency,
+    ScreenCloseDependency, MainScreenActions, NowPlayingActions {
 
     private lateinit var mModel: MainScreenModel
     private lateinit var mCountrySetting: CountrySetting
     private lateinit var mSleepTimerModel: SleepTimerModel
+    private lateinit var mSettings: SettingsModels
+    private lateinit var mFileStoreManager: FileStoreManager
+    private lateinit var mScreenClose: ScreenClose
     private lateinit var mPlatform: MainScreenPlatform
+    private lateinit var mSettingsPlatform: SettingsPlatform
     private lateinit var mPlayerPlatform: NowPlayingPlatform
 
     override fun configureWith(model: MainScreenModel) {
@@ -98,6 +105,18 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
 
     override fun configureWith(sleepTimerModel: SleepTimerModel) {
         mSleepTimerModel = sleepTimerModel
+    }
+
+    override fun configureWith(models: SettingsModels) {
+        mSettings = models
+    }
+
+    override fun configureWith(fileStoreManager: FileStoreManager) {
+        mFileStoreManager = fileStoreManager
+    }
+
+    override fun configureWith(screenClose: ScreenClose) {
+        mScreenClose = screenClose
     }
 
     override fun onProvideAssistContent(outContent: AssistContent?) {
@@ -117,15 +136,20 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
         DependencyRegistryCommonUi.injectMainScreenModel(this)
         DependencyRegistryCommonUi.injectCountrySetting(this)
         DependencyRegistryCommon.injectSleepTimerModel(this)
+        DependencyRegistryCommonUi.injectSettingsModels(this)
+        DependencyRegistryCommonUi.injectFileStoreManager(this)
+        DependencyRegistryCommonUi.injectScreenClose(this)
         val density = Density(this)
         val artworkCache = ArtworkCache.forProvider(applicationContext, with(density) { ConsoleDimens.tileSize.roundToPx() })
         val playerArtworkCache = ArtworkCache.forProvider(applicationContext, with(density) { ARTWORK_HEIGHT.roundToPx() })
-        mPlatform = MainScreenPlatform(this, mModel, mCountrySetting, mSleepTimerModel, listOf(artworkCache, playerArtworkCache))
+        mPlatform = MainScreenPlatform(this, mScreenClose, mCountrySetting, mSleepTimerModel, listOf(artworkCache, playerArtworkCache))
+        mSettingsPlatform = SettingsPlatform(this, mSettings, mFileStoreManager)
         mPlayerPlatform = NowPlayingPlatform(this)
         mPlatform.attach()
         mModel.start()
+        // The screen stack first, then the main screen's own back: the one place the order is decided.
         onBackPressedDispatcher.addCallback(this) {
-            if (!mModel.back()) {
+            if (!mSettings.screens.backThen(mModel::back)) {
                 mModel.leave()
                 finish()
             }
@@ -138,21 +162,24 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
         }
         setContent {
             val state by mModel.state.collectAsState()
+            val destination by mSettings.screens.top.collectAsState()
             ConsoleTheme {
                 CompositionLocalProvider(
                     LocalArtworkCache provides artworkCache,
                     LocalPlayerArtworkCache provides playerArtworkCache,
                 ) {
+                    SettingsEffectsHost(mSettings, mSettingsPlatform)
+                    val top = destination
                     val nowPlaying = state.nowPlaying
-                    if (state.playerScreen != PlayerScreen.NONE && nowPlaying != null) {
-                        NowPlayingScreen(nowPlaying, state.playerScreen, this@MainActivity)
-                    } else {
-                        MainScreen(state, this@MainActivity)
+                    when {
+                        top != null -> DestinationScreen(top, mSettings, mSettingsPlatform)
+                        state.playerScreen != PlayerScreen.NONE && nowPlaying != null ->
+                            NowPlayingScreen(nowPlaying, state.playerScreen, this@MainActivity)
+                        else -> MainScreen(state, this@MainActivity)
                     }
                 }
             }
         }
-        BatteryOptimizationDialog.handle(applicationContext, supportFragmentManager)
     }
 
     override fun onResume() {
@@ -181,14 +208,10 @@ class MainActivity : AppCompatActivity(), MainScreenModelDependency, CountrySett
 
     override fun onOverflow(item: OverflowItem) {
         when (item) {
-            OverflowItem.GENERAL -> showDialog(GeneralSettingsDialog::class.java.name, GeneralSettingsDialog.DIALOG_TAG)
-            OverflowItem.SOURCE -> showDialog(SourceDialog::class.java.name, SourceDialog.DIALOG_TAG)
-            OverflowItem.NETWORK -> showDialog(NetworkDialog::class.java.name, NetworkDialog.DIALOG_TAG)
-            OverflowItem.BUFFERING -> showDialog(StreamBufferingDialog::class.java.name, StreamBufferingDialog.DIALOG_TAG)
+            OverflowItem.SETTINGS -> mSettings.settings.open()
             OverflowItem.SLEEP_TIMER -> showDialog(SleepTimerDialog::class.java.name, SleepTimerDialog.DIALOG_TAG)
             OverflowItem.EQUALIZER -> showDialog(EqualizerDialog::class.java.name, EqualizerDialog.DIALOG_TAG)
-            OverflowItem.FILE_STORAGE -> showDialog(FileStorageDialog::class.java.name, FileStorageDialog.DIALOG_TAG)
-            OverflowItem.ABOUT -> showDialog(AboutDialog::class.java.name, AboutDialog.DIALOG_TAG)
+            OverflowItem.ABOUT -> mSettings.settings.openAbout()
         }
     }
 

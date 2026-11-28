@@ -34,7 +34,7 @@ import com.yuriy.openradio.shared.model.timer.SleepTimerListener
 import com.yuriy.openradio.shared.model.timer.SleepTimerModel
 import com.yuriy.openradio.shared.permission.PermissionChecker
 import com.yuriy.openradio.shared.presenter.main.CountrySetting
-import com.yuriy.openradio.shared.presenter.main.MainScreenModel
+import com.yuriy.openradio.shared.presenter.main.ScreenClose
 import com.yuriy.openradio.shared.service.location.LocationService
 import com.yuriy.openradio.shared.utils.AppUtils
 
@@ -42,10 +42,12 @@ import com.yuriy.openradio.shared.utils.AppUtils
  * What the main screen needs from Android that the model must not touch: the location lookup and
  * its permission, the Bluetooth permission, artwork change notifications and the sleep timer.
  * An artwork change drops that logo from every [ArtworkCache], so only what shows it redraws.
+ * The sleep timer closes the app through the registry's [ScreenClose], which also empties the
+ * settings screens.
  */
 internal class MainScreenPlatform(
     private val mActivity: AppCompatActivity,
-    private val mModel: MainScreenModel,
+    private val mScreenClose: ScreenClose,
     private val mCountrySetting: CountrySetting,
     private val mSleepTimerModel: SleepTimerModel,
     private val mArtworkCaches: List<ArtworkCache>,
@@ -55,7 +57,7 @@ internal class MainScreenPlatform(
     private val mTimerListener = object : SleepTimerListener {
         override fun onComplete() {
             // The timer completes on a background dispatcher, and the model is main thread only.
-            mActivity.runOnUiThread { mModel.close() }
+            mActivity.runOnUiThread { mScreenClose.close() }
         }
     }
 

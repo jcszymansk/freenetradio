@@ -101,4 +101,5 @@
     <string name="about_key_playlist_parser">Playlist parser</string>
     <string name="about_key_swipe">Swipe</string>
     <string name="about_key_fonts">Fonts</string>
+    <string name="main_menu_settings">Settings</string>
 </resources>
