@@ -18,6 +18,7 @@ package com.yuriy.openradio.shared.dependencies
 
 import android.content.Context
 import androidx.annotation.OptIn
+import androidx.media3.common.MediaLibraryInfo
 import androidx.media3.common.util.UnstableApi
 import com.yuriy.openradio.shared.model.eq.EqualizerLayer
 import com.yuriy.openradio.shared.model.logging.LoggingLayer
@@ -34,12 +35,28 @@ import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayer
 import com.yuriy.openradio.shared.model.storage.StorageManagerLayerImpl
+import com.yuriy.openradio.shared.permission.PermissionChecker
 import com.yuriy.openradio.shared.presenter.main.CountrySetting
 import com.yuriy.openradio.shared.presenter.main.CountrySettingImpl
 import com.yuriy.openradio.shared.presenter.main.FavoriteLookup
 import com.yuriy.openradio.shared.presenter.main.LastPlayedStation
 import com.yuriy.openradio.shared.presenter.main.MainScreenModel
 import com.yuriy.openradio.shared.presenter.main.NowPlayingTracker
+import com.yuriy.openradio.shared.presenter.main.ScreenClose
+import com.yuriy.openradio.shared.presenter.screen.ScreenStack
+import com.yuriy.openradio.shared.presenter.settings.BluetoothPermission
+import com.yuriy.openradio.shared.presenter.settings.BufferBounds
+import com.yuriy.openradio.shared.presenter.settings.CountryList
+import com.yuriy.openradio.shared.presenter.settings.DiagnosticsModel
+import com.yuriy.openradio.shared.presenter.settings.SettingsModel
+import com.yuriy.openradio.shared.presenter.settings.SourceChoiceModel
+import com.yuriy.openradio.shared.presenter.settings.StationTransferModel
+import com.yuriy.openradio.shared.presenter.settings.StreamBufferingModel
+import com.yuriy.openradio.shared.presenter.settings.UserAgentModel
+import com.yuriy.openradio.shared.presenter.settings.aboutRows
+import com.yuriy.openradio.shared.presenter.settings.appVersion
+import com.yuriy.openradio.shared.service.location.LocationService
+import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.view.dialog.AddEditStationDialogPresenter
 import com.yuriy.openradio.shared.view.dialog.AddEditStationDialogPresenterImpl
 import com.yuriy.openradio.shared.view.dialog.BaseAddEditStationDialog
@@ -49,7 +66,6 @@ import com.yuriy.openradio.shared.view.dialog.EditStationPresenterImpl
 import com.yuriy.openradio.shared.view.dialog.EqualizerDialog
 import com.yuriy.openradio.shared.view.dialog.EqualizerPresenter
 import com.yuriy.openradio.shared.view.dialog.EqualizerPresenterImpl
-import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialogPresenter
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialogPresenterImpl
@@ -84,6 +100,8 @@ object DependencyRegistryCommonUi :
     private lateinit var sMainScreenModel: MainScreenModel
     private lateinit var sCountrySetting: CountrySetting
     private lateinit var sLatestRadioStationStorage: LatestRadioStationStorage
+    private lateinit var sSettingsModels: SettingsModels
+    private lateinit var sScreenClose: ScreenClose
 
     @Volatile
     private var sInit = AtomicBoolean(false)
@@ -141,6 +159,54 @@ object DependencyRegistryCommonUi :
         )
         sFileStoraManager = FileStoreManager()
 
+        // Last, because FileStoreManager's own init reads sStorageManagerLayer through
+        // injectStorageManagerLayer: building this block earlier, or moving the manager's
+        // construction earlier, makes every app start throw UninitializedPropertyAccessException.
+        val screens = ScreenStack()
+        val version = appVersion(
+            AppUtils.getApplicationVersion(context),
+            AppUtils.getApplicationVersionCode(context)
+        )
+        val notices = ToastNotices(context)
+        val buffers = BufferStoreImpl(context)
+        val userAgentStore = UserAgentStoreImpl(context)
+        val bounds = BufferBounds(
+            context.resources.getInteger(com.yuriy.openradio.R.integer.min_buffer_val),
+            context.resources.getInteger(com.yuriy.openradio.R.integer.max_buffer_val)
+        )
+        sSettingsModels = SettingsModels(
+            screens = screens,
+            settings = SettingsModel(
+                GeneralSettingsImpl(context, sNetworkSettingsStorage),
+                buffers,
+                userAgentStore,
+                sCountrySetting,
+                CountryList { LocationService.getCountriesWithLocation(context).toList() },
+                sSourcesLayer,
+                sMainScreenModel.serviceCommander,
+                BluetoothPermission {
+                    AppUtils.hasVersionS() && !PermissionChecker.isBluetoothConnectGranted(context)
+                },
+                screens,
+                version,
+                uiScope
+            ),
+            source = SourceChoiceModel(sSourcesLayer, AppRestartImpl(context), screens),
+            buffering = StreamBufferingModel(buffers, bounds, screens),
+            userAgent = UserAgentModel(userAgentStore, screens),
+            diagnostics = DiagnosticsModel(sLoggingLayer, notices, screens, uiScope),
+            transfers = StationTransferModel(
+                StationFilesImpl(context, sFileStoraManager), notices, uiScope
+            ),
+            about = aboutRows(version, MediaLibraryInfo.VERSION)
+        )
+        // Closing the app (the notification's close action, the sleep timer) must not leave a
+        // settings screen to open on next time, as it leaves no tab drilled down.
+        sScreenClose = ScreenClose {
+            screens.clear()
+            sMainScreenModel.close()
+        }
+
         sInit.set(true)
     }
 
@@ -192,8 +258,12 @@ object DependencyRegistryCommonUi :
         dependency.configureWith(sMainScreenModel)
     }
 
+    fun injectSettingsModels(dependency: SettingsModelsDependency) {
+        dependency.configureWith(sSettingsModels)
+    }
+
     fun injectScreenClose(dependency: ScreenCloseDependency) {
-        dependency.configureWith(sMainScreenModel)
+        dependency.configureWith(sScreenClose)
     }
 
     fun injectCountrySetting(dependency: CountrySettingDependency) {
@@ -224,15 +294,7 @@ object DependencyRegistryCommonUi :
         dependency.configureWith(sAddEditStationDialogPresenter)
     }
 
-    fun inject(dependency: NetworkDialog) {
-        dependency.configureWith(sNetworkSettingsStorage)
-    }
-
     fun injectServiceCommander(dependency: ServiceCommanderDependency) {
         dependency.configureWith(sMainScreenModel.serviceCommander)
-    }
-
-    fun injectLoggingLayer(dependency: LoggingLayerDependency) {
-        dependency.configureWith(sLoggingLayer)
     }
 }

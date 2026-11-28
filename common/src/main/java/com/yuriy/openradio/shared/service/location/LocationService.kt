@@ -90,22 +90,17 @@ class LocationService : JobIntentService() {
         }
 
         fun getCountries(): Array<Country> {
-            val list = ArrayList<Country>()
-            for ((name, code) in COUNTRY_NAME_TO_CODE) {
-                list.add(Country(name, code))
-            }
-            list.sortWith(compareBy({ it.name }, { it.name }))
-            return list.toTypedArray()
+            return COUNTRY_CODE_TO_NAME
+                .map { (code, name) -> Country(name, code) }
+                .sortedWith(compareBy({ it.name }, { it.name }))
+                .toTypedArray()
         }
 
         fun getCountriesWithLocation(context: Context): Array<Country> {
-            val list = ArrayList<Country>()
             val locationStr = context.getString(R.string.default_country_use_location)
-            for ((name, code) in COUNTRY_NAME_TO_CODE) {
-                list.add(Country(name, code))
-            }
-            list.sortWith(compareBy({ it.name }, { it.name }))
-            list.add(0, Country(locationStr, locationStr))
+            val list = ArrayList<Country>()
+            list.add(Country(locationStr, locationStr))
+            list.addAll(getCountries())
             return list.toTypedArray()
         }
 

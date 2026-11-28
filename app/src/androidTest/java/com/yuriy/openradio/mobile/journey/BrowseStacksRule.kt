@@ -36,6 +36,8 @@ import org.junit.runners.model.Statement
  *
  * The case's own failure, if it has one, comes first. A case that fails part way through is the
  * likely way to leave a tab behind, and what it failed on is what says what broke.
+ *
+ * It does the same for the settings screen stack, which is a registry singleton too.
  */
 @UnstableApi
 class BrowseStacksRule : TestRule {
@@ -62,6 +64,17 @@ class BrowseStacksRule : TestRule {
                     )
                     val model = registryModel()
                     onMainThread { resetToRoots(model) }
+                }
+                val screens = onMainThread { registrySettings().screens.snapshot() }
+                if (screens.isNotEmpty()) {
+                    failures.add(
+                        AssertionError(
+                            "${description.displayName} left the settings screens $screens open. The stack is a " +
+                                "registry singleton that outlives the Activity, so the next case would have " +
+                                "launched into them. They have been closed."
+                        )
+                    )
+                    onMainThread { registrySettings().screens.clear() }
                 }
                 MultipleFailureException.assertEmpty(failures)
             }

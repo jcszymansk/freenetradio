@@ -157,7 +157,7 @@ class LocalStationLifecycleJourneyTest {
         val editedUrl = serveStream(EDITED_PATH)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val view = MainScreenView(mCompose)
-            val dialogs = JourneyDialogs(scenario, mCompose)
+            val dialogs = JourneyDialogs(scenario)
             val navigation = JourneyNavigation(scenario, view)
             try {
                 awaitEmptyMine(view, navigation)
@@ -212,7 +212,7 @@ class LocalStationLifecycleJourneyTest {
     fun removingTheLastStationEmptiesMine() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val view = MainScreenView(mCompose)
-            val dialogs = JourneyDialogs(scenario, mCompose)
+            val dialogs = JourneyDialogs(scenario)
             val navigation = JourneyNavigation(scenario, view)
             try {
                 awaitEmptyMine(view, navigation)
@@ -397,7 +397,7 @@ class LocalStationLifecycleJourneyTest {
         val station = seedStation()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val view = MainScreenView(mCompose)
-            val dialogs = JourneyDialogs(scenario, mCompose)
+            val dialogs = JourneyDialogs(scenario)
             val navigation = JourneyNavigation(scenario, view)
             view.awaitTabs(mProfile.cleanInstallTabs())
             try {
@@ -446,7 +446,7 @@ class LocalStationLifecycleJourneyTest {
         name: String,
         url: String
     ) {
-        val dialogs = JourneyDialogs(scenario, mCompose)
+        val dialogs = JourneyDialogs(scenario)
         view.tap(MainScreenTags.FAB_ADD)
         val dialog = dialogs.awaitDialog(AddStationDialog.DIALOG_TAG)
         dialogs.type(dialog, DialogR.id.add_edit_station_name_edit, name)
@@ -478,7 +478,7 @@ class LocalStationLifecycleJourneyTest {
         station: RadioStation
     ): DialogFragment {
         view.longPressRow(station.id)
-        val dialogs = JourneyDialogs(scenario, mCompose)
+        val dialogs = JourneyDialogs(scenario)
         val settings = dialogs.awaitDialog(RSSettingsDialog.DIALOG_TAG)
         assertEquals(
             "The settings dialog for a station of the user's own does not offer edit and remove",
@@ -502,7 +502,7 @@ class LocalStationLifecycleJourneyTest {
         buttonId: Int,
         opened: String
     ): DialogFragment {
-        val dialogs = JourneyDialogs(scenario, mCompose)
+        val dialogs = JourneyDialogs(scenario)
         dialogs.click(settings, buttonId)
         return dialogs.awaitDialog(opened)
     }

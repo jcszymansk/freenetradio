@@ -21,15 +21,12 @@ import com.yuriy.openradio.mobile.R
 import com.yuriy.openradio.shared.R as SharedR
 
 /**
- * The top bar's overflow menu, in screen order. Each opens its existing dialog.
+ * The top bar's overflow menu, in screen order. Settings and About open their screens;
+ * the sleep timer and the equalizer still open their dialogs until build B moves them.
  */
 enum class OverflowItem(@StringRes val labelRes: Int) {
-    GENERAL(SharedR.string.main_menu_general),
-    SOURCE(SharedR.string.main_menu_source),
-    NETWORK(SharedR.string.main_menu_network),
-    BUFFERING(SharedR.string.main_menu_buffering),
+    SETTINGS(R.string.main_menu_settings),
     SLEEP_TIMER(SharedR.string.main_menu_sleep_timer),
     EQUALIZER(R.string.eq_label),
-    FILE_STORAGE(SharedR.string.main_menu_file_storage),
     ABOUT(SharedR.string.main_menu_about),
 }

@@ -19,21 +19,13 @@ package com.yuriy.openradio.mobile.journey
 import android.view.View
 import android.widget.CompoundButton
 import android.widget.EditText
-import android.widget.Spinner
 import android.widget.TextView
-import androidx.compose.ui.test.junit4.ComposeTestRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import com.yuriy.openradio.mobile.view.activity.MainActivity
-import com.yuriy.openradio.mobile.view.main.MainScreenTags
-import com.yuriy.openradio.mobile.view.main.OverflowItem
-import com.yuriy.openradio.shared.service.location.Country
 import com.yuriy.openradio.testing.withActivity
 import java.util.concurrent.TimeUnit
-import com.yuriy.openradio.shared.R as DialogR
 
 /**
  * The dialogs a journey drives, read the way a user meets them: asked for by a tap, waited for
@@ -41,24 +33,11 @@ import com.yuriy.openradio.shared.R as DialogR
  *
  * Every dialog in this application is a [DialogFragment], so it exists some time after the tap
  * that asked for it, and which half of it holds the views depends on the dialog: the add and edit
- * dialogs build a fragment view, while the settings, remove and preference dialogs build an
+ * dialogs build a fragment view, while the remove and station-settings dialogs build an
  * [android.app.AlertDialog] and have no fragment view at all.
  */
 @UnstableApi
-internal class JourneyDialogs(
-    private val mScenario: ActivityScenario<MainActivity>,
-    private val mCompose: ComposeTestRule,
-) {
-
-    /**
-     * Opens the dialog behind [item] in the top bar's overflow menu, the way a user does, and
-     * waits for it.
-     */
-    fun openFromOverflow(item: OverflowItem, tag: String): DialogFragment {
-        mCompose.onNodeWithTag(MainScreenTags.OVERFLOW).performClick()
-        mCompose.onNodeWithTag(MainScreenTags.overflow(item)).performClick()
-        return awaitDialog(tag)
-    }
+internal class JourneyDialogs(private val mScenario: ActivityScenario<MainActivity>) {
 
     /**
      * Waits for the dialog tagged [tag] to be up and to have a view to read.
@@ -119,23 +98,6 @@ internal class JourneyDialogs(
     }
 
     /**
-     * Selects the country [code] in the spinner of the general dialog [general]. The spinner is
-     * sorted by name and carries a "use location" entry ahead of every real country, so the
-     * position has to be looked up rather than assumed.
-     */
-    fun chooseCountry(general: DialogFragment, code: String) {
-        val spinnerId = DialogR.id.default_country_spinner
-        val codes = read<Spinner, List<String>>(general, spinnerId) { spinner ->
-            (0 until spinner.adapter.count).map { (spinner.adapter.getItem(it) as Country).code }
-        }
-        val position = codes.indexOf(code)
-        if (position < 0) {
-            throw AssertionError("The country spinner offers no entry for '$code'")
-        }
-        read<Spinner, Unit>(general, spinnerId) { it.setSelection(position) }
-    }
-
-    /**
      * Leaves the dialog tagged [tag] and waits until it is gone.
      *
      * Several of these dialogs write what the user typed in `onPause`, which the removal is what
@@ -161,17 +123,6 @@ internal class JourneyDialogs(
             Thread.sleep(POLL_MILLIS)
         }
         throw AssertionError("The $tag dialog was still up $DIALOG_TIMEOUT_SECONDS seconds after it was left")
-    }
-
-    /**
-     * @return true when no dialog is added to the Activity at all.
-     */
-    fun noneIsUp(): Boolean {
-        return mScenario.withActivity { activity ->
-            val manager = activity.supportFragmentManager
-            manager.executePendingTransactions()
-            manager.fragments.none { it is DialogFragment }
-        }
     }
 
     /**

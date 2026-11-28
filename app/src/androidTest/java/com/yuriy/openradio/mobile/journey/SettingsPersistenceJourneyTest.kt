@@ -17,23 +17,21 @@
 package com.yuriy.openradio.mobile.journey
 
 import android.content.Context
-import android.widget.Spinner
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
-import androidx.fragment.app.DialogFragment
 import androidx.media3.common.util.UnstableApi
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yuriy.openradio.mobile.view.activity.MainActivity
-import com.yuriy.openradio.mobile.view.main.OverflowItem
+import com.yuriy.openradio.mobile.view.main.MainScreenTags
+import com.yuriy.openradio.mobile.view.settings.SettingsTags
 import com.yuriy.openradio.shared.model.storage.AppPreferencesManager
 import com.yuriy.openradio.shared.model.storage.LocationStorage
 import com.yuriy.openradio.shared.model.storage.NetworkSettingsStorage
 import com.yuriy.openradio.shared.model.storage.StartPlayback
+import com.yuriy.openradio.shared.presenter.settings.BufferField
 import com.yuriy.openradio.shared.service.location.Country
-import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
-import com.yuriy.openradio.shared.view.dialog.NetworkDialog
-import com.yuriy.openradio.shared.view.dialog.StreamBufferingDialog
+import com.yuriy.openradio.testing.onMainThread
 import com.yuriy.openradio.testing.withActivity
 import java.lang.ref.WeakReference
 import java.util.concurrent.TimeUnit
@@ -41,34 +39,32 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import com.yuriy.openradio.shared.R as DialogR
 
 /**
  * The fifth phone journey: what the user changed in the settings is still what the application
  * offers after Android has torn the Activity down and built it again.
  *
- * The three dialogs the overflow menu opens for settings are driven the way a user drives
- * them, through the widgets themselves, and they write to three different stores: the network
- * dialog to `NetworkSettingsStorage`, the buffering dialog and two thirds of the general dialog to
- * `AppPreferencesManager`, and the general dialog's country spinner to `LocationStorage` by way of
- * the main screen's `CountrySetting`. None of them needs a connection, which is why this journey can run beside the
- * others with networking disabled: the connectivity gate of TASK-049 sits on the browse list, not
- * on the overflow menu.
+ * One Settings screen and its sub-screens write to three different stores: the mobile data row to
+ * `NetworkSettingsStorage`, the buffering, start playback and user agent screens to
+ * `AppPreferencesManager`, and the default country screen to `LocationStorage` by way of the main
+ * screen's `CountrySetting`. Nothing on these screens needs a connection, which is why this
+ * journey can run beside the others with networking disabled: the connectivity gate of TASK-049
+ * sits on the browse list, not on the overflow menu.
  *
- * Two of the writes only happen when the dialog is left, so leaving it is part of the journey
- * rather than cleanup. The buffering dialog writes all four values in `onPause` after validating
- * them together, and the general dialog writes the custom user agent there too.
+ * Leaving a screen is part of the journey rather than cleanup, because the user agent screen
+ * stores what was typed only when it is left, and because the buffering screen stores the four
+ * values only on Save.
  *
- * Two settings on those dialogs are deliberately left alone. The Bluetooth auto-play box asks for
- * a runtime permission on API 31 and above and would put a system prompt over the Activity this
- * journey reads. The master volume bar persists only from `onStopTrackingTouch`, which a
- * programmatic progress never fires, so driving it would mean calling the listener rather than
- * using the widget; `OpenRadioServiceCommandTest` covers the command it sends instead.
+ * Two settings on the Settings screen are deliberately left alone. The Bluetooth auto-play switch
+ * asks for a runtime permission on API 31 and above and would put a system prompt over the
+ * Activity this journey reads. The master volume is covered by `SettingsModelTest` and
+ * `OpenRadioServiceCommandTest` instead.
  */
 @UnstableApi
 @RunWith(AndroidJUnit4::class)
@@ -103,22 +99,21 @@ class SettingsPersistenceJourneyTest {
     }
 
     /**
-     * What a user changes is what gets stored: one setting in the network dialog, all four in the
-     * buffering dialog, and three in the general dialog.
+     * What a user changes on the Settings screen and its sub-screens is what gets stored.
      *
      * The defaults are asserted first. Without that, a value that was never written would be
      * indistinguishable from one that was written and happens to match, and every case below
      * builds on this one having changed something real.
      */
     @Test
-    fun changingTheNetworkBufferingAndGeneralSettingsStoresWhatTheUserTyped() {
+    fun changingEverySettingStoresWhatTheUserChose() {
         assertTheDefaultsAreInPlace()
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario, mCompose)
+        ActivityScenario.launch(MainActivity::class.java).use { _ ->
+            val settings = SettingsView(mCompose)
             MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
 
-            changeEverySetting(dialogs)
+            changeEverySetting(settings)
         }
 
         assertTheChangedSettingsAreStored()
@@ -128,22 +123,21 @@ class SettingsPersistenceJourneyTest {
      * The journey's subject: Android takes the Activity down and builds it again, and the settings
      * come back up.
      *
-     * Every dialog is left before the recreate, so what the reopened dialogs show can only have
-     * come from the stores. Recreating with a dialog still up would restore the dialog's own view
-     * state, which would pass whether or not anything had been written, and
-     * [recreatingTheActivityWithTheBufferingDialogUpStoresWhatTheUserHadTyped] covers that half
-     * separately and on purpose.
+     * Every screen is left before the recreate, so what the reopened screens show can only have
+     * come from the stores. A recreate with a screen still open would show that screen's state
+     * holder's draft instead, which would pass whether or not anything had been written; the
+     * buffering cases below cover that half separately and on purpose.
      */
     @Test
-    fun theChangedSettingsComeBackUpInTheDialogsAfterTheActivityIsRecreated() {
+    fun theChangedSettingsComeBackUpAfterTheActivityIsRecreated() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario, mCompose)
+            val settings = SettingsView(mCompose)
             MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
-            changeEverySetting(dialogs)
-            assertTrue(
-                "A dialog was still up, so the recreate would restore its views instead of " +
-                    "making the application read the stores",
-                dialogs.noneIsUp()
+            changeEverySetting(settings)
+            assertNull(
+                "A settings screen was still open, so the recreate would show its state holder's " +
+                    "draft instead of making the application read the stores",
+                onMainThread { registrySettings().screens.top.value }
             )
 
             val before = activityIdentity(scenario)
@@ -151,7 +145,7 @@ class SettingsPersistenceJourneyTest {
             assertActivityWasRebuilt(scenario, before)
 
             MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
-            readEverySettingBackFromTheDialogs(dialogs)
+            readEverySettingBack(settings)
         }
 
         assertTheChangedSettingsAreStored()
@@ -168,10 +162,10 @@ class SettingsPersistenceJourneyTest {
      */
     @Test
     fun theChangedSettingsReachDiskRatherThanOnlyTheRunningProcess() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario, mCompose)
+        ActivityScenario.launch(MainActivity::class.java).use { _ ->
+            val settings = SettingsView(mCompose)
             MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
-            changeEverySetting(dialogs)
+            changeEverySetting(settings)
         }
 
         mProfile.awaitStoredOnDisk(NETWORK_PREFERENCE_FILE, "\"IS_USE_MOBILE\" value=\"false\"")
@@ -191,151 +185,179 @@ class SettingsPersistenceJourneyTest {
     }
 
     /**
-     * The other half of the recreate: the user is still in the buffering dialog when Android
+     * The other half of the recreate: the user is still on the buffering screen when Android
      * rebuilds the Activity, which is what a rotation does.
      *
-     * The dialog only writes in `onPause`, and the recreate is what runs it, so this is the path
-     * on which what the user typed reaches the store without the user ever closing anything. The
-     * rebuilt dialog then has to show those values rather than the defaults it started from.
+     * The screen comes back with what was typed, because its state holder survives the Activity,
+     * and nothing is stored, because only Save stores.
      */
     @Test
-    fun recreatingTheActivityWithTheBufferingDialogUpStoresWhatTheUserHadTyped() {
+    fun recreatingTheActivityOnTheBufferingScreenKeepsWhatTheUserTypedAndStoresNothing() {
         assertTheDefaultsAreInPlace()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val dialogs = JourneyDialogs(scenario, mCompose)
+            val settings = SettingsView(mCompose)
             MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
-            typeTheBufferValues(dialogs, dialogs.openFromOverflow(OverflowItem.BUFFERING, BUFFERING_TAG))
+            settings.openFromOverflow()
+            settings.open(SettingsTags.STREAM_BUFFERING, SettingsTags.BUFFERING_SCREEN)
+            typeTheBufferValues(settings)
 
             val before = activityIdentity(scenario)
             scenario.recreate()
             assertActivityWasRebuilt(scenario, before)
 
-            awaitStoredBuffers()
-            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
-            assertTheBufferFieldsRead(
-                dialogs, dialogs.awaitDialog(BUFFERING_TAG), "after the recreate"
+            settings.await(SettingsTags.BUFFERING_SCREEN)
+            assertTheBufferFieldsRead(settings, "after the recreate")
+            assertEquals(
+                "Recreating the Activity stored the minimum buffer, which only Save does",
+                AppPreferencesManager.DEFAULT_MIN_BUFFER_MS,
+                AppPreferencesManager.getMinBuffer(mContext)
             )
+            settings.click(SettingsTags.CLOSE)
+            settings.await(SettingsTags.SCREEN)
+            settings.back(MainScreenTags.TABS)
         }
     }
 
     /**
-     * Opens each of the three dialogs in turn, changes what it offers and leaves it again.
+     * ✕ leaves the buffering screen without storing, whatever the fields hold.
      */
-    private fun changeEverySetting(dialogs: JourneyDialogs) {
-        val network = dialogs.openFromOverflow(OverflowItem.NETWORK, NETWORK_TAG)
-        assertTrue(
-            "The network dialog did not open on the stored value",
-            dialogs.isChecked(network, DialogR.id.use_mobile_network_check_box)
-        )
-        dialogs.click(network, DialogR.id.use_mobile_network_check_box)
-        dialogs.dismiss(NETWORK_TAG)
+    @Test
+    fun closingTheBufferingScreenStoresNothing() {
+        assertTheDefaultsAreInPlace()
 
-        typeTheBufferValues(dialogs, dialogs.openFromOverflow(OverflowItem.BUFFERING, BUFFERING_TAG))
-        dialogs.dismiss(BUFFERING_TAG)
-        awaitStoredBuffers()
+        ActivityScenario.launch(MainActivity::class.java).use { _ ->
+            val settings = SettingsView(mCompose)
+            MainScreenView(mCompose).awaitTabs(mProfile.cleanInstallTabs())
+            settings.openFromOverflow()
+            settings.open(SettingsTags.STREAM_BUFFERING, SettingsTags.BUFFERING_SCREEN)
+            typeTheBufferValues(settings)
+            settings.click(SettingsTags.CLOSE)
+            settings.await(SettingsTags.SCREEN)
+            settings.assertValue(SettingsTags.STREAM_BUFFERING, "DEFAULT")
+            settings.back(MainScreenTags.TABS)
+        }
 
-        val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GENERAL_TAG)
-        assertTrue(
-            "The general dialog did not open on the stored value",
-            dialogs.isChecked(general, DialogR.id.settings_dialog_start_playback_if_playing)
+        assertEquals(
+            "✕ stored the minimum buffer",
+            AppPreferencesManager.DEFAULT_MIN_BUFFER_MS,
+            AppPreferencesManager.getMinBuffer(mContext)
         )
-        assertFalse(
-            "The general dialog did not open on the stored value",
-            dialogs.isChecked(general, DialogR.id.settings_dialog_start_playback_never)
+        assertEquals(
+            "✕ stored the maximum buffer",
+            AppPreferencesManager.DEFAULT_MAX_BUFFER_MS,
+            AppPreferencesManager.getMaxBuffer(mContext)
         )
-        dialogs.click(general, DialogR.id.settings_dialog_start_playback_never)
-
-        assertFalse(
-            "A custom user agent was already switched on",
-            dialogs.isChecked(general, DialogR.id.user_agent_check_view)
+        assertEquals(
+            "✕ stored the playback buffer",
+            AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+            AppPreferencesManager.getPlayBuffer(mContext)
         )
-        dialogs.click(general, DialogR.id.user_agent_check_view)
-        dialogs.type(general, DialogR.id.user_agent_input_view, CUSTOM_USER_AGENT)
-
-        dialogs.chooseCountry(general, CHOSEN_COUNTRY_CODE)
-        awaitChosenCountry()
-        dialogs.dismiss(GENERAL_TAG)
+        assertEquals(
+            "✕ stored the rebuffer buffer",
+            AppPreferencesManager.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+            AppPreferencesManager.getPlayBufferRebuffer(mContext)
+        )
     }
 
     /**
-     * Reads every changed setting back off the widgets of freshly opened dialogs, which is what a
-     * user looking at the settings after the recreate would see.
+     * Opens Settings, changes what each screen offers, and goes back to the main screen.
      */
-    private fun readEverySettingBackFromTheDialogs(dialogs: JourneyDialogs) {
-        val network = dialogs.openFromOverflow(OverflowItem.NETWORK, NETWORK_TAG)
-        assertFalse(
-            "The network dialog offers mobile data again after the recreate",
-            dialogs.isChecked(network, DialogR.id.use_mobile_network_check_box)
-        )
-        dialogs.dismiss(NETWORK_TAG)
-
-        assertTheBufferFieldsRead(
-            dialogs, dialogs.openFromOverflow(OverflowItem.BUFFERING, BUFFERING_TAG), "after the recreate"
-        )
-        dialogs.dismiss(BUFFERING_TAG)
-
-        val general = dialogs.openFromOverflow(OverflowItem.GENERAL, GENERAL_TAG)
+    private fun changeEverySetting(settings: SettingsView) {
+        settings.openFromOverflow()
         assertTrue(
-            "The general dialog shows a different start playback choice after the recreate",
-            dialogs.isChecked(general, DialogR.id.settings_dialog_start_playback_never)
+            "Settings did not open on the stored mobile data value",
+            settings.isOn(SettingsTags.MOBILE_DATA)
         )
+        settings.click(SettingsTags.MOBILE_DATA)
+
+        settings.open(SettingsTags.STREAM_BUFFERING, SettingsTags.BUFFERING_SCREEN)
+        typeTheBufferValues(settings)
+        settings.click(SettingsTags.SAVE)
+        settings.await(SettingsTags.SCREEN)
+        awaitStoredBuffers()
+
+        settings.assertValue(SettingsTags.START_PLAYBACK, "IF PLAYING")
+        settings.open(SettingsTags.START_PLAYBACK, SettingsTags.CHOICE_SCREEN)
+        assertTrue(
+            "Start playback did not open on the stored value",
+            settings.isChosen(StartPlayback.IF_PLAYING.name)
+        )
+        settings.choose(StartPlayback.NEVER.name)
+        settings.await(SettingsTags.SCREEN)
+
+        settings.open(SettingsTags.USER_AGENT, SettingsTags.USER_AGENT_SCREEN)
         assertFalse(
-            "The general dialog shows a different start playback choice after the recreate",
-            dialogs.isChecked(general, DialogR.id.settings_dialog_start_playback_if_playing)
+            "A custom user agent was already switched on",
+            settings.isOn(SettingsTags.USER_AGENT_SWITCH)
         )
+        settings.click(SettingsTags.USER_AGENT_SWITCH)
+        settings.type(SettingsTags.USER_AGENT_FIELD, CUSTOM_USER_AGENT)
+        settings.back(SettingsTags.SCREEN)
+
+        settings.open(SettingsTags.DEFAULT_COUNTRY, SettingsTags.CHOICE_SCREEN)
+        settings.choose(CHOSEN_COUNTRY_CODE)
+        settings.await(SettingsTags.SCREEN)
+        awaitChosenCountry()
+
+        settings.back(MainScreenTags.TABS)
+    }
+
+    /**
+     * Reads every changed setting back off the screens, which is what a user would see after the
+     * recreate.
+     */
+    private fun readEverySettingBack(settings: SettingsView) {
+        settings.openFromOverflow()
+        assertFalse(
+            "Settings offers mobile data again after the recreate",
+            settings.isOn(SettingsTags.MOBILE_DATA)
+        )
+        settings.assertValue(SettingsTags.STREAM_BUFFERING, "CUSTOM")
+        settings.open(SettingsTags.STREAM_BUFFERING, SettingsTags.BUFFERING_SCREEN)
+        assertTheBufferFieldsRead(settings, "after the recreate")
+        settings.click(SettingsTags.CLOSE)
+        settings.await(SettingsTags.SCREEN)
+        settings.assertValue(SettingsTags.START_PLAYBACK, "NEVER")
+        settings.assertValue(SettingsTags.USER_AGENT, "CUSTOM")
+        settings.open(SettingsTags.USER_AGENT, SettingsTags.USER_AGENT_SCREEN)
         assertTrue(
             "The custom user agent is switched off again after the recreate",
-            dialogs.isChecked(general, DialogR.id.user_agent_check_view)
+            settings.isOn(SettingsTags.USER_AGENT_SWITCH)
         )
-        assertEquals(
-            "The general dialog shows a different user agent after the recreate",
-            CUSTOM_USER_AGENT,
-            dialogs.text(general, DialogR.id.user_agent_input_view)
-        )
-        assertEquals(
-            "The general dialog shows a different country after the recreate",
-            CHOSEN_COUNTRY_CODE,
-            dialogs.read<Spinner, String>(general, DialogR.id.default_country_spinner) { spinner ->
-                (spinner.selectedItem as Country).code
-            }
-        )
-        dialogs.dismiss(GENERAL_TAG)
+        assertEquals(CUSTOM_USER_AGENT, settings.text(SettingsTags.USER_AGENT_FIELD))
+        settings.back(SettingsTags.SCREEN)
+        settings.assertValue(SettingsTags.DEFAULT_COUNTRY, CHOSEN_COUNTRY_CODE)
+        settings.back(MainScreenTags.TABS)
     }
 
-    private fun typeTheBufferValues(dialogs: JourneyDialogs, buffering: DialogFragment) {
-        dialogs.type(buffering, DialogR.id.min_buffer_edit_view, MIN_BUFFER.toString())
-        dialogs.type(buffering, DialogR.id.max_buffer_edit_view, MAX_BUFFER.toString())
-        dialogs.type(buffering, DialogR.id.play_buffer_edit_view, PLAY_BUFFER.toString())
-        dialogs.type(
-            buffering, DialogR.id.play_buffer_after_rebuffer_edit_view, REBUFFER_BUFFER.toString()
-        )
+    private fun typeTheBufferValues(settings: SettingsView) {
+        settings.type(SettingsTags.bufferField(BufferField.MIN), MIN_BUFFER.toString())
+        settings.type(SettingsTags.bufferField(BufferField.MAX), MAX_BUFFER.toString())
+        settings.type(SettingsTags.bufferField(BufferField.PLAY), PLAY_BUFFER.toString())
+        settings.type(SettingsTags.bufferField(BufferField.REBUFFER), REBUFFER_BUFFER.toString())
     }
 
-    private fun assertTheBufferFieldsRead(
-        dialogs: JourneyDialogs,
-        buffering: DialogFragment,
-        occasion: String
-    ) {
+    private fun assertTheBufferFieldsRead(settings: SettingsView, occasion: String) {
         assertEquals(
-            "The buffering dialog shows a different minimum buffer $occasion",
+            "A different minimum buffer $occasion",
             MIN_BUFFER.toString(),
-            dialogs.text(buffering, DialogR.id.min_buffer_edit_view)
+            settings.text(SettingsTags.bufferField(BufferField.MIN))
         )
         assertEquals(
-            "The buffering dialog shows a different maximum buffer $occasion",
+            "A different maximum buffer $occasion",
             MAX_BUFFER.toString(),
-            dialogs.text(buffering, DialogR.id.max_buffer_edit_view)
+            settings.text(SettingsTags.bufferField(BufferField.MAX))
         )
         assertEquals(
-            "The buffering dialog shows a different playback buffer $occasion",
+            "A different playback buffer $occasion",
             PLAY_BUFFER.toString(),
-            dialogs.text(buffering, DialogR.id.play_buffer_edit_view)
+            settings.text(SettingsTags.bufferField(BufferField.PLAY))
         )
         assertEquals(
-            "The buffering dialog shows a different rebuffer buffer $occasion",
+            "A different rebuffer buffer $occasion",
             REBUFFER_BUFFER.toString(),
-            dialogs.text(buffering, DialogR.id.play_buffer_after_rebuffer_edit_view)
+            settings.text(SettingsTags.bufferField(BufferField.REBUFFER))
         )
     }
 
@@ -382,45 +404,45 @@ class SettingsPersistenceJourneyTest {
 
     private fun assertTheChangedSettingsAreStored() {
         assertFalse(
-            "The network dialog did not store the refusal of mobile data",
+            "Settings did not store the refusal of mobile data",
             networkSettings().getUseMobile()
         )
         assertEquals(
-            "The buffering dialog did not store the minimum buffer",
+            "The buffering screen did not store the minimum buffer",
             MIN_BUFFER,
             AppPreferencesManager.getMinBuffer(mContext)
         )
         assertEquals(
-            "The buffering dialog did not store the maximum buffer",
+            "The buffering screen did not store the maximum buffer",
             MAX_BUFFER,
             AppPreferencesManager.getMaxBuffer(mContext)
         )
         assertEquals(
-            "The buffering dialog did not store the playback buffer",
+            "The buffering screen did not store the playback buffer",
             PLAY_BUFFER,
             AppPreferencesManager.getPlayBuffer(mContext)
         )
         assertEquals(
-            "The buffering dialog did not store the rebuffer buffer",
+            "The buffering screen did not store the rebuffer buffer",
             REBUFFER_BUFFER,
             AppPreferencesManager.getPlayBufferRebuffer(mContext)
         )
         assertEquals(
-            "The general dialog did not store the start playback choice",
+            "Settings did not store the start playback choice",
             StartPlayback.NEVER,
             AppPreferencesManager.startPlayback(mContext)
         )
         assertTrue(
-            "The general dialog did not store the custom user agent being switched on",
+            "The user agent screen did not store the custom user agent being switched on",
             AppPreferencesManager.isCustomUserAgent(mContext)
         )
         assertEquals(
-            "The general dialog did not store the user agent that was typed",
+            "The user agent screen did not store the user agent that was typed",
             CUSTOM_USER_AGENT,
             AppPreferencesManager.getCustomUserAgent(mContext, NO_USER_AGENT_STORED)
         )
         assertEquals(
-            "The general dialog did not store the chosen country",
+            "Settings did not store the chosen country",
             CHOSEN_COUNTRY_CODE,
             locationSettings().getCountryCode()
         )
@@ -445,8 +467,8 @@ class SettingsPersistenceJourneyTest {
     /**
      * Waits for the buffer values to reach the store.
      *
-     * The dialog writes them in `onPause`, which runs while it is being taken off the Activity,
-     * so there is a transaction between the last thing this test did and the write.
+     * Save stores all four together, so reading them back is what says whether the screen has
+     * left yet.
      */
     private fun awaitStoredBuffers() {
         awaitStored("the buffer values") {
@@ -460,8 +482,8 @@ class SettingsPersistenceJourneyTest {
     /**
      * Waits for the chosen country to reach the store.
      *
-     * A spinner reports a selection from its next layout pass rather than from the call that set
-     * it, and the write then goes through `CountrySetting`, so there is nothing synchronous to read.
+     * The choice screen reports the tap at once, but the write goes through `CountrySetting`, so
+     * there is nothing synchronous to read.
      */
     private fun awaitChosenCountry() {
         awaitStored("the chosen country") {
@@ -494,17 +516,11 @@ class SettingsPersistenceJourneyTest {
 
     private companion object {
 
-        val NETWORK_TAG = NetworkDialog.DIALOG_TAG
-
-        val BUFFERING_TAG = StreamBufferingDialog.DIALOG_TAG
-
-        val GENERAL_TAG = GeneralSettingsDialog.DIALOG_TAG
-
         /**
-         * The four buffer values the dialog validates together: each one inside the range its
-         * description quotes, the maximum no smaller than the minimum, and the minimum no smaller
-         * than either playback buffer. They all differ from the Media3 defaults, so a value that
-         * was never written cannot pass for one that was.
+         * The four buffer values the buffering screen validates together: each one inside the
+         * range its description quotes, the maximum no smaller than the minimum, and the minimum
+         * no smaller than either playback buffer. They all differ from the Media3 defaults, so a
+         * value that was never written cannot pass for one that was.
          */
         const val MIN_BUFFER = 30000
 
@@ -524,7 +540,7 @@ class SettingsPersistenceJourneyTest {
 
         /**
          * Anything but [Country.COUNTRY_CODE_DEFAULT], and not the "use location" entry the
-         * spinner carries first: choosing that one makes the Activity ask for the location
+         * country screen carries first: choosing that one makes the Activity ask for the location
          * permission when it resumes.
          */
         const val CHOSEN_COUNTRY_CODE = "PL"
@@ -536,7 +552,7 @@ class SettingsPersistenceJourneyTest {
         const val LOCATION_PREFERENCE_FILE = "LocationPref"
 
         /**
-         * Covers the fragment transaction a dialog is written from and the write itself.
+         * Covers the store write and the screen transition that starts it.
          */
         const val STORE_TIMEOUT_SECONDS = 20L
 

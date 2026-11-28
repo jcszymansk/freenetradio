@@ -18,37 +18,22 @@ package com.yuriy.openradio.shared.utils
 
 import android.view.View
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.ToggleButton
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentTransaction
-import com.yuriy.openradio.shared.view.dialog.AboutDialog
 import com.yuriy.openradio.shared.view.dialog.AddStationDialog
-import com.yuriy.openradio.shared.view.dialog.BatteryOptimizationDialog
 import com.yuriy.openradio.shared.view.dialog.EditStationDialog
 import com.yuriy.openradio.shared.view.dialog.EqualizerDialog
-import com.yuriy.openradio.shared.view.dialog.GeneralSettingsDialog
-import com.yuriy.openradio.shared.view.dialog.FileStorageDialog
-import com.yuriy.openradio.shared.view.dialog.NetworkDialog
 import com.yuriy.openradio.shared.view.dialog.RSSettingsDialog
 import com.yuriy.openradio.shared.view.dialog.RemoveStationDialog
 import com.yuriy.openradio.shared.view.dialog.SearchDialog
 import com.yuriy.openradio.shared.view.dialog.SleepTimerDialog
-import com.yuriy.openradio.shared.view.dialog.SourceDialog
-import com.yuriy.openradio.shared.view.dialog.StreamBufferingDialog
-
-fun View.findProgressBar(id: Int): ProgressBar {
-    return findViewById(id)
-}
 
 fun View?.visible() {
     this?.visibility = View.VISIBLE
@@ -74,19 +59,11 @@ fun View.findToggleButton(id: Int): ToggleButton {
     return findViewById(id)
 }
 
-fun View.findCheckBox(id: Int): CheckBox {
-    return findViewById(id)
-}
-
 fun View.findLinearLayout(id: Int): LinearLayout {
     return findViewById(id)
 }
 
 fun View.findImageView(id: Int): ImageView {
-    return findViewById(id)
-}
-
-fun View.findImageButton(id: Int): ImageButton {
     return findViewById(id)
 }
 
@@ -102,10 +79,6 @@ fun View.findSpinner(id: Int): Spinner {
     return findViewById(id)
 }
 
-fun View.findSeekBar(id: Int): SeekBar {
-    return findViewById(id)
-}
-
 object UiUtils {
 
     /**
@@ -115,20 +88,13 @@ object UiUtils {
      * @param transaction Instance of Fragment transaction.
      */
     fun clearDialogs(manager: FragmentManager, transaction: FragmentTransaction) {
-        removeFragment(transaction, manager.findFragmentByTag(AboutDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(AddStationDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(EditStationDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(EqualizerDialog.DIALOG_TAG))
-        removeFragment(transaction, manager.findFragmentByTag(GeneralSettingsDialog.DIALOG_TAG))
-        removeFragment(transaction, manager.findFragmentByTag(FileStorageDialog.DIALOG_TAG))
-        removeFragment(transaction, manager.findFragmentByTag(NetworkDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(RemoveStationDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(RSSettingsDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(SearchDialog.DIALOG_TAG))
         removeFragment(transaction, manager.findFragmentByTag(SleepTimerDialog.DIALOG_TAG))
-        removeFragment(transaction, manager.findFragmentByTag(StreamBufferingDialog.DIALOG_TAG))
-        removeFragment(transaction, manager.findFragmentByTag(SourceDialog.DIALOG_TAG))
-        removeFragment(transaction, manager.findFragmentByTag(BatteryOptimizationDialog.DIALOG_TAG))
         try {
             transaction.commitNow()
         } catch (exception: IllegalStateException) {

@@ -22,7 +22,6 @@
     <color name="colorPrimaryDark">#303F9F</color>
     <!--   a secondary color for controls like checkboxes and text fields -->
     <color name="colorAccent">#FF4081</color>
-    <color name="or_color_blue_light">#FF33B5E5</color>
     <color name="or_color_white">#FFFFFFFF</color>
     <color name="or_color_primary">#FF303030</color>
     <color name="or_color_primary_dark">#FF171C24</color>
