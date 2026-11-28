@@ -23,7 +23,7 @@ import java.io.File
 
 /**
  * What the settings screens' controls ask for, which `SettingsPlatform` answers and screenshot
- * tests answer with nothing. Nothing implements them yet; Task 13 does.
+ * tests answer with nothing.
  */
 interface SettingsActions {
 
