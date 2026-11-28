@@ -27,7 +27,6 @@ import com.yuriy.openradio.shared.dependencies.StorageManagerDependency
 import com.yuriy.openradio.shared.utils.AppLogger
 import com.yuriy.openradio.shared.utils.AppUtils
 import com.yuriy.openradio.shared.utils.IntentUtils
-import java.io.ByteArrayOutputStream
 
 class FileStoreManager : StorageManagerDependency {
 
@@ -46,7 +45,7 @@ class FileStoreManager : StorageManagerDependency {
         // https://developer.android.com/training/data-storage/shared/documents-files
         // Was what recommended as alternative to deprecation require much more time to implement as it relies
         // on APIs available since Android 13.
-        if (IntentUtils.startActivityForResultSafe(activity, getUploadIntent(), REQUEST_CODE_CREATE_FILE).not()) {
+        if (IntentUtils.startActivityForResultSafe(activity, exportIntent(), REQUEST_CODE_CREATE_FILE).not()) {
             onFailure()
         }
     }
@@ -56,7 +55,7 @@ class FileStoreManager : StorageManagerDependency {
         // https://developer.android.com/training/data-storage/shared/documents-files
         // Was what recommended as alternative to deprecation require much more time to implement as it relies
         // on APIs available since Android 13.
-        if (IntentUtils.startActivityForResultSafe(dialogFragment, getUploadIntent(), REQUEST_CODE_CREATE_FILE).not()) {
+        if (IntentUtils.startActivityForResultSafe(dialogFragment, exportIntent(), REQUEST_CODE_CREATE_FILE).not()) {
             onFailure()
         }
     }
@@ -66,7 +65,7 @@ class FileStoreManager : StorageManagerDependency {
         // https://developer.android.com/training/data-storage/shared/documents-files
         // Was what recommended as alternative to deprecation require much more time to implement as it relies
         // on APIs available since Android 13.
-        if (IntentUtils.startActivityForResultSafe(activity, getDownloadIntent(), REQUEST_CODE_OPEN_FILE).not()) {
+        if (IntentUtils.startActivityForResultSafe(activity, importIntent(), REQUEST_CODE_OPEN_FILE).not()) {
             onFailure()
         }
     }
@@ -76,7 +75,7 @@ class FileStoreManager : StorageManagerDependency {
         // https://developer.android.com/training/data-storage/shared/documents-files
         // Was what recommended as alternative to deprecation require much more time to implement as it relies
         // on APIs available since Android 13.
-        if (IntentUtils.startActivityForResultSafe(dialogFragment, getDownloadIntent(), REQUEST_CODE_OPEN_FILE).not()) {
+        if (IntentUtils.startActivityForResultSafe(dialogFragment, importIntent(), REQUEST_CODE_OPEN_FILE).not()) {
             onFailure()
         }
     }
@@ -89,21 +88,10 @@ class FileStoreManager : StorageManagerDependency {
         onSuccess: () -> Unit,
         onFailure: () -> Unit
     ) {
-        if (resultCode != Activity.RESULT_OK) {
-            AppLogger.e("$TAG activity result is not OK")
-            onFailure()
-            return
-        }
-        if (intent == null) {
-            AppLogger.e("$TAG activity result has no intent")
-            onFailure()
-            return
-        }
+        val document = documentOf(resultCode, intent)
         when (requestCode) {
             REQUEST_CODE_CREATE_FILE -> {
-                val uri: Uri? = intent.data
-                AppLogger.d("Save data file to:$uri")
-                if (uri != null && writeDataFile(context, uri)) {
+                if (document != null && exportTo(context, document)) {
                     onSuccess()
                 } else {
                     onFailure()
@@ -111,41 +99,37 @@ class FileStoreManager : StorageManagerDependency {
             }
 
             REQUEST_CODE_OPEN_FILE -> {
-                val uri: Uri? = intent.data
-                uri?.let {
-                    try {
-                        context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                            val buffer = ByteArray(2046)
-                            val byteArrayOutputStream = ByteArrayOutputStream()
-                            var bytesRead: Int
-                            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                                byteArrayOutputStream.write(buffer, 0, bytesRead)
-                            }
-                            val fileContent = byteArrayOutputStream.toByteArray()
-                            val data = AppUtils.deserializeMap(AppUtils.decodeBase64(fileContent))
-                            if (data.isEmpty().not()) {
-                                val fav: String? = data[KEY_FAV]
-                                if (!fav.isNullOrEmpty()) {
-                                    mStorageManagerLayer.mergeFavorites(fav)
-                                }
-                                val loc: String? = data[KEY_LOC]
-                                if (!loc.isNullOrEmpty()) {
-                                    mStorageManagerLayer.mergeDeviceLocals(loc)
-                                }
-                            }
-                            onSuccess()
-                        }
-                    } catch (e: Exception) {
-                        AppLogger.e("Error reading file content", e)
-                        onFailure()
-                    }
-                } ?: onFailure()
+                if (document != null && importFrom(context, document)) {
+                    onSuccess()
+                } else {
+                    onFailure()
+                }
             }
         }
     }
 
     /**
-     * Writes favorites and device local stations to the document at [uri].
+     * Asks the document UI where to write the stations file: an openable text document named
+     * `openradio_data`.
+     */
+    fun exportIntent(): Intent {
+        return Intent(Intent.ACTION_CREATE_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType(FILE_TYPE)
+            .putExtra(Intent.EXTRA_TITLE, FILE_NAME)
+    }
+
+    /**
+     * Asks the document UI which stations file to read.
+     */
+    fun importIntent(): Intent {
+        return Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType(FILE_TYPE)
+    }
+
+    /**
+     * Writes favorites and device local stations to the document at [document].
      *
      * The document comes from a picker the user left a while ago, so it may be gone or no longer
      * writable by the time the result arrives; the content resolver throws in that case, and the
@@ -153,11 +137,11 @@ class FileStoreManager : StorageManagerDependency {
      *
      * @return true when the whole data file was written.
      */
-    private fun writeDataFile(context: Context, uri: Uri): Boolean {
+    fun exportTo(context: Context, document: Uri): Boolean {
         return try {
-            val outputStream = context.contentResolver?.openOutputStream(uri)
+            val outputStream = context.contentResolver?.openOutputStream(document)
             if (outputStream == null) {
-                AppLogger.e("$TAG no output stream for uri: $uri")
+                AppLogger.e("$TAG no output stream for uri: $document")
                 return false
             }
             outputStream.use {
@@ -169,24 +153,43 @@ class FileStoreManager : StorageManagerDependency {
             }
             true
         } catch (e: Exception) {
-            AppLogger.e("$TAG error writing data file to uri: $uri", e)
+            AppLogger.e("$TAG error writing data file to uri: $document", e)
             false
         }
     }
 
-    private fun getUploadIntent(): Intent {
-        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-        intent.setType(FILE_TYPE)
-        intent.putExtra(Intent.EXTRA_TITLE, FILE_NAME)
-        return intent
-    }
-
-    private fun getDownloadIntent(): Intent {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-        intent.type = FILE_TYPE
-        return intent
+    /**
+     * Merges the favorites and device local stations of the document at [document] into the
+     * stores. A file that decodes to nothing usable changes nothing and still counts as read.
+     *
+     * @return false when the document could not be opened or read.
+     */
+    fun importFrom(context: Context, document: Uri): Boolean {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(document)
+            if (inputStream == null) {
+                AppLogger.e("$TAG no input stream for uri: $document")
+                return false
+            }
+            inputStream.use {
+                val fileContent = it.readBytes()
+                val data = AppUtils.deserializeMap(AppUtils.decodeBase64(fileContent))
+                if (data.isEmpty().not()) {
+                    val fav: String? = data[KEY_FAV]
+                    if (!fav.isNullOrEmpty()) {
+                        mStorageManagerLayer.mergeFavorites(fav)
+                    }
+                    val loc: String? = data[KEY_LOC]
+                    if (!loc.isNullOrEmpty()) {
+                        mStorageManagerLayer.mergeDeviceLocals(loc)
+                    }
+                }
+            }
+            true
+        } catch (e: Exception) {
+            AppLogger.e("$TAG error reading data file from uri: $document", e)
+            false
+        }
     }
 
     companion object {
@@ -206,5 +209,21 @@ class FileStoreManager : StorageManagerDependency {
          * Request code of the "open the data file" activity result.
          */
         const val REQUEST_CODE_OPEN_FILE = 5678
+
+        /**
+         * Returns the document an activity result carries, or null when the result is not OK,
+         * has no intent or has no URI, which the caller reports as a failure.
+         */
+        fun documentOf(resultCode: Int, data: Intent?): Uri? {
+            if (resultCode != Activity.RESULT_OK) {
+                AppLogger.e("$TAG activity result is not OK")
+                return null
+            }
+            val document = data?.data
+            if (document == null) {
+                AppLogger.e("$TAG activity result carries no document")
+            }
+            return document
+        }
     }
 }

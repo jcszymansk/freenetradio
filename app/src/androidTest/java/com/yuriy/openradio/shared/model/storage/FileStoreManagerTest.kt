@@ -24,6 +24,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -34,7 +36,8 @@ import java.lang.ref.WeakReference
 /**
  * Covers the data file that carries favorites and device local stations between installs. The
  * exchange normally runs through a Storage Access Framework document; here it runs through an
- * app private file addressed by a file Uri, which the content resolver serves the same way.
+ * app private file addressed by a file Uri, which the content resolver serves the same way, handed
+ * straight to the entry points the activity's launchers call.
  */
 @RunWith(AndroidJUnit4::class)
 class FileStoreManagerTest {
@@ -45,8 +48,6 @@ class FileStoreManagerTest {
     private lateinit var mLatest: LatestRadioStationStorage
     private lateinit var mManager: FileStoreManager
     private lateinit var mFile: File
-    private var mSuccesses = 0
-    private var mFailures = 0
 
     @Before
     fun setUp() {
@@ -72,18 +73,13 @@ class FileStoreManagerTest {
         mFavorites.addAll(setOf(makeStation("a", sortId = 1), makeStation("b", sortId = 2)))
         mLocals.addAll(setOf(makeStation("local-1", sortId = 1, isLocal = true)))
 
-        deliverExport()
-
-        assertEquals(1, mSuccesses)
-        assertEquals(0, mFailures)
+        assertTrue(mManager.exportTo(mContext, uriOfFile()))
         assertTrue(mFile.length() > 0)
 
         mFavorites.clear()
         mLocals.clear()
-        deliverImport()
 
-        assertEquals(2, mSuccesses)
-        assertEquals(0, mFailures)
+        assertTrue(mManager.importFrom(mContext, uriOfFile()))
         assertEquals(setOf("a", "b"), mFavorites.getAll().map { it.id }.toSet())
         assertEquals(setOf("local-1"), mLocals.getAll().map { it.id }.toSet())
     }
@@ -91,35 +87,32 @@ class FileStoreManagerTest {
     @Test
     fun importMergesIntoWhatIsAlreadyStored() {
         mFavorites.addAll(setOf(makeStation("a", sortId = 1)))
-        deliverExport()
+        assertTrue(mManager.exportTo(mContext, uriOfFile()))
 
         mFavorites.addAll(setOf(makeStation("b", sortId = 2)))
-        deliverImport()
 
+        assertTrue(mManager.importFrom(mContext, uriOfFile()))
         assertEquals(setOf("a", "b"), mFavorites.getAll().map { it.id }.toSet())
     }
 
     @Test
     fun importOfAFileWithoutLocalsLeavesTheStoredLocalsAlone() {
         mFavorites.addAll(setOf(makeStation("a", sortId = 1)))
-        deliverExport()
+        assertTrue(mManager.exportTo(mContext, uriOfFile()))
 
         mFavorites.clear()
         mLocals.addAll(setOf(makeStation("local-2", sortId = 1, isLocal = true)))
-        deliverImport()
 
+        assertTrue(mManager.importFrom(mContext, uriOfFile()))
         assertEquals(setOf("a"), mFavorites.getAll().map { it.id }.toSet())
         assertEquals(setOf("local-2"), mLocals.getAll().map { it.id }.toSet())
     }
 
     @Test
     fun anExportOfEmptyStoresImportsAsANoOp() {
-        deliverExport()
+        assertTrue(mManager.exportTo(mContext, uriOfFile()))
+        assertTrue(mManager.importFrom(mContext, uriOfFile()))
 
-        deliverImport()
-
-        assertEquals(2, mSuccesses)
-        assertEquals(0, mFailures)
         assertTrue(mFavorites.getAll().isEmpty())
         assertTrue(mLocals.getAll().isEmpty())
     }
@@ -131,10 +124,7 @@ class FileStoreManagerTest {
         mFavorites.addAll(setOf(makeStation("a", sortId = 1)))
         mFile.writeText("!!! this is not an exported data file !!!")
 
-        deliverImport()
-
-        assertEquals(1, mSuccesses)
-        assertEquals(0, mFailures)
+        assertTrue(mManager.importFrom(mContext, uriOfFile()))
         assertEquals(setOf("a"), mFavorites.getAll().map { it.id }.toSet())
     }
 
@@ -142,61 +132,49 @@ class FileStoreManagerTest {
     fun aTruncatedExportIsAcceptedAndChangesNothing() {
         mFavorites.addAll(setOf(makeStation("a", sortId = 1)))
         mLocals.addAll(setOf(makeStation("local-1", sortId = 1, isLocal = true)))
-        deliverExport()
+        assertTrue(mManager.exportTo(mContext, uriOfFile()))
         truncateExportInHalf()
 
         mFavorites.clear()
         mLocals.clear()
-        deliverImport()
 
-        assertEquals(2, mSuccesses)
-        assertEquals(0, mFailures)
+        assertTrue(mManager.importFrom(mContext, uriOfFile()))
         assertTrue(mFavorites.getAll().isEmpty())
         assertTrue(mLocals.getAll().isEmpty())
     }
 
     @Test
     fun importingAFileThatIsNotThereIsReportedAsAFailure() {
-        deliverImport()
-
-        assertEquals(0, mSuccesses)
-        assertEquals(1, mFailures)
+        assertFalse(mManager.importFrom(mContext, uriOfFile()))
     }
 
     @Test
-    fun aResultThatIsNotOkIsReportedAsAFailure() {
-        deliver(FileStoreManager.REQUEST_CODE_OPEN_FILE, Activity.RESULT_CANCELED, uriOfFile())
+    fun anOkResultCarriesTheChosenDocument() {
+        val document = uriOfFile()
 
-        assertEquals(0, mSuccesses)
-        assertEquals(1, mFailures)
+        val result = FileStoreManager.documentOf(Activity.RESULT_OK, Intent().setData(document))
+
+        assertEquals(document, result)
     }
 
     @Test
-    fun aMissingIntentIsReportedAsAFailure() {
-        mManager.onActivityResult(
-            mContext, FileStoreManager.REQUEST_CODE_OPEN_FILE, Activity.RESULT_OK, null,
-            ::onSuccess, ::onFailure
+    fun aResultThatIsNotOkCarriesNoDocument() {
+        val result = FileStoreManager.documentOf(
+            Activity.RESULT_CANCELED,
+            Intent().setData(uriOfFile())
         )
 
-        assertEquals(0, mSuccesses)
-        assertEquals(1, mFailures)
+        assertNull(result)
     }
 
     @Test
-    fun aResultWithoutAUriIsReportedAsAFailureForBothDirections() {
-        deliver(FileStoreManager.REQUEST_CODE_OPEN_FILE, Activity.RESULT_OK, null)
-        deliver(FileStoreManager.REQUEST_CODE_CREATE_FILE, Activity.RESULT_OK, null)
-
-        assertEquals(0, mSuccesses)
-        assertEquals(2, mFailures)
+    fun aMissingIntentCarriesNoDocument() {
+        assertNull(FileStoreManager.documentOf(Activity.RESULT_OK, null))
     }
 
     @Test
-    fun anUnknownRequestCodeReportsNothingAtAll() {
-        deliver(UNKNOWN_REQUEST_CODE, Activity.RESULT_OK, uriOfFile())
-
-        assertEquals(0, mSuccesses)
-        assertEquals(0, mFailures)
+    fun aResultWithoutAUriCarriesNoDocument() {
+        assertNull(FileStoreManager.documentOf(Activity.RESULT_OK, Intent()))
     }
 
     @Test
@@ -205,26 +183,43 @@ class FileStoreManagerTest {
         // be written; the user has to hear about it instead of the app crashing (TASK-026).
         val unreachable = Uri.fromFile(File(mContext.filesDir, "no-such-directory/$FILE_NAME"))
 
-        deliver(FileStoreManager.REQUEST_CODE_CREATE_FILE, Activity.RESULT_OK, unreachable)
-
-        assertEquals(0, mSuccesses)
-        assertEquals(1, mFailures)
+        assertFalse(mManager.exportTo(mContext, unreachable))
     }
 
-    private fun deliverExport() {
-        deliver(FileStoreManager.REQUEST_CODE_CREATE_FILE, Activity.RESULT_OK, uriOfFile())
+    @Test
+    fun theExportIntentAsksForAnOpenableTextDocumentNamedAsBefore() {
+        val intent = mManager.exportIntent()
+
+        assertEquals(Intent.ACTION_CREATE_DOCUMENT, intent.action)
+        assertEquals(setOf(Intent.CATEGORY_OPENABLE), intent.categories)
+        assertEquals("text/plain", intent.type)
+        assertEquals("openradio_data", intent.getStringExtra(Intent.EXTRA_TITLE))
     }
 
-    private fun deliverImport() {
-        deliver(FileStoreManager.REQUEST_CODE_OPEN_FILE, Activity.RESULT_OK, uriOfFile())
+    @Test
+    fun theImportIntentAsksForAnOpenableTextDocument() {
+        val intent = mManager.importIntent()
+
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT, intent.action)
+        assertEquals(setOf(Intent.CATEGORY_OPENABLE), intent.categories)
+        assertEquals("text/plain", intent.type)
     }
 
-    private fun deliver(requestCode: Int, resultCode: Int, uri: Uri?) {
-        val intent = Intent()
-        if (uri != null) {
-            intent.data = uri
-        }
-        mManager.onActivityResult(mContext, requestCode, resultCode, intent, ::onSuccess, ::onFailure)
+    @Test
+    fun anUnknownRequestCodeReportsNothingAtAll() {
+        // Goes with the request codes in the last task of this build.
+        var reports = 0
+
+        mManager.onActivityResult(
+            mContext,
+            UNKNOWN_REQUEST_CODE,
+            Activity.RESULT_OK,
+            Intent().setData(uriOfFile()),
+            { reports++ },
+            { reports++ }
+        )
+
+        assertEquals(0, reports)
     }
 
     private fun uriOfFile(): Uri {
@@ -240,14 +235,6 @@ class FileStoreManagerTest {
         val kept = (encoded.length / 2) / 4 * 4
         assertTrue("The export is too small to truncate", kept > 0)
         mFile.writeText(encoded.substring(0, kept))
-    }
-
-    private fun onSuccess() {
-        mSuccesses++
-    }
-
-    private fun onFailure() {
-        mFailures++
     }
 
     private fun clearAll() {
