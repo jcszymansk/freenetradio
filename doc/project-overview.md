@@ -24,7 +24,7 @@ project.
 | Module | Responsibility |
 | --- | --- |
 | `common/` | Domain models, provider APIs, parsing, caching, persistence, playback, Media3 service, equalizer, location, timers, and broadcast receivers |
-| `common-ui/` | The main screen's state holder (`MainScreenModel`), dialogs, file import/export, logging, and service-command glue |
+| `common-ui/` | The main screen's state holder (`MainScreenModel`), the settings screen stack and state holders, the remaining dialogs, file import/export, logging, and service-command glue |
 | `app/` | Phone/tablet UI and Android Auto metadata |
 | `console-design/` | Shared Compose design system: theme, colours, typography, and components. An included build from a git submodule, edited only in its own repository |
 | `android-jvm-stubs/` | Working JVM implementations of the Android types unit tests need — `Uri`, `Bundle`, `MimeTypeMap`, and the resource lookups of `Context`. `:common` and `:common-ui` take it as `testRuntimeOnly`, so tests compile against the real Android API and only the implementation is swapped at run time |
@@ -253,13 +253,13 @@ It also reads the UI mode once, at startup, to tell whether the process runs in 
 
 ### Phone and tablet: `app/`
 
-The entry points are `MainApp.kt` and `MainActivity.kt`. `MainActivity` is a single-instance `AppCompatActivity` whose content is the Compose `MainScreen`, drawn with the console-design theme: a top bar with search and an overflow menu, the tabs (FAV, MINE, POPULAR, NEW, COUNTRY, GENRE; WebRadioDB has no POPULAR or NEW), the selected tab's list, and a mini player. There is no navigation drawer: the settings and other dialogs open from the overflow menu. It provides:
+The entry points are `MainApp.kt` and `MainActivity.kt`. `MainActivity` is a single-instance `AppCompatActivity` whose content is the Compose `MainScreen`, Now playing, or the top of the settings screen stack (`ScreenStack`), drawn with the console-design theme. The main screen has a top bar with search and an overflow menu, the tabs (FAV, MINE, POPULAR, NEW, COUNTRY, GENRE; WebRadioDB has no POPULAR or NEW), the selected tab's list, and a mini player. There is no navigation drawer: the overflow menu opens Settings, Sleep timer, Equalizer and About. Settings holds the general, source, network, stream buffering, file storage, diagnostics and About settings as Compose screens; the sleep timer, equaliser, search and station dialogs are still View dialogs. It provides:
 
 - Station and category browsing
 - Search
 - Equalizer
 - Add, edit, and remove operations for local stations
-- General, network, and stream-buffer settings
+- Settings: start playback, master volume, Bluetooth auto play, stream buffering, source, default country, export and import of stations, mobile data, user agent, clear cache, diagnostic report
 - Sleep timer
 - About information
 
@@ -310,10 +310,11 @@ The repository contains these test classes, counted as files holding JUnit `@Tes
 
 | Source set | Runs on | Classes | Subject |
 | --- | --- | ---: | --- |
-| `common/src/test` | JVM | 56 | Playlist parsers, URL and parser layers, API caches, the model layer, browse commands and `BrowseTree`, media IDs and media-item building, station serialization and validation, sorting and filtering, network policy and recovery, playback state and error classification, equalizer serialization, sleep timer, artwork grants |
-| `common-ui/src/test` | JVM | 9 | `MainScreenModel` tabs, browse stacks, child delivery, paging, search and the player screens, `NowPlayingTracker` playback and hearts, Station details rows, row mapping and tabs, the country setting, `ServiceCommander`, diagnostic report files |
+| `common/src/test` | JVM | 65 | Playlist parsers, URL and parser layers, API caches, the model layer, browse commands and `BrowseTree`, media IDs and media-item building, station serialization and validation, sorting and filtering, network policy and recovery, playback state and error classification, equalizer serialization, sleep timer, artwork grants, audio offload logging, the start playback setting |
+| `common-ui/src/test` | JVM | 18 | `MainScreenModel` tabs, browse stacks, child delivery, paging, search and the player screens, `NowPlayingTracker` playback and hearts, Station details rows, row mapping and tabs, the country setting, `ServiceCommander`, diagnostic report files, the screen stack, the settings state holders (settings, source choice, stream buffering, user agent, station transfer, diagnostics), the buffering rules, the About rows |
 | `android-jvm-stubs/src/test` | JVM | 3 | The stubs themselves: `Uri`, `Bundle`, `MimeTypeMap` |
-| `app/src/androidTest` | Device | 48 | SharedPreferences storages, the Room API cache and its schema upgrade, `ImagesProvider` access, file import and export, receivers, `OpenRadioService` browse, search, playback, commands and recovery, `OpenRadioPlayer`, `MediaResourcesManager`, the sleep timer, playlist resolution, station dialogs, end-to-end journeys through `MainActivity` including Now playing, and the offline test harness itself |
+| `app/src/test` | JVM (Robolectric) | 9 | Compose screenshots of the console theme, the main screen, Now playing and settings; row titles, player menu items, the artwork cache, the settings choice rows, the Now playing platform glue |
+| `app/src/androidTest` | Device | 53 | SharedPreferences storages, the Room API cache and its schema upgrade, `ImagesProvider` access, file import and export, receivers, `OpenRadioService` browse, search, playback, commands and recovery, `OpenRadioPlayer`, `MediaResourcesManager`, the sleep timer, playlist resolution, station dialogs, end-to-end journeys through `MainActivity` including Now playing, the offline test harness itself, the settings adapters, and the settings navigation, settings persistence and station transfer journeys |
 
 The instrumented suite runs under `OfflineTestRunner`, which refuses to run on a device that
 reports a network; the urls its fixtures hand the app point at loopback or at an unreachable
