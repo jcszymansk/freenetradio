@@ -201,16 +201,15 @@ class SettingsModel(
     }
 
     /**
-     * Clears the cache and empties the screen stack.
+     * Tells the service to clear the cache, leaving Settings open.
      *
-     * The service clears the app data, emptying its browse tree; the stack empties so the user is
-     * back on the main screen while the lists reload. The service shows its own "Cache is
-     * cleared" message, so the model adds none.
+     * The service clears the app data and shows its own "Cache is cleared" message, so the model
+     * adds none. The screen stack stays as it is, as the View dialog stayed open: the owner chose
+     * on 2026-11-28 (fnr-xuhfx, REQ-001) that clearing the cache does not close Settings.
      */
     @MainThread
     fun clearCache() {
         send(OpenRadioService.CMD_CLEAR_CACHE)
-        mScreens.clear()
     }
 
     private fun readState(bluetoothRequest: Boolean): SettingsState {

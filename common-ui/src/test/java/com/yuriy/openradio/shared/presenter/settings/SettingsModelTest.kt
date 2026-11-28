@@ -387,14 +387,14 @@ class SettingsModelTest {
     }
 
     @Test
-    fun clearCacheTellsTheServiceAndEmptiesTheStack() {
+    fun clearCacheTellsTheServiceAndKeepsSettingsOpen() {
         val model = model()
         model.open()
 
         model.clearCache()
 
         assertEquals(listOf(OpenRadioService.CMD_CLEAR_CACHE), mCommander.commands())
-        assertEquals(null, mScreens.top.value)
+        assertEquals(Destination.Settings, mScreens.top.value)
     }
 
     private companion object {
