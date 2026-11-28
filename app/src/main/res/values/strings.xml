@@ -52,4 +52,23 @@
     <string name="details_stream">Stream</string>
     <string name="details_url">URL</string>
     <string name="details_web">Web</string>
+    <string name="settings_start_playback">Start playback</string>
+    <string name="settings_master_volume">Master volume</string>
+    <string name="settings_source">Source</string>
+    <string name="settings_default_country">Default country</string>
+    <string name="settings_volume_value">%1$d%%</string>
+    <string name="settings_volume_down">Lower the volume</string>
+    <string name="settings_volume_up">Raise the volume</string>
+    <string name="settings_restart">Restart to apply</string>
+    <string name="settings_close">Close</string>
+    <string name="settings_save">Save</string>
+    <string name="about_key_version">Version</string>
+    <string name="about_key_media3">Media3</string>
+    <string name="about_key_project">Project</string>
+    <string name="about_key_issues">Issues</string>
+    <string name="about_key_radio_browser">Radio Browser</string>
+    <string name="about_key_webradiodb">WebRadioDB</string>
+    <string name="about_key_playlist_parser">Playlist parser</string>
+    <string name="about_key_swipe">Swipe</string>
+    <string name="about_key_fonts">Fonts</string>
 </resources>
