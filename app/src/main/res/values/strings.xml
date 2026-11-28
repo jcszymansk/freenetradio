@@ -82,6 +82,16 @@
     <string name="settings_value_never">Never</string>
     <string name="settings_value_default">Default</string>
     <string name="settings_value_custom">Custom</string>
+    <string name="settings_buffering_values">Buffers</string>
+    <string name="settings_buffering_restore">Restore defaults</string>
+    <string name="settings_buffer_min">Min buffer (ms)</string>
+    <string name="settings_buffer_max">Max buffer (ms)</string>
+    <string name="settings_buffer_play">Play buffer (ms)</string>
+    <string name="settings_buffer_rebuffer">Play buffer after rebuffer (ms)</string>
+    <string name="settings_buffering_range">From %1$d to %2$d ms. Restart playback to apply.</string>
+    <string name="settings_user_agent_custom">Custom user agent</string>
+    <string name="settings_diagnostics_title">Diagnostic report</string>
+    <string name="settings_diagnostics_create">Create report</string>
     <string name="about_key_version">Version</string>
     <string name="about_key_media3">Media3</string>
     <string name="about_key_project">Project</string>

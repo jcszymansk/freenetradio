@@ -20,9 +20,16 @@ import com.yuriy.openradio.mobile.view.settings.SettingsActions
 import com.yuriy.openradio.shared.model.source.Source
 import com.yuriy.openradio.shared.model.storage.StartPlayback
 import com.yuriy.openradio.shared.presenter.settings.AboutRow
+import com.yuriy.openradio.shared.presenter.settings.BufferBounds
 import com.yuriy.openradio.shared.presenter.settings.BufferField
+import com.yuriy.openradio.shared.presenter.settings.BufferRule
+import com.yuriy.openradio.shared.presenter.settings.BufferSettings
+import com.yuriy.openradio.shared.presenter.settings.BufferTexts
+import com.yuriy.openradio.shared.presenter.settings.DiagnosticsState
 import com.yuriy.openradio.shared.presenter.settings.SettingsState
 import com.yuriy.openradio.shared.presenter.settings.SourceChoiceState
+import com.yuriy.openradio.shared.presenter.settings.StreamBufferingState
+import com.yuriy.openradio.shared.presenter.settings.UserAgentState
 import com.yuriy.openradio.shared.presenter.settings.aboutRows
 import com.yuriy.openradio.shared.service.location.Country
 import java.io.File
@@ -80,6 +87,30 @@ internal object SettingsFixtures {
         userAgentCustom = true,
         version = VERSION,
     )
+
+    val bounds: BufferBounds = BufferBounds(1000, 300000)
+
+    val bufferingValid: StreamBufferingState = StreamBufferingState(
+        texts = BufferTexts.of(BufferSettings(30000, 60000, 2000, 3000)),
+        errors = emptyMap(),
+    )
+
+    val bufferingErrors: StreamBufferingState = StreamBufferingState(
+        texts = BufferTexts(min = "30000", max = "20000", play = "", rebuffer = "40000"),
+        errors = mapOf(
+            BufferField.MAX to BufferRule.MAX_BELOW_MIN,
+            BufferField.PLAY to BufferRule.INVALID_VALUE,
+            BufferField.REBUFFER to BufferRule.REBUFFER_ABOVE_MIN,
+        ),
+    )
+
+    val userAgentCustom: UserAgentState = UserAgentState(custom = true, text = "MyAgent/1.0 (FreeNetRadio)")
+
+    val userAgentEmpty: UserAgentState = UserAgentState(custom = true, text = "")
+
+    val diagnosticsIdle: DiagnosticsState = DiagnosticsState(collecting = false, report = null)
+
+    val diagnosticsCollecting: DiagnosticsState = DiagnosticsState(collecting = true, report = null)
 
     val noActions: SettingsActions = object : SettingsActions {
 

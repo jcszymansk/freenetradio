@@ -30,9 +30,12 @@ import com.github.jcszymansk.console.design.PrimaryButton
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.yuriy.openradio.mobile.view.settings.AboutScreen
 import com.yuriy.openradio.mobile.view.settings.ChoiceScreen
+import com.yuriy.openradio.mobile.view.settings.DiagnosticsScreen
 import com.yuriy.openradio.mobile.view.settings.MasterVolumeScreen
 import com.yuriy.openradio.mobile.view.settings.SettingsScreen
 import com.yuriy.openradio.mobile.view.settings.SettingsTags
+import com.yuriy.openradio.mobile.view.settings.StreamBufferingScreen
+import com.yuriy.openradio.mobile.view.settings.UserAgentScreen
 import com.yuriy.openradio.mobile.view.settings.countryRows
 import com.yuriy.openradio.mobile.view.settings.sourceRows
 import com.yuriy.openradio.mobile.view.settings.startPlaybackRows
@@ -129,6 +132,36 @@ class SettingsScreenshotTest(private val mTheme: String, private val mDark: Bool
     @Test
     fun settingsWhileAFileIsWritten() = capture("export_progress", PROGRESS_FRAME_MILLIS) {
         SettingsScreen(SettingsFixtures.defaults, transferring = true, actions = SettingsFixtures.noActions)
+    }
+
+    @Test
+    fun bufferingValid() = capture("buffering_valid") {
+        StreamBufferingScreen(SettingsFixtures.bufferingValid, SettingsFixtures.bounds, SettingsFixtures.noActions)
+    }
+
+    @Test
+    fun bufferingWithErrors() = capture("buffering_errors") {
+        StreamBufferingScreen(SettingsFixtures.bufferingErrors, SettingsFixtures.bounds, SettingsFixtures.noActions)
+    }
+
+    @Test
+    fun userAgentCustom() = capture("user_agent_custom") {
+        UserAgentScreen(SettingsFixtures.userAgentCustom, SettingsFixtures.noActions)
+    }
+
+    @Test
+    fun userAgentEmpty() = capture("user_agent_empty") {
+        UserAgentScreen(SettingsFixtures.userAgentEmpty, SettingsFixtures.noActions)
+    }
+
+    @Test
+    fun diagnosticsIdle() = capture("diagnostics_idle") {
+        DiagnosticsScreen(SettingsFixtures.diagnosticsIdle, SettingsFixtures.noActions)
+    }
+
+    @Test
+    fun diagnosticsCollecting() = capture("diagnostics_collecting", PROGRESS_FRAME_MILLIS) {
+        DiagnosticsScreen(SettingsFixtures.diagnosticsCollecting, SettingsFixtures.noActions)
     }
 
     /**
